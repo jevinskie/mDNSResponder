@@ -274,9 +274,7 @@ because I don't have access to the physical machine.
 
 Licencing
 ---------
-This code is distributed under the Apple Public Source License.
-Information about the licence is included at the top of each source file.
-
+This source code is Open Source; for details see the "LICENSE" file.
 
 Credits and Version History
 ---------------------------

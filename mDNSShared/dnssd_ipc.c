@@ -1,4 +1,5 @@
-/*
+/* -*- Mode: C; tab-width: 4 -*-
+ *
  * Copyright (c) 2003-2004, Apple Computer, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without 
@@ -27,6 +28,9 @@
 	Change History (most recent first):
 
 $Log: dnssd_ipc.c,v $
+Revision 1.16  2006/08/14 23:05:53  cheshire
+Added "tab-width" emacs header line
+
 Revision 1.15  2005/01/27 22:57:56  cheshire
 Fix compile errors on gcc4
 

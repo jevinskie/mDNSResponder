@@ -1,28 +1,32 @@
-/*
+/* -*- Mode: C; tab-width: 4 -*-
+ *
  * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
  *
- * @APPLE_LICENSE_HEADER_START@
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  * 
- * This file contains Original Code and/or Modifications of Original Code
- * as defined in and that are subject to the Apple Public Source License
- * Version 2.0 (the 'License'). You may not use this file except in
- * compliance with the License. Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this
- * file.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  * 
- * The Original Code and all software distributed under the License are
- * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
- * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
- * Please see the License for the specific language governing rights and
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
- * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: DNSCommon.h,v $
+Revision 1.34.2.1  2006/08/29 06:24:22  cheshire
+Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
+
+Revision 1.34  2006/03/18 21:47:56  cheshire
+<rdar://problem/4073825> Improve logic for delaying packets after repeated interface transitions
+
+Revision 1.33  2006/03/10 21:51:41  cheshire
+<rdar://problem/4111464> After record update, old record sometimes remains in cache
+Split out SameRDataBody() into a separate routine so it can be called from other code
+
 Revision 1.32  2005/03/21 00:33:51  shersche
 <rdar://problem/4021486> Fix build warnings on Win32 platform
 
@@ -141,6 +145,7 @@ Revision 1.1  2003/12/13 03:05:27  ksekar
 	extern "C" {
 #endif
 
+
 // ***************************************************************************
 #if COMPILER_LIKES_PRAGMA_MARK
 #pragma mark - DNS Protocol Constants
@@ -192,6 +197,7 @@ typedef enum
 	TSIG_ErrBadTime = 18
 	} TSIG_ErrorCode;
 	
+
 // ***************************************************************************
 #if COMPILER_LIKES_PRAGMA_MARK
 #pragma mark -
@@ -202,6 +208,7 @@ extern const NetworkInterfaceInfo *GetFirstActiveInterface(const NetworkInterfac
 extern mDNSInterfaceID GetNextActiveInterfaceID(const NetworkInterfaceInfo *intf);
 
 extern mDNSu32 mDNSRandom(mDNSu32 max);
+extern mDNSu32 mDNSRandomFromFixedSeed(mDNSu32 seed, mDNSu32 max);
 
 
 // ***************************************************************************
@@ -235,6 +242,7 @@ extern void mDNS_HostNameCallback(mDNS *const m, AuthRecord *const rr, mStatus r
 
 extern mDNSu32 RDataHashValue(mDNSu16 const rdlength, const RDataBody *const rdb);
 
+extern mDNSBool SameRDataBody(const ResourceRecord *const r1, const RDataBody *const r2);
 extern mDNSBool SameRData(const ResourceRecord *const r1, const ResourceRecord *const r2);
 
 extern mDNSBool ResourceRecordAnswersQuestion(const ResourceRecord *const rr, const DNSQuestion *const q);
@@ -330,6 +338,7 @@ extern const mDNSu8 *LocateAuthorities(const DNSMessage *const msg, const mDNSu8
 
 extern const mDNSu8 *LocateAdditionals(const DNSMessage *const msg, const mDNSu8 *const end);
 
+
 // ***************************************************************************
 #if COMPILER_LIKES_PRAGMA_MARK
 #pragma mark -
@@ -339,6 +348,7 @@ extern const mDNSu8 *LocateAdditionals(const DNSMessage *const msg, const mDNSu8
 
 extern mStatus mDNSSendDNSMessage(const mDNS *const m, DNSMessage *const msg, mDNSu8 *end,
 	mDNSInterfaceID InterfaceID, const mDNSAddr *dst, mDNSIPPort dstport, int sd, uDNS_AuthInfo *authInfo);
+
 
 // ***************************************************************************
 #if COMPILER_LIKES_PRAGMA_MARK

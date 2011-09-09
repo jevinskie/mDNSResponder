@@ -2,28 +2,28 @@
  *
  * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
- * @APPLE_LICENSE_HEADER_START@
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  * 
- * This file contains Original Code and/or Modifications of Original Code
- * as defined in and that are subject to the Apple Public Source License
- * Version 2.0 (the 'License'). You may not use this file except in
- * compliance with the License. Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this
- * file.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  * 
- * The Original Code and all software distributed under the License are
- * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
- * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
- * Please see the License for the specific language governing rights and
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
- * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: mDNSUNP.c,v $
+Revision 1.34  2006/08/14 23:24:47  cheshire
+Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
+
+Revision 1.33  2006/03/13 23:14:21  cheshire
+<rdar://problem/4427969> Compile problems on FreeBSD
+Use <netinet/in_var.h> instead of <netinet6/in6_var.h>
+
 Revision 1.32  2005/12/21 02:56:43  cheshire
 <rdar://problem/4243433> get_ifi_info() should fake ifi_index when SIOCGIFINDEX undefined
 
@@ -169,7 +169,9 @@ First checkin
 #endif
 
 #if defined(AF_INET6) && HAVE_IPV6 && !HAVE_LINUX
-#include <netinet6/in6_var.h>
+#include <net/if_var.h>
+#include <netinet/in_var.h>
+// NOTE: netinet/in_var.h implicitly includes netinet6/in6_var.h for us
 #endif
 
 #if defined(AF_INET6) && HAVE_IPV6 && HAVE_LINUX
@@ -186,8 +188,7 @@ void plen_to_mask(int plen, char *addr) {
 		if(plen>bits_in_block) ones_in_block=bits_in_block;
 		else                   ones_in_block=plen;
 		block = ones & (ones << (bits_in_block-ones_in_block));
-		i==0 ? sprintf(addr, "%x", block) :
- sprintf(addr, "%s:%x", addr, block);
+		i==0 ? sprintf(addr, "%x", block) : sprintf(addr, "%s:%x", addr, block);
 		plen -= ones_in_block;
 		}
 	}

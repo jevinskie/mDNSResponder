@@ -23,7 +23,27 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS 
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
+# IMPORTANT NOTE: This is a Makefile for *GNU make*
+# On some systems, a different program may be the default "make" command.
+# If "make os=xxx" gives lots of errors like "Missing dependency operator",
+# then try typing "gmake os=xxx" instead.
+#
 # $Log: Makefile,v $
+# Revision 1.71  2006/06/20 23:07:04  rpantos
+# <rdar://problem/3839132> Java needs to implement DNSServiceRegisterRecord equivalent
+#
+# Revision 1.70  2006/05/03 23:35:10  cheshire
+# Add missing dependency: NetMonitor.c textually imports mDNS.c
+#
+# Revision 1.69  2006/02/26 23:18:50  cheshire
+# <rdar://problem/4427969> FreeBSD 4 requires "-pthread" option to compile threaded code
+#
+# Revision 1.68  2006/02/26 01:36:54  cheshire
+# Rename the poorly named "LIBFLAGS" as "LINKOPTS"
+#
+# Revision 1.67  2006/02/25 23:14:29  cheshire
+# Add comment suggesting using "gmake" command
+#
 # Revision 1.66  2006/01/06 01:06:17  cheshire
 # <rdar://problem/3978979> Compile library and client programs in one pass
 #
@@ -253,7 +273,9 @@ CP = cp
 RM = rm
 LN = ln -s -f
 CFLAGS_COMMON = -I. -I$(COREDIR) -I$(SHAREDDIR) -W -Wall -DPID_FILE=\"/var/run/mdnsd.pid\" -DMDNS_UDS_SERVERPATH=\"/var/run/mdnsd\"
-LIBFLAGS =
+CFLAGS_PTHREAD =
+LINKOPTS =
+LINKOPTS_PTHREAD = -lpthread
 LDSUFFIX = so
 JAVACFLAGS_OS = -fPIC -shared -ldns_sd
 
@@ -280,7 +302,7 @@ CFLAGS_OS = -DNOT_HAVE_DAEMON -DNOT_HAVE_SA_LEN -DNOT_HAVE_SOCKLEN_T -DNOT_HAVE_
 	 -DLOG_PERROR=0 -D_XPG4_2 -D__EXTENSIONS__ -DHAVE_BROKEN_RECVIF_NAME
 CC = gcc
 LD = gcc -shared
-LIBFLAGS = -lsocket -lnsl -lresolv
+LINKOPTS = -lsocket -lnsl -lresolv
 JAVACFLAGS_OS += -I$(JDK)/include/solaris
 ifneq ($(DEBUG),1)
 STRIP = strip
@@ -306,6 +328,14 @@ LOCALBASE?=/usr/local
 INSTBASE=$(LOCALBASE)
 STARTUPSCRIPTNAME=mdns.sh
 CFLAGS_OS =
+# FreeBSD 4 requires threaded code to be compiled and linked using the "-pthread" option,
+# and requires that the "-lpthread" link option NOT be used
+# This appies only to FreeBSD -- "man cc" on FreeBSD says:
+#   FreeBSD SPECIFIC OPTIONS
+#     -pthread
+#       Link a user-threaded process against libc_r instead of libc.
+CFLAGS_PTHREAD   = -pthread -D_THREAD_SAFE
+LINKOPTS_PTHREAD = -pthread
 JAVACFLAGS_OS += -I$(JDK)/include/freebsd
 LDCONFIG = ldconfig
 else
@@ -318,7 +348,7 @@ else
 ifeq ($(os),jaguar)
 CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp -Werror -DNOT_HAVE_SOCKLEN_T
 LD = libtool -dynamic
-LIBFLAGS = -lSystem
+LINKOPTS = -lSystem
 LDSUFFIX = dylib
 JDK = /System/Library/Frameworks/JavaVM.framework/Home
 JAVACFLAGS_OS = -dynamiclib -I/System/Library/Frameworks/JavaVM.framework/Headers -framework JavaVM 
@@ -327,7 +357,7 @@ else
 ifeq ($(os),panther)
 CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp -Werror
 LD = libtool -dynamic
-LIBFLAGS = -lSystem
+LINKOPTS = -lSystem
 LDSUFFIX = dylib
 JDK = /System/Library/Frameworks/JavaVM.framework/Home
 JAVACFLAGS_OS = -dynamiclib -I/System/Library/Frameworks/JavaVM.framework/Headers -framework JavaVM 
@@ -337,7 +367,7 @@ ifeq ($(os),tiger)
 CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp -Werror -Wdeclaration-after-statement #-Wunreachable-code
 CC = @gcc-4.0
 LD = $(CC) -dynamiclib
-LIBFLAGS = -lSystem
+LINKOPTS = -lSystem
 LDSUFFIX = dylib
 JDK = /System/Library/Frameworks/JavaVM.framework/Home
 JAVACFLAGS_OS = -dynamiclib -I/System/Library/Frameworks/JavaVM.framework/Headers -framework JavaVM 
@@ -433,7 +463,7 @@ Daemon: setup $(BUILDDIR)/mdnsd
 	@echo "Responder daemon done"
 
 $(BUILDDIR)/mdnsd: $(DAEMONOBJS)
-	$(CC) -o $@ $+ $(CFLAGS) $(LIBFLAGS)
+	$(CC) -o $@ $+ $(LINKOPTS)
 	@$(STRIP) $@
 
 # libdns_sd target builds the client library
@@ -443,7 +473,7 @@ libdns_sd: setup $(BUILDDIR)/libdns_sd.$(LDSUFFIX)
 CLIENTLIBOBJS = $(OBJDIR)/dnssd_clientlib.c.so.o $(OBJDIR)/dnssd_clientstub.c.so.o $(OBJDIR)/dnssd_ipc.c.so.o
 
 $(BUILDDIR)/libdns_sd.$(LDSUFFIX): $(CLIENTLIBOBJS)
-	@$(LD) $(LIBFLAGS) -o $@ $+
+	@$(LD) $(LINKOPTS) -o $@ $+
 	@$(STRIP) $@
 
 Clients: setup libdns_sd ../Clients/build/dns-sd
@@ -457,7 +487,7 @@ nss_mdns: setup $(BUILDDIR)/$(NSSLIBFILE)
 	@echo "Name Service Switch module done"
 
 $(BUILDDIR)/$(NSSLIBFILE): $(CLIENTLIBOBJS) $(OBJDIR)/nss_mdns.c.so.o
-	@$(LD) $(LIBFLAGS) -o $@ $+
+	@$(LD) $(LINKOPTS) -o $@ $+
 	@$(STRIP) $@
 
 #############################################################################
@@ -572,6 +602,8 @@ JARCONTENTS =	$(OBJDIR)/com/apple/dnssd/DNSSDService.class \
 				$(OBJDIR)/com/apple/dnssd/RegisterListener.class \
 				$(OBJDIR)/com/apple/dnssd/QueryListener.class \
 				$(OBJDIR)/com/apple/dnssd/DomainListener.class \
+				$(OBJDIR)/com/apple/dnssd/RegisterRecordListener.class \
+				$(OBJDIR)/com/apple/dnssd/DNSSDRecordRegistrar.class \
 				$(OBJDIR)/com/apple/dnssd/DNSSD.class
 
 $(BUILDDIR)/dns_sd.jar: $(JARCONTENTS) setup
@@ -626,24 +658,26 @@ dnsextd: setup $(BUILDDIR)/dnsextd
 	@echo "dnsextd done"
 
 $(BUILDDIR)/mDNSClientPosix:         $(APPOBJ)     $(OBJDIR)/Client.c.o
-	$(CC) $+ -o $@ $(LIBFLAGS)
+	$(CC) $+ -o $@ $(LINKOPTS)
 
 $(BUILDDIR)/mDNSResponderPosix:      $(COMMONOBJ)  $(OBJDIR)/Responder.c.o
-	$(CC) $+ -o $@ $(LIBFLAGS)
+	$(CC) $+ -o $@ $(LINKOPTS)
 
 $(BUILDDIR)/mDNSProxyResponderPosix: $(COMMONOBJ)  $(OBJDIR)/ProxyResponder.c.o
-	$(CC) $+ -o $@ $(LIBFLAGS)
+	$(CC) $+ -o $@ $(LINKOPTS)
 
 $(BUILDDIR)/mDNSIdentify:            $(SPECIALOBJ) $(OBJDIR)/Identify.c.o
-	$(CC) $+ -o $@ $(LIBFLAGS)
+	$(CC) $+ -o $@ $(LINKOPTS)
 
 $(OBJDIR)/Identify.c.o:              $(COREDIR)/mDNS.c # Note: Identify.c textually imports mDNS.c
 
 $(BUILDDIR)/mDNSNetMonitor:          $(SPECIALOBJ) $(OBJDIR)/NetMonitor.c.o
-	$(CC) $+ -o $@ $(LIBFLAGS)
+	$(CC) $+ -o $@ $(LINKOPTS)
+
+$(OBJDIR)/NetMonitor.c.o:            $(COREDIR)/mDNS.c # Note: NetMonitor.c textually imports mDNS.c
 
 $(BUILDDIR)/dnsextd:                 $(SPECIALOBJ) $(OBJDIR)/dnsextd.c.threadsafe.o
-	$(CC) $+ -o $@ $(LIBFLAGS) -lpthread
+	$(CC) $+ -o $@ $(LINKOPTS) $(LINKOPTS_PTHREAD)
 
 #############################################################################
 
@@ -658,7 +692,7 @@ $(OBJDIR)/%.c.o:	$(SHAREDDIR)/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(OBJDIR)/%.c.threadsafe.o:	%.c
-	$(CC) $(CFLAGS) -D_REENTRANT -c -o $@ $<
+	$(CC) $(CFLAGS) $(CFLAGS_PTHREAD) -D_REENTRANT -c -o $@ $<
 
 $(OBJDIR)/%.c.so.o:	%.c
 	$(CC) $(CFLAGS) -c -fPIC -o $@ $<

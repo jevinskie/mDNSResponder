@@ -1,4 +1,5 @@
-/*
+/* -*- Mode: C; tab-width: 4 -*-
+ *
  * Copyright (c) 2003-2004, Apple Computer, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without 
@@ -27,6 +28,13 @@
     Change History (most recent first):
 
 $Log: dnssd_ipc.h,v $
+Revision 1.23  2006/08/14 23:05:53  cheshire
+Added "tab-width" emacs header line
+
+Revision 1.22  2006/06/28 08:56:26  cheshire
+Added "_op" to the end of the operation code enum values,
+to differentiate them from the routines with the same names
+
 Revision 1.21  2005/09/29 06:38:13  herscher
 Remove #define MSG_WAITALL on Windows.  We don't use this macro anymore, and it's presence causes warnings to be emitted when compiling against the latest Microsoft Platform SDK.
 
@@ -173,12 +181,12 @@ typedef enum
 
 typedef enum
     {
-    enumeration_reply = 64,
-    reg_service_reply,
-    browse_reply,
-    resolve_reply,
-    query_reply,
-    reg_record_reply
+    enumeration_reply_op = 64,
+    reg_service_reply_op,
+    browse_reply_op,
+    resolve_reply_op,
+    query_reply_op,
+    reg_record_reply_op
     } reply_op_t;
 
 typedef struct ipc_msg_hdr_struct ipc_msg_hdr;

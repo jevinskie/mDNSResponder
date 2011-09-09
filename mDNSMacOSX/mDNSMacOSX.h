@@ -1,28 +1,34 @@
-/*
+/* -*- Mode: C; tab-width: 4 -*-
+ *
  * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
  *
- * @APPLE_LICENSE_HEADER_START@
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  * 
- * This file contains Original Code and/or Modifications of Original Code
- * as defined in and that are subject to the Apple Public Source License
- * Version 2.0 (the 'License'). You may not use this file except in
- * compliance with the License. Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this
- * file.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  * 
- * The Original Code and all software distributed under the License are
- * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
- * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
- * Please see the License for the specific language governing rights and
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
- * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: mDNSMacOSX.h,v $
+Revision 1.55.2.1  2006/08/29 06:48:07  cheshire
+Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
+
+Revision 1.55  2006/06/29 05:33:30  cheshire
+<rdar://problem/4607043> mDNSResponder conditional compilation options
+
+Revision 1.54  2006/03/19 03:27:49  cheshire
+<rdar://problem/4118624> Suppress "interface flapping" logic for loopback
+
+Revision 1.53  2006/03/19 02:00:09  cheshire
+<rdar://problem/4073825> Improve logic for delaying packets after repeated interface transitions
+
 Revision 1.52  2006/01/05 21:41:49  cheshire
 <rdar://problem/4108164> Reword "mach_absolute_time went backwards" dialog
 
@@ -237,12 +243,18 @@ struct NetworkInterfaceInfoOSX_struct
 	NetworkInterfaceInfoOSX *next;
 	mDNSu32                  Exists;			// 1 = currently exists in getifaddrs list; 0 = doesn't
 												// 2 = exists, but McastTxRx state changed
+	mDNSs32                  AppearanceTime;	// Time this interface appeared most recently in getifaddrs list
+												// i.e. the first time an interface is seen, AppearanceTime is set.
+												// If an interface goes away temporarily and then comes back then
+												// AppearanceTime is updated to the time of the most recent appearance.
 	mDNSs32                  LastSeen;			// If Exists==0, last time this interface appeared in getifaddrs list
+	mDNSBool                 Flashing;			// Set if interface appeared for less than 60 seconds and then vanished
+	mDNSBool                 Occulting;			// Set if interface vanished for less than 60 seconds and then came back
 	char                    *ifa_name;			// Memory for this is allocated using malloc
 	mDNSu32                  scope_id;			// interface index / IPv6 scope ID
 	mDNSEthAddr              BSSID;				// BSSID of 802.11 base station, if applicable
 	u_short                  sa_family;
-	mDNSBool                 Multicast;
+	unsigned int             ifa_flags;
 	CFSocketSet              ss;
 	};
 

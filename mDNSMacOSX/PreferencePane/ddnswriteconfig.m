@@ -43,7 +43,11 @@
     ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     Change History (most recent first):
+
 $Log: ddnswriteconfig.m,v $
+Revision 1.5  2006/08/14 23:15:47  cheshire
+Tidy up Change History comment
+
 Revision 1.4  2005/06/04 04:47:47  cheshire
 <rdar://problem/4138070> ddnswriteconfig (Bonjour PreferencePane) vulnerability
 Remove self-installing capability of ddnswriteconfig

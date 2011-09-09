@@ -1,28 +1,28 @@
-/*
+/* -*- Mode: C; tab-width: 4 -*-
+ *
  * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
  *
- * @APPLE_LICENSE_HEADER_START@
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  * 
- * This file contains Original Code and/or Modifications of Original Code
- * as defined in and that are subject to the Apple Public Source License
- * Version 2.0 (the 'License'). You may not use this file except in
- * compliance with the License. Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this
- * file.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  * 
- * The Original Code and all software distributed under the License are
- * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
- * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
- * Please see the License for the specific language governing rights and
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
- * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: mDNSMacOS9.c,v $
+Revision 1.46  2006/08/14 23:24:29  cheshire
+Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
+
+Revision 1.45  2006/03/19 02:00:14  cheshire
+<rdar://problem/4073825> Improve logic for delaying packets after repeated interface transitions
+
 Revision 1.44  2005/09/16 21:06:50  cheshire
 Use mDNS_TimeNow_NoLock macro, instead of writing "mDNSPlatformRawTime() + m->timenow_adjust" all over the place
 
@@ -406,7 +406,7 @@ mDNSlocal pascal void mDNSNotifier(void *contextPtr, OTEventCode code, OTResult 
 				case mOT_Bind:			OTBind(m->p->ep, (TBind*)&mDNSbindReq, NULL); break;
 				case mOT_Ready:         mDNSinitComplete(m, mStatus_NoError);
 										// Can't do mDNS_RegisterInterface until *after* mDNSinitComplete has set m->mDNSPlatformStatus to mStatus_NoError
-										mDNS_RegisterInterface(m, &m->p->interface, 0);
+										mDNS_RegisterInterface(m, &m->p->interface, mDNSfalse);
 										break;
 				default:                LogMsg("Unexpected m->p->mOTstate %d", m->p->mOTstate-1);
 				}
@@ -423,7 +423,7 @@ mDNSlocal pascal void mDNSNotifier(void *contextPtr, OTEventCode code, OTResult 
 			if (m->p->mOTstate == mOT_Ready)
 				{
 				m->p->mOTstate = mOT_Closed;
-				mDNS_DeregisterInterface(m, &m->p->interface);
+				mDNS_DeregisterInterface(m, &m->p->interface, mDNSfalse);
 				}
 			if (m->p->ep) { OTCloseProvider(m->p->ep); m->p->ep = NULL; }
 			break;						// Do we need to do anything?
@@ -645,7 +645,7 @@ extern void mDNSPlatformClose (mDNS *const m)
 	if (m->p->mOTstate == mOT_Ready)
 		{
 		m->p->mOTstate = mOT_Closed;
-		mDNS_DeregisterInterface(m, &m->p->interface);
+		mDNS_DeregisterInterface(m, &m->p->interface, mDNSfalse);
 		}
 	if (m->p->ep)          { OTCloseProvider   (m->p->ep);          m->p->ep          = NULL; }
 	if (m->p->OTTimerTask) { OTDestroyTimerTask(m->p->OTTimerTask); m->p->OTTimerTask = 0;    }

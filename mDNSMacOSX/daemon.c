@@ -1,24 +1,18 @@
-/*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+/* -*- Mode: C; tab-width: 4 -*-
  *
- * @APPLE_LICENSE_HEADER_START@
+ * Copyright (c) 2002-2006 Apple Computer, Inc. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  * 
- * This file contains Original Code and/or Modifications of Original Code
- * as defined in and that are subject to the Apple Public Source License
- * Version 2.0 (the 'License'). You may not use this file except in
- * compliance with the License. Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this
- * file.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  * 
- * The Original Code and all software distributed under the License are
- * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
- * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
- * Please see the License for the specific language governing rights and
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
- * @APPLE_LICENSE_HEADER_END@
  *
  * Formatting notes:
  * This code follows the "Whitesmiths style" C indentation rules. Plenty of discussion
@@ -36,6 +30,24 @@
     Change History (most recent first):
 
 $Log: daemon.c,v $
+Revision 1.265.2.1  2006/08/29 06:24:30  cheshire
+Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
+
+Revision 1.265  2006/06/29 07:32:08  cheshire
+Added missing LogOperation logging for DNSServiceBrowse results
+
+Revision 1.264  2006/06/29 05:33:30  cheshire
+<rdar://problem/4607043> mDNSResponder conditional compilation options
+
+Revision 1.263  2006/06/08 23:23:48  cheshire
+Fix errant indentation of curly brace at the end of provide_DNSServiceBrowserCreate_rpc()
+
+Revision 1.262  2006/03/18 21:49:11  cheshire
+Added comment in ShowTaskSchedulingError(mDNS *const m)
+
+Revision 1.261  2006/01/06 01:22:28  cheshire
+<rdar://problem/4108164> Reword "mach_absolute_time went backwards" dialog
+
 Revision 1.260  2005/11/07 01:51:58  cheshire
 <rdar://problem/4331591> Include list of configured DNS servers in SIGINFO output
 
@@ -769,7 +781,8 @@ mDNSexport void LogMemCorruption(const char *format, ...)
 	buffer[mDNS_vsnprintf((char *)buffer, sizeof(buffer), format, ptr)] = 0;
 	va_end(ptr);
 	LogMsg("!!!! %s !!!!", buffer);
-	NotifyOfElusiveBug("Memory Corruption", 0, buffer);
+	NotifyOfElusiveBug("Memory Corruption", buffer);
+	//*(long*)0 = -1;	// Trick to crash and get a stack trace right here, if that's what we want
 	}
 
 mDNSlocal void validatelists(mDNS *const m)
@@ -1210,6 +1223,9 @@ mDNSlocal void FoundInstance(mDNS *const m, DNSQuestion *question, const Resourc
 	DNSServiceBrowserResult **p = &browser->results;
 	while (*p) p = &(*p)->next;
 	*p = x;
+
+	LogOperation("%5d: DNSServiceBrowse(%##s, %s) RESULT %s %s",
+		browser->ClientMachPort, question->qname.c, DNSTypeName(question->qtype), AddRecord ? "Add" : "Rmv", RRDisplayString(m, answer));
 	}
 
 mDNSlocal mStatus AddDomainToBrowser(DNSServiceBrowser *browser, const domainname *d)
@@ -1259,8 +1275,10 @@ mDNSexport void DefaultBrowseDomainChanged(const domainname *d, mDNSBool add)
 						*q = (*q)->next;
 						if (remove->q.LongLived)
 							{
-							// give goodbyes for known answers.  note that since events are sent to client via udns_execute(),
-							// we don't need to worry about the question being cancelled mid-loop
+							// Give goodbyes for known answers.
+							// Note that this a special case where we know that the QuestionCallback function is our own
+							// code (it's FoundInstance), and that callback routine doesn't ever cancel its operation, so we
+							// don't need to guard against the question being cancelled mid-loop the way the mDNSCore routines do.
 							CacheRecord *ka = remove->q.uDNS_info.knownAnswers;
 							while (ka) { remove->q.QuestionCallback(&mDNSStorage, &remove->q, &ka->resrec, mDNSfalse); ka = ka->next; }
 							}						
@@ -1351,7 +1369,7 @@ fail:
 	LogMsg("%5d: DNSServiceBrowse(\"%s\", \"%s\") failed: %s (%ld)", client, regtype, domain, errormsg, err);
 	if (SearchDomains) mDNS_FreeDNameList(SearchDomains);
 	return(err);
-		}
+	}
 
 //*************************************************************************************************************
 // Resolve Service Info
@@ -1770,12 +1788,14 @@ fail:
 	return(err);
 	}
 
-mDNSlocal CFUserNotificationRef gNotification    = NULL;
-mDNSlocal CFRunLoopSourceRef    gNotificationRLS = NULL;
 mDNSlocal domainlabel           gNotificationPrefHostLabel;	// The prefs as they were the last time we saw them
 mDNSlocal domainlabel           gNotificationPrefNiceLabel;
 mDNSlocal domainlabel           gNotificationUserHostLabel;	// The prefs as they were the last time the user changed them
 mDNSlocal domainlabel           gNotificationUserNiceLabel;
+
+#ifndef NO_CFUSERNOTIFICATION
+mDNSlocal CFUserNotificationRef gNotification    = NULL;
+mDNSlocal CFRunLoopSourceRef    gNotificationRLS = NULL;
 
 mDNSlocal void NotificationCallBackDismissed(CFUserNotificationRef userNotification, CFOptionFlags responseFlags)
 	{
@@ -1821,6 +1841,7 @@ mDNSlocal void ShowNameConflictNotification(CFStringRef header, CFStringRef subt
 
 	CFRelease(dictionary);
 	}
+#endif /* NO_CFUSERNOTIFICATION */
 
 // This updates either the text of the field currently labelled "Local Hostname",
 // or the text of the field currently labelled "Computer Name"
@@ -1857,6 +1878,7 @@ mDNSlocal void RecordUpdatedName(const mDNS *const m, const domainlabel *const o
 			LogMsg("RecordUpdatedName: ERROR: Couldn't update SCPreferences");
 		else if (m->p->NotifyUser)
 			{
+#ifndef NO_CFUSERNOTIFICATION
 			uid_t uid;
 			gid_t gid;
 			CFStringRef userName = SCDynamicStoreCopyConsoleUser(NULL, &uid, &gid);
@@ -1874,6 +1896,9 @@ mDNSlocal void RecordUpdatedName(const mDNS *const m, const domainlabel *const o
 				append(alertHeader, CFSTR("automatically."));
 				ShowNameConflictNotification(alertHeader, subtext);
 				}
+#else
+			(void)subtext;
+#endif /*  NO_CFUSERNOTIFICATION */
 			}
 		if (s0)          CFRelease(s0);
 		if (s1)          CFRelease(s1);
@@ -1906,9 +1931,11 @@ mDNSlocal void mDNS_StatusCallback(mDNS *const m, mStatus result)
 			{
 			gNotificationUserHostLabel = gNotificationPrefHostLabel = m->p->userhostlabel;
 			gNotificationUserNiceLabel = gNotificationPrefNiceLabel = m->p->usernicelabel;
+#ifndef NO_CFUSERNOTIFICATION
 			// If we're showing a name conflict notification, and the user has manually edited
 			// the name to remedy the conflict, we should now remove the notification window.
 			if (gNotificationRLS) CFUserNotificationCancel(gNotification);
+#endif /* NO_CFUSERNOTIFICATION */
 			}
 
 		DNSServiceRegistration *r;
@@ -2568,6 +2595,8 @@ mDNSlocal void ShowTaskSchedulingError(mDNS *const m)
 
 	LogMsg("Task Scheduling Error: Continuously busy for more than a second");
 	
+	// NOTE: To accurately diagnose *why* we're busy, the debugging code here to show needs to mirror the logic in GetNextScheduledEvent
+
 	if (m->NewQuestions && (!m->NewQuestions->DelayAnswering || m->timenow - m->NewQuestions->DelayAnswering >= 0))
 		LogMsg("Task Scheduling Error: NewQuestion %##s (%s)",
 			m->NewQuestions->qname.c, DNSTypeName(m->NewQuestions->qtype));

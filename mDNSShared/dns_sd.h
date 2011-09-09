@@ -1,4 +1,5 @@
-/*
+/* -*- Mode: C; tab-width: 4 -*-
+ *
  * Copyright (c) 2003-2004, Apple Computer, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without 
@@ -42,7 +43,7 @@
 #endif
 
 /* stdint.h does not exist on FreeBSD 4.x; its types are defined in sys/types.h instead */
-#if defined(__FreeBSD_version) && (__FreeBSD_version < 500000)
+#if defined(__FreeBSD__) && (__FreeBSD__ < 5)
 #include <sys/types.h>
 
 /* Likewise, on Sun, standard integer types are in sys/types.h */
@@ -145,9 +146,14 @@ enum
      * (queries from hosts more than one hop away; hosts not directly connected to the local link).
      */
 
-    kDNSServiceFlagsForceMulticast      = 0x400
+    kDNSServiceFlagsForceMulticast      = 0x400,
     /* Flag for signifying that a query or registration should be performed exclusively via multicast DNS,
      * even for a name in a domain (e.g. foo.apple.com.) that would normally imply unicast DNS.
+     */
+     
+    kDNSServiceFlagsReturnCNAME         = 0x800
+    /* Flag for returning CNAME records in the DNSServiceQueryRecord call. CNAME records are
+     * normally followed without indicating to the client that there was a CNAME record.
      */
     };
 
@@ -196,7 +202,7 @@ enum
     kDNSServiceType_KEY       = 25,     /* Security key. */
     kDNSServiceType_PX        = 26,     /* X.400 mail mapping. */
     kDNSServiceType_GPOS      = 27,     /* Geographical position (withdrawn). */
-    kDNSServiceType_AAAA      = 28,     /* Ip6 Address. */
+    kDNSServiceType_AAAA      = 28,     /* IPv6 Address. */
     kDNSServiceType_LOC       = 29,     /* Location Information. */
     kDNSServiceType_NXT       = 30,     /* Next domain (security). */
     kDNSServiceType_EID       = 31,     /* Endpoint identifier. */
@@ -206,7 +212,7 @@ enum
     kDNSServiceType_NAPTR     = 35,     /* Naming Authority PoinTeR */
     kDNSServiceType_KX        = 36,     /* Key Exchange */
     kDNSServiceType_CERT      = 37,     /* Certification record */
-    kDNSServiceType_A6        = 38,     /* IPv6 address (deprecates AAAA) */
+    kDNSServiceType_A6        = 38,     /* IPv6 Address (deprecated) */
     kDNSServiceType_DNAME     = 39,     /* Non-terminal DNAME (for IPv6) */
     kDNSServiceType_SINK      = 40,     /* Kitchen sink (experimentatl) */
     kDNSServiceType_OPT       = 41,     /* EDNS0 option (meta-RR) */
@@ -318,7 +324,7 @@ enum
  * 
  * If the client passes 0 for interface index, that means "do the right thing",
  * which (at present) means, "if the name is in an mDNS local multicast domain
- * (e.g. 'local.', '254.169.in-addr.arpa.', '0.8.E.F.ip6.arpa.') then multicast
+ * (e.g. 'local.', '254.169.in-addr.arpa.', '{8,9,A,B}.E.F.ip6.arpa.') then multicast
  * on all applicable interfaces, otherwise send via unicast to the appropriate
  * DNS server." Normally, most clients will use 0 for interface index to
  * automatically get the default sensible behaviour.
@@ -623,6 +629,9 @@ typedef void (DNSSD_API *DNSServiceRegisterReply)
  *                  i.e. it creates a TXT record of length one containing a single empty string.
  *                  RFC 1035 doesn't allow a TXT record to contain *zero* strings, so a single empty
  *                  string is the smallest legal DNS TXT record.
+ *                  As with the other parameters, the DNSServiceRegister call copies the txtRecord
+ *                  data; e.g. if you allocated the storage for the txtRecord parameter with malloc()
+ *                  then you can safely free that memory right after the DNSServiceRegister call returns.
  *
  * callBack:        The function to be called when the registration completes or asynchronously
  *                  fails.  The client MAY pass NULL for the callback -  The client will NOT be notified
@@ -638,7 +647,6 @@ typedef void (DNSSD_API *DNSServiceRegisterReply)
  *                  errors are delivered to the callback), otherwise returns an error code indicating
  *                  the error that occurred (the callback is never invoked and the DNSServiceRef
  *                  is not initialized.)
- *
  */
 
 DNSServiceErrorType DNSSD_API DNSServiceRegister
@@ -664,6 +672,12 @@ DNSServiceErrorType DNSSD_API DNSServiceRegister
  * registered service's name.
  * The record can later be updated or deregistered by passing the RecordRef initialized
  * by this function to DNSServiceUpdateRecord() or DNSServiceRemoveRecord().
+ *
+ * Note that the DNSServiceAddRecord/UpdateRecord/RemoveRecord are *NOT* thread-safe
+ * with respect to a single DNSServiceRef. If you plan to have multiple threads
+ * in your program simultaneously add, update, or remove records from the same
+ * DNSServiceRef, then it's the caller's responsibility to use a mutext lock
+ * or take similar appropriate precautions to serialize those calls.
  *
  *
  * Parameters;
@@ -914,8 +928,22 @@ DNSServiceErrorType DNSSD_API DNSServiceBrowse
  *
  * txtRecord:       The service's primary txt record, in standard txt record format.
  *
-
  * context:         The context pointer that was passed to the callout.
+ *
+ * NOTE: In earlier versions of this header file, the txtRecord parameter was declared "const char *"
+ * This is incorrect, since it contains length bytes which are values in the range 0 to 255, not -128 to +127.
+ * Depending on your compiler settings, this change may cause signed/unsigned mismatch warnings.
+ * These should be fixed by updating your own callback function definition to match the corrected
+ * function signature using "const unsigned char *txtRecord". Making this change may also fix inadvertent
+ * bugs in your callback function, where it could have incorrectly interpreted a length byte with value 250
+ * as being -6 instead, with various bad consequences ranging from incorrect operation to software crashes.
+ * If you need to maintain portable code that will compile cleanly with both the old and new versions of
+ * this header file, you should update your callback function definition to use the correct unsigned value,
+ * and then in the place where you pass your callback function to DNSServiceResolve(), use a cast to eliminate
+ * the compiler warning, e.g.:
+ *   DNSServiceResolve(sd, flags, index, name, regtype, domain, (DNSServiceResolveReply)MyCallback, context);
+ * This will ensure that your code compiles cleanly without warnings (and more importantly, works correctly)
+ * with both the old header and with the new corrected version.
  *
  */
 
@@ -929,7 +957,7 @@ typedef void (DNSSD_API *DNSServiceResolveReply)
     const char                          *hosttarget,
     uint16_t                            port,
     uint16_t                            txtLen,
-    const char                          *txtRecord,
+    const unsigned char                 *txtRecord,
     void                                *context
     );
 
@@ -1022,7 +1050,7 @@ DNSServiceErrorType DNSSD_API DNSServiceCreateConnection(DNSServiceRef *sdRef);
  * DNSServiceRegisterRecordReply() parameters:
  *
  * sdRef:           The connected DNSServiceRef initialized by
- *                  DNSServiceDiscoveryConnect().
+ *                  DNSServiceCreateConnection().
  *
  * RecordRef:       The DNSRecordRef initialized by DNSServiceRegisterRecord().  If the above
  *                  DNSServiceRef is passed to DNSServiceRefDeallocate(), this DNSRecordRef is
@@ -1237,7 +1265,7 @@ DNSServiceErrorType DNSSD_API DNSServiceQueryRecord
  *
  */
 
-void DNSSD_API DNSServiceReconfirmRecord
+DNSServiceErrorType DNSSD_API DNSServiceReconfirmRecord
     (
     DNSServiceFlags                    flags,
     uint32_t                           interfaceIndex,
@@ -1443,7 +1471,6 @@ DNSServiceErrorType DNSSD_API TXTRecordSetValue
  * return value:    Returns kDNSServiceErr_NoError on success.
  *                  Returns kDNSServiceErr_NoSuchKey if the "key" does not
  *                  exist in the TXTRecordRef.
- *
  */
 
 DNSServiceErrorType DNSSD_API TXTRecordRemoveValue
@@ -1463,7 +1490,6 @@ DNSServiceErrorType DNSSD_API TXTRecordRemoveValue
  *                  which you can pass directly to DNSServiceRegister() or
  *                  to DNSServiceUpdateRecord().
  *                  Returns 0 if the TXTRecordRef is empty.
- *
  */
 
 uint16_t DNSSD_API TXTRecordGetLength
@@ -1481,7 +1507,6 @@ uint16_t DNSSD_API TXTRecordGetLength
  * return value:    Returns a pointer to the raw bytes inside the TXTRecordRef
  *                  which you can pass directly to DNSServiceRegister() or
  *                  to DNSServiceUpdateRecord().
- *
  */
 
 const void * DNSSD_API TXTRecordGetBytesPtr
@@ -1536,7 +1561,6 @@ const void * DNSSD_API TXTRecordGetBytesPtr
  *
  * return value:    Returns 1 if the TXT Record contains the specified key.
  *                  Otherwise, it returns 0.
- *
  */
 
 int DNSSD_API TXTRecordContainsKey

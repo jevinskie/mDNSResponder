@@ -1,28 +1,28 @@
-/*
+/* -*- Mode: Java; tab-width: 4 -*-
+ *
  * Copyright (c) 2004 Apple Computer, Inc. All rights reserved.
  *
- * @APPLE_LICENSE_HEADER_START@
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  * 
- * This file contains Original Code and/or Modifications of Original Code
- * as defined in and that are subject to the Apple Public Source License
- * Version 2.0 (the 'License'). You may not use this file except in
- * compliance with the License. Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this
- * file.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  * 
- * The Original Code and all software distributed under the License are
- * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
- * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
- * Please see the License for the specific language governing rights and
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
- * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: DNSSD.java,v $
+Revision 1.11  2006/08/14 23:25:08  cheshire
+Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
+
+Revision 1.10  2006/06/20 23:05:55  rpantos
+<rdar://problem/3839132> Java needs to implement DNSServiceRegisterRecord equivalent
+
 Revision 1.9  2005/10/26 01:52:24  cheshire
 <rdar://problem/4316286> Race condition in Java code (doesn't work at all on Linux)
 
@@ -54,10 +54,6 @@ First checked in.
 	This file declares and implements DNSSD, the central Java factory class
 	for doing DNS Service Discovery. It includes the mostly-abstract public
 	interface, as well as the Apple* implementation subclasses.
-
-	To do:
-	- implement network interface mappings
-	- RegisterRecord
  */
 
 
@@ -310,6 +306,18 @@ abstract public class	DNSSD
 	throws DNSSDException
 	{ return register( 0, 0, serviceName, regType, null, null, port, null, listener); }
 
+	/** Create a {@link DNSSDRecordRegistrar} allowing efficient registration of 
+		multiple individual records.<P> 
+		<P>
+		@return		A {@link DNSSDRecordRegistrar} that can be used to register records.
+
+		@throws SecurityException If a security manager is present and denies <tt>RuntimePermission("getDNSSDInstance")</tt>.
+		@see    RuntimePermission
+	*/
+	public static DNSSDRecordRegistrar	createRecordRegistrar( RegisterRecordListener listener)
+	throws DNSSDException
+	{ return getInstance()._createRecordRegistrar( listener); }
+
 	/** Query for an arbitrary DNS record.<P> 
 		@param	flags
 					Possible values are: MORE_COMING.
@@ -474,6 +482,9 @@ abstract public class	DNSSD
 									String domain, String host, int port, TXTRecord txtRecord, RegisterListener listener)
 	throws DNSSDException;
 
+	abstract protected DNSSDRecordRegistrar	_createRecordRegistrar( RegisterRecordListener listener)
+	throws DNSSDException;
+
 	abstract protected DNSSDService	_queryRecord( int flags, int ifIndex, String serviceName, int rrtype, 
 										int rrclass, QueryListener listener)
 	throws DNSSDException;
@@ -593,6 +604,12 @@ class	AppleDNSSD extends DNSSD
 	{
 		return new AppleRegistration( flags, ifIndex, serviceName, regType, domain, host, port, 
 										( txtRecord != null) ? txtRecord.getRawBytes() : null, client);
+	}
+
+	protected DNSSDRecordRegistrar	_createRecordRegistrar( RegisterRecordListener listener)
+	throws DNSSDException
+	{
+		return new AppleRecordRegistrar( listener);
 	}
 
 	protected DNSSDService		_queryRecord( int flags, int ifIndex, String serviceName, int rrtype, 
@@ -797,7 +814,6 @@ class	AppleRegistration extends AppleService implements DNSSDRegistration
 		AppleDNSRecord	newRecord = new AppleDNSRecord( this);
 
 		this.ThrowOnErr( this.AddRecord( flags, rrType, rData, ttl, newRecord));
-
 		return newRecord;
 	}
 
@@ -813,6 +829,35 @@ class	AppleRegistration extends AppleService implements DNSSDRegistration
 
 	// Sets fNativeContext. Returns non-zero on error.
 	protected native int	AddRecord( int flags, int rrType, byte[] rData, int ttl, AppleDNSRecord destObj);
+}
+
+class	AppleRecordRegistrar extends AppleService implements DNSSDRecordRegistrar
+{
+	public			AppleRecordRegistrar( RegisterRecordListener listener) 
+	throws DNSSDException
+	{ 
+		super(listener); 
+		this.ThrowOnErr( this.CreateConnection());
+		if ( !AppleDNSSD.hasAutoCallbacks)
+			new Thread(this).start();
+	}
+
+	public DNSRecord	registerRecord( int flags, int ifIndex, String fullname, int rrtype, 
+									int rrclass, byte[] rdata, int ttl)
+	throws DNSSDException
+	{
+		AppleDNSRecord	newRecord = new AppleDNSRecord( this);
+
+		this.ThrowOnErr( this.RegisterRecord( flags, ifIndex, fullname, rrtype, rrclass, rdata, ttl, newRecord));
+		return newRecord;
+	}
+
+	// Sets fNativeContext. Returns non-zero on error.
+	protected native int	CreateConnection();
+
+	// Sets fNativeContext. Returns non-zero on error.
+	protected native int	RegisterRecord( int flags, int ifIndex, String fullname, int rrtype, 
+										int rrclass, byte[] rdata, int ttl, AppleDNSRecord destObj);
 }
 
 class	AppleQuery extends AppleService

@@ -2,52 +2,27 @@
  *
  * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
- * @APPLE_LICENSE_HEADER_START@
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  * 
- * This file contains Original Code and/or Modifications of Original Code
- * as defined in and that are subject to the Apple Public Source License
- * Version 2.0 (the 'License'). You may not use this file except in
- * compliance with the License. Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this
- * file.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  * 
- * The Original Code and all software distributed under the License are
- * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
- * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
- * Please see the License for the specific language governing rights and
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
  * limitations under the License.
- * 
- * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: dnsextd.c,v $
-Revision 1.41  2005/09/24 01:10:54  cheshire
-Fix comment typos
+Revision 1.33.2.2  2006/08/29 06:24:34  cheshire
+Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
 
-Revision 1.40  2005/09/07 21:54:37  ksekar
-<rdar://problem/4046465> dnsextd doesn't clean up on exit
-Close sockets before cleanup so clients can't make new requests
-
-Revision 1.39  2005/08/22 23:30:30  ksekar
-<rdar://problem/4158123> memory leak in dnsextd.c
-
-Revision 1.38  2005/06/29 10:03:56  cheshire
-Fix compile errors and warnings
-
-Revision 1.37  2005/06/27 22:12:17  ksekar
-<rdar://problem/4163315> dnsextd performance improvements
-
-Revision 1.36  2005/06/14 23:14:41  ksekar
-<rdar://problem/3934233> Unable to refresh LLQs
-
-Revision 1.35  2005/03/17 03:57:43  cheshire
-LEASE_OPT_SIZE is now LEASE_OPT_RDLEN; LLQ_OPT_SIZE is now LLQ_OPT_RDLEN
-
-Revision 1.34  2005/03/16 18:47:37  ksekar
-<rdar://problem/4046465> dnsextd doesn't clean up on exit
+Revision 1.33.2.1  2005/08/05 21:14:00  ksekar
+<rdar://problem/4012279> Long-lived queries not working on windows
+Change constant names
 
 Revision 1.33  2005/03/11 19:09:02  ksekar
 Fixed ZERO_LLQID macro
@@ -177,7 +152,6 @@ Revision 1.1  2004/08/11 00:43:26  ksekar
 #include <syslog.h>
 #include <string.h>
 #include <sys/time.h>
-#include <sys/resource.h>
 #include <time.h>
 #include <errno.h>
 
@@ -255,9 +229,7 @@ typedef struct AnswerListElem
     mDNSu16 type;
     CacheRecord *KnownAnswers;  // All valid answers delivered to client
     CacheRecord *EventList;     // New answers (adds/removes) to be sent to client
-    int refcount;
-    mDNSBool UseTCP;            // Use TCP if UDP would cause truncation
-    pthread_t tid;              // Allow parallel list updates
+    int refcount;          
 	} AnswerListElem;
 
 // llq table entry
@@ -278,7 +250,7 @@ typedef struct LLQEntry
 typedef struct 
 	{
     // server variables - read only after initialization (no locking)
-    struct sockaddr_in saddr;  // server address
+    struct in_addr saddr;      // server address
     domainname zone;           // zone being updated
     int tcpsd;                 // listening TCP socket
     int udpsd;                 // listening UDP socket
@@ -296,9 +268,8 @@ typedef struct
     // LLQ table variables
     LLQEntry *LLQTable[LLQ_TABLESIZE];  // !!!KRS change this and RRTable to use a common data structure
     AnswerListElem *AnswerTable[LLQ_TABLESIZE];
-    int AnswerTableCount;
-    int LLQEventNotifySock;          // Unix domain socket pair - update handling thread writes to EventNotifySock, which wakes
-    int LLQEventListenSock;          // the main thread listening on EventListenSock, indicating that the zone has changed
+    int LLQEventListenSock;       // Unix domain socket pair - polling thread writes to ServPollSock, which wakes
+    int LLQServPollSock;          // the main thread listening on EventListenSock, indicating that the zone has changed
 	} DaemonInfo;
 
 // args passed to UDP request handler thread as void*
@@ -316,13 +287,6 @@ typedef struct
     struct sockaddr_in cliaddr; 
     DaemonInfo *d;
 	} TCPRequestArgs;
-
-// args passed to UpdateAnswerList thread as void*
-typedef struct
-	{
-    DaemonInfo *d;
-    AnswerListElem *a;
-	} UpdateAnswerListArgs;
 
 //
 // Global Variables
@@ -385,12 +349,11 @@ mDNSlocal void Log(const char *format, ...)
 
 // Error Logging
 // prints message "dnsextd <function>: <operation> - <error message>" 
-// must be compiled w/ -D_REENTRANT for thread-safe errno usage
+// must be compiled w/ -D_REENTRANT  for thread-safe errno usage
 mDNSlocal void LogErr(const char *fn, const char *operation)
 	{
-	char buf[512], errbuf[256];
-	strerror_r(errno, errbuf, sizeof(errbuf));
-	snprintf(buf, sizeof(buf), "%s: %s - %s", fn, operation, errbuf);
+	char buf[512];
+	snprintf(buf, sizeof(buf), "%s: %s - %s", fn, operation, strerror(errno));
 	PrintLog(buf);
 	}
 
@@ -433,40 +396,30 @@ mDNSlocal void HdrHToN(PktMsg *pkt)
 // caller terminates connection via close()
 mDNSlocal int ConnectToServer(DaemonInfo *d)
 	{
-	int ntries = 0, retry = 0;
-
-	while (1)
-		{
-	    int sd = socket(AF_INET, SOCK_STREAM, 0);
-		if (sd < 0) { LogErr("ConnectToServer", "socket");  return -1; }
-		if (!connect(sd, (struct sockaddr *)&d->saddr, sizeof(d->saddr))) return sd;
-		close(sd);
-		if (++ntries < 10)
-			{
-			LogErr("ConnectToServer", "connect");
-			Log("ConnectToServer - retrying connection");
-			if (!retry) retry = 500000 + random() % 500000;
-			usleep(retry);
-			retry *= 2;
-			}
-		else { Log("ConnectToServer - %d failed attempts.  Aborting.", ntries); return -1; }
-		}
+	struct sockaddr_in servaddr;
+	int sd;
+	
+	bzero(&servaddr, sizeof(servaddr));
+	if (d->saddr.s_addr) servaddr.sin_addr = d->saddr;
+	else                 inet_pton(AF_INET, LOOPBACK, &d->saddr);  // use loopback if server not explicitly specified			
+	servaddr.sin_port = htons(NS_PORT);
+	servaddr.sin_family = AF_INET;
+#ifndef NOT_HAVE_SA_LEN
+	servaddr.sin_len = sizeof(servaddr); 
+#endif
+	sd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sd < 0) { LogErr("ConnectToServer", "socket");  return -1; }
+	if (connect(sd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) { LogErr("ConnectToServer", "connect"); return -1; }
+	return sd;
 	}
 
-// send an entire block of data over a connected socket
+// send an entire block of data over a connected socket, blocking if buffers are full
 mDNSlocal int MySend(int sd, const void *msg, int len)
 	{
-	int selectval, n, nsent = 0;
-	fd_set wset;	
-	struct timeval timeout = { 3, 0 };  // until we remove all calls from main thread, keep timeout short
-	
+	int n, nsent = 0;
+
 	while (nsent < len)
 		{
-		FD_ZERO(&wset);
-		FD_SET(sd, &wset);
-		selectval = select(sd+1, NULL, &wset, NULL, &timeout);
-		if (selectval < 0) { LogErr("MySend", "select");  return -1; }
-		if (!selectval || !FD_ISSET(sd, &wset)) { Log("MySend - timeout"); return -1; }
 		n = send(sd, (char *)msg + nsent, len - nsent, 0);
 		if (n < 0) { LogErr("MySend", "send");  return -1; }
 		nsent += n;
@@ -493,21 +446,11 @@ static int my_recv(const int sd, void *const buf, const int len)
     // use an explicit while() loop instead.
     // Also, don't try to do '+=' arithmetic on the original "void *" pointer --
     // arithmetic on "void *" pointers is compiler-dependent.
-
-	fd_set rset;	
-	struct timeval timeout = { 3, 0 };  // until we remove all calls from main thread, keep timeout short	
-    int selectval, remaining = len;
+    int remaining = len;
     char *ptr = (char *)buf;
-	ssize_t num_read;
-	
-	while (remaining)
+    while (remaining)
     	{
-		FD_ZERO(&rset);
-		FD_SET(sd, &rset);
-		selectval = select(sd+1, &rset, NULL, NULL, &timeout);
-		if (selectval < 0) { LogErr("my_recv", "select");  return -1; }
-		if (!selectval || !FD_ISSET(sd, &rset)) { Log("my_recv - timeout"); return -1; }
-    	num_read = recv(sd, ptr, remaining, 0);
+    	ssize_t num_read = recv(sd, ptr, remaining, 0);
     	if ((num_read == 0) || (num_read < 0) || (num_read > remaining)) return -1;
     	ptr       += num_read;
     	remaining -= num_read;
@@ -528,7 +471,7 @@ mDNSlocal PktMsg *ReadTCPMsg(int sd, PktMsg *storage)
 	unsigned int srclen;
 	
 	nread = my_recv(sd, &msglen, sizeof(msglen));
-	if (nread < 0) { LogErr("ReadTCPMsg", "recv"); goto error; }
+	if (nread < 0) { LogErr("TCPRequestForkFn", "recv"); goto error; }
 	msglen = ntohs(msglen);
 	if (nread != sizeof(msglen)) { Log("Could not read length field of message"); goto error; }	
 
@@ -552,7 +495,7 @@ mDNSlocal PktMsg *ReadTCPMsg(int sd, PktMsg *storage)
 	if (getpeername(sd, (struct sockaddr *)&pkt->src, &srclen) ||
 		srclen != sizeof(pkt->src)) { LogErr("ReadTCPMsg", "getpeername"); bzero(&pkt->src, sizeof(pkt->src)); }
 	nread = my_recv(sd, &pkt->msg, msglen);
-	if (nread < 0) { LogErr("ReadTCPMsg", "recv"); goto error; }
+	if (nread < 0) { LogErr("TCPRequestForkFn", "recv"); goto error; }
 	if (nread != msglen) { Log("Could not read entire message"); goto error; }
 	if (pkt->len < sizeof(DNSMessageHeader))
 		{ Log("ReadTCPMsg: Message too short (%d bytes)", pkt->len);  goto error; }	
@@ -562,33 +505,6 @@ mDNSlocal PktMsg *ReadTCPMsg(int sd, PktMsg *storage)
 	error:
 	if (pkt && pkt != storage) free(pkt);
 	return NULL;
-	}
-
-mDNSlocal int UDPServerTransaction(const DaemonInfo *d, const PktMsg *request, PktMsg *reply, mDNSBool *trunc)
-	{
-	fd_set rset;	
-	struct timeval timeout = { 3, 0 };  // until we remove all calls from main thread, keep timeout short
-	int selectval, err = -1, sd = socket(AF_INET, SOCK_DGRAM, 0);
-
-	*trunc = mDNSfalse;
-	if (sd < 0) { LogErr("UDPServerTransaction", "socket"); goto end; }
-	if (sendto(sd, (char *)&request->msg, request->len, 0, (struct sockaddr *)&d->saddr, sizeof(d->saddr)) != (int)request->len)
-		{ LogErr("UDPServerTransaction", "sendto"); goto end; }
-
-	FD_ZERO(&rset);
-	FD_SET(sd, &rset);
-	selectval = select(sd+1, &rset, NULL, NULL, &timeout);
-	if (selectval < 0) { LogErr("UDPServerTransaction", "select");  goto end; }
-	if (!selectval || !FD_ISSET(sd, &rset)) { Log("UDPServerTransaction - timeout"); goto end; }
-	reply->len = recvfrom(sd, &reply->msg, sizeof(reply->msg), 0, NULL, NULL);
-	if ((int)reply->len < 0) { LogErr("UDPServerTransaction", "recvfrom"); goto end; }
-	if (reply->len < sizeof(DNSMessageHeader)) { Log("UDPServerTransaction - Message too short (%d bytes)", reply->len); goto end; }
-	if (reply->msg.h.flags.b[0] & kDNSFlag0_TC) *trunc = mDNStrue;
-	err = 0;
-
-	end:
-	if (sd >= 0) close(sd);
-	return err;	
 	}
 
 //
@@ -926,14 +842,10 @@ mDNSlocal void PrintHelp(void)
 mDNSlocal int ProcessArgs(int argc, char *argv[], DaemonInfo *d)
 	{
 	int opt;
-	struct in_addr server;
-	
-	if (argc < 2) goto arg_error;
-	
-    // defaults, may be overriden by command option
-	d->port.NotAnInteger = htons(DAEMON_PORT);  
-	inet_pton(AF_INET, LOOPBACK, &server);  // use loopback if server not explicitly specified
 
+	if (argc < 2) goto arg_error;
+
+	d->port.NotAnInteger = htons(DAEMON_PORT);  // default, may be overriden by command option
 	while ((opt = getopt(argc, argv, "z:p:hfvs:k:")) != -1)
 		{
 		switch(opt)
@@ -944,8 +856,8 @@ mDNSlocal int ProcessArgs(int argc, char *argv[], DaemonInfo *d)
 			case 'h': PrintHelp();    return -1;
 			case 'f': foreground = 1; break;
 			case 'v': verbose = 1;    break;
-			case 's': if (!inet_pton(AF_INET, optarg, &server)) goto arg_error;
-				break;
+			case 's': if (!inet_pton(AF_INET, optarg, &d->saddr)) goto arg_error;
+				      break;
 			case 'k': if (ReadAuthKey(argc, argv, d) < 0) goto arg_error;
 				      break;
 			case 'z': if (!MakeDomainNameFromDNSNameString(&d->zone, optarg))
@@ -960,16 +872,6 @@ mDNSlocal int ProcessArgs(int argc, char *argv[], DaemonInfo *d)
 		
 	if (!d->zone.c[0]) goto arg_error;  // zone is the only required argument
 	if (d->AuthInfo) AssignDomainName(&d->AuthInfo->zone, &d->zone); // if we have a shared secret, use it for the entire zone
-
-	// setup server's sockaddr
-	bzero(&d->saddr, sizeof(d->saddr));
-	d->saddr.sin_addr = server;   
-	d->saddr.sin_port = htons(NS_PORT);
-	d->saddr.sin_family = AF_INET;
-#ifndef NOT_HAVE_SA_LEN
-	d->saddr.sin_len = sizeof(d->saddr); 
-#endif
-
 	return 0;
 	
 	arg_error:
@@ -1018,7 +920,7 @@ mDNSlocal int SetupSockets(DaemonInfo *daemon)
 	// set up Unix domain socket pair for LLQ polling thread to signal main thread that a change to the zone occurred
 	if (socketpair(AF_LOCAL, SOCK_STREAM, 0, sockpair) < 0) { LogErr("SetupSockets", "socketpair"); return -1; }
 	daemon->LLQEventListenSock = sockpair[0];
-	daemon->LLQEventNotifySock = sockpair[1];
+	daemon->LLQServPollSock = sockpair[1];
 	return 0;
 	}
 
@@ -1027,9 +929,9 @@ mDNSlocal int SetupSockets(DaemonInfo *daemon)
 //
 
 // Delete a resource record from the nameserver via a dynamic update
-// sd is a socket already connected to the server
-mDNSlocal void DeleteOneRecord(DaemonInfo *d, CacheRecord *rr, domainname *zone, int sd)
+mDNSlocal void DeleteRecord(DaemonInfo *d, CacheRecord *rr, domainname *zone)
 	{
+	int sd = -1;
 	mDNSOpaque16 id;
 	PktMsg pkt;
 	mDNSu8 *ptr = pkt.msg.data;
@@ -1039,6 +941,8 @@ mDNSlocal void DeleteOneRecord(DaemonInfo *d, CacheRecord *rr, domainname *zone,
 	PktMsg *reply = NULL;
 	
 	VLog("Expiring record %s", GetRRDisplayString_rdb(&rr->resrec, &rr->resrec.rdata->u, buf));	
+	sd = ConnectToServer(d);
+	if (sd < 0) { Log("DeleteRecord: ConnectToServer failed"); goto end; }
 	
 	id.NotAnInteger = 0;
 	InitializeDNSMessage(&pkt.msg.h, id, UpdateReqFlags);
@@ -1060,45 +964,51 @@ mDNSlocal void DeleteOneRecord(DaemonInfo *d, CacheRecord *rr, domainname *zone,
 	pkt.len = ptr - (mDNSu8 *)&pkt.msg;
 	pkt.src.sin_addr.s_addr = htonl(INADDR_ANY); // address field set solely for verbose logging in subroutines
 	pkt.src.sin_family = AF_INET;
-	if (SendTCPMsg(sd, &pkt)) { Log("DeleteOneRecord: SendTCPMsg failed"); }
+	if (SendTCPMsg(sd, &pkt)) { Log("DeleteRecord: SendTCPMsg failed"); }
 	reply = ReadTCPMsg(sd, NULL);
 	if (!SuccessfulUpdateTransaction(&pkt, reply))
-		Log("Expiration update failed with rcode %d", reply ? reply->msg.h.flags.b[1] & kDNSFlag1_RC : -1);
+		Log("Expiration update failed with rcode %d", reply->msg.h.flags.b[1] & kDNSFlag1_RC);
 					  
 	end:
-	if (!ptr) { Log("DeleteOneRecord: Error constructing lease expiration update"); }
+	if (!ptr) { Log("DeleteRecord: Error constructing lease expiration update"); }
+	if (sd >= 0) close(sd);	
 	if (reply) free(reply);
 	}
 
-// iterate over table, deleting expired records (or all records if DeleteAll is true)
-mDNSlocal void DeleteRecords(DaemonInfo *d, mDNSBool DeleteAll)
+// iterate over table, deleting expired records
+mDNSlocal void DeleteExpiredRecords(DaemonInfo *d)
 	{
+	int i;
+	RRTableElem *ptr, *prev, *fptr;	
 	struct timeval now;
-	int i, sd = ConnectToServer(d);
-	if (sd < 0) { Log("DeleteRecords: ConnectToServer failed"); return; }  
-	if (gettimeofday(&now, NULL)) { LogErr("DeleteRecords ", "gettimeofday"); return; }
-	if (pthread_mutex_lock(&d->tablelock)) { LogErr("DeleteRecords", "pthread_mutex_lock"); return; }
 
+	if (gettimeofday(&now, NULL)) { LogErr("DeleteExpiredRecords ", "gettimeofday"); return; }
+	if (pthread_mutex_lock(&d->tablelock)) { LogErr("DeleteExpiredRecords", "pthread_mutex_lock"); return; }
 	for (i = 0; i < d->nbuckets; i++)
 		{
-		RRTableElem **ptr = &d->table[i];
-		while (*ptr)
+		ptr = d->table[i];
+		prev = NULL;
+		while (ptr)
 			{
-			if (DeleteAll || (*ptr)->expire - now.tv_sec < 0)
+			if (ptr->expire - now.tv_sec < 0)
 				{
-				RRTableElem *fptr;
 				// delete record from server
-				DeleteOneRecord(d, &(*ptr)->rr, &(*ptr)->zone, sd);
-				fptr = *ptr;
-				*ptr = (*ptr)->next;
+				DeleteRecord(d, &ptr->rr, &ptr->zone);
+				if (prev) prev->next = ptr->next;
+				else d->table[i] = ptr->next;
+				fptr = ptr;
+				ptr = ptr->next;
 				free(fptr);
 				d->nelems--;
 				}
-			else ptr = &(*ptr)->next;
+			else
+				{
+				prev = ptr;
+				ptr = ptr->next;
+				}
 			}
 		}
 	pthread_mutex_unlock(&d->tablelock);
-	close(sd);
 	}
 
 //
@@ -1235,54 +1145,32 @@ mDNSlocal PktMsg *FormatLeaseReply(DaemonInfo *d, PktMsg *orig, mDNSu32 lease)
 mDNSlocal PktMsg *HandleRequest(PktMsg *pkt, DaemonInfo *d)
 	{
 	int sd = -1;
-	PktMsg *reply = NULL, *LeaseReply, buf;
+	PktMsg *reply = NULL, *LeaseReply;
 	mDNSs32 lease;
-	char addrbuf[32], pingmsg[4];
+	char buf[32];
 	
 	// send msg to server, read reply
-
-	if (pkt->len <= 512)
-		{
-		mDNSBool trunc;
-		if (UDPServerTransaction(d, pkt, &buf, &trunc) < 0)
-			Log("HandleRequest - UDPServerTransaction failed.  Trying TCP");
-		else if (trunc) VLog("HandleRequest - answer truncated.  Using TCP");
-		else reply = &buf; // success
-		}
-
-	if (!reply)
-		{
-		sd = ConnectToServer(d);
-		if (sd < 0)
-			{ Log("Discarding request from %s due to connection errors", inet_ntop(AF_INET, &pkt->src.sin_addr, addrbuf, 32)); goto cleanup; }
-		if (SendTCPMsg(sd, pkt) < 0)
-			{ Log("Couldn't relay message from %s to server.  Discarding.", inet_ntop(AF_INET, &pkt->src.sin_addr, addrbuf, 32)); goto cleanup; }		
-		reply = ReadTCPMsg(sd, &buf);
-		}
-		
+	sd = ConnectToServer(d);
+	if (sd < 0)
+		{ Log("Discarding request from %s due to connection errors", inet_ntop(AF_INET, &pkt->src.sin_addr, buf, 32)); goto cleanup; }
+	if (SendTCPMsg(sd, pkt) < 0)
+		{ Log("Couldn't relay message from %s to server.  Discarding.", inet_ntop(AF_INET, &pkt->src.sin_addr, buf, 32)); goto cleanup; }
+	reply = ReadTCPMsg(sd, NULL);
+	
 	// process reply
 	if (!SuccessfulUpdateTransaction(pkt, reply))
-		{ VLog("Message from %s not a successful update.", inet_ntop(AF_INET, &pkt->src.sin_addr, addrbuf, 32));  goto cleanup; }	
+		{ VLog("Message from %s not a successful update.", inet_ntop(AF_INET, &pkt->src.sin_addr, buf, 32));  goto cleanup; }	
 	lease = GetPktLease(pkt);
 	UpdateLeaseTable(pkt, d, lease);
 	if (lease > 0)
 		{
 		LeaseReply = FormatLeaseReply(d, reply, lease);
 		if (!LeaseReply) Log("HandleRequest - unable to format lease reply");
+		free(reply); 
 		reply = LeaseReply;
 		}
-
-	// tell the main thread there was an update so it can send LLQs
-	if (send(d->LLQEventNotifySock, pingmsg, sizeof(pingmsg), 0) != sizeof(pingmsg)) LogErr("HandleRequest", "send");
-
 	cleanup:
 	if (sd >= 0) close(sd);
-	if (reply == &buf)
-		{
-		reply = malloc(sizeof(*reply));
-		if (!reply) LogErr("HandleRequest", "malloc");
-		else { reply->len = buf.len; memcpy(&reply->msg, &buf.msg, buf.len); }
-		}
 	return reply;
 	}
 
@@ -1327,13 +1215,9 @@ mDNSlocal void DeleteLLQ(DaemonInfo *d, LLQEntry *e)
 	inet_ntop(AF_INET, &e->cli.sin_addr, addr, 32);
 	VLog("Deleting LLQ table entry for %##s client %s", e->qname.c, addr);
 
-	if (a && !(--a->refcount) && d->AnswerTableCount >= LLQ_TABLESIZE)
+	// free shared answer structure if ref count drops to zero
+	if (a && !(--a->refcount))
 		{
-		// currently, generating initial answers blocks the main thread, so we keep the answer list
-		// even if the ref count drops to zero.  To prevent unbounded table growth, we free shared answers
-		// if the ref count drops to zero AND there are more table elements than buckets
-		// !!!KRS update this when we make the table dynamically growable
-
 		CacheRecord *cr = a->KnownAnswers, *tmp;
 		AnswerListElem **tbl = &d->AnswerTable[bucket];
 
@@ -1345,7 +1229,7 @@ mDNSlocal void DeleteLLQ(DaemonInfo *d, LLQEntry *e)
 			}
 
 		while (*tbl && *tbl != a) tbl = &(*tbl)->next;
-		if (*tbl) { *tbl = (*tbl)->next; free(a); d->AnswerTableCount--; }
+		if (*tbl) { *tbl = (*tbl)->next; free(a); }
 		else Log("Error: DeleteLLQ - AnswerList not found in table");
 		}
 
@@ -1372,17 +1256,20 @@ mDNSlocal int SendLLQ(DaemonInfo *d, PktMsg *pkt, struct sockaddr_in dst)
 	return err;
 	}
 
-mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, AnswerListElem *e)
+// if non-negative, sd is a TCP socket connected to the nameserver
+// otherwise, this routine creates and closes its own socket
+mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, AnswerListElem *e, int sd)
 	{
 	PktMsg q;
-	int i, sd = -1;
+	int i;
 	const mDNSu8 *ansptr;
 	mDNSu8 *end = q.msg.data;
 	mDNSOpaque16 id, flags = QueryFlags;
-	PktMsg buf, *reply = NULL;
+	PktMsg *reply = NULL;
 	LargeCacheRecord lcr;
 	CacheRecord *AnswerList = NULL;
 	mDNSu8 rcode;
+	mDNSBool CloseSDOnExit = sd < 0;
 	
 	VLog("Querying server for %##s type %d", e->name.c, e->type);
 	
@@ -1393,26 +1280,11 @@ mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, AnswerListElem *e)
 	end = putQuestion(&q.msg, end, end + AbsoluteMaxDNSMessageData, &e->name, e->type, kDNSClass_IN);
 	if (!end) { Log("Error: AnswerQuestion - putQuestion returned NULL"); goto end; }
 	q.len = (int)(end - (mDNSu8 *)&q.msg);
-
-	if (!e->UseTCP)
-		{
-		mDNSBool trunc;
-
-		if (UDPServerTransaction(d, &q, &buf, &trunc) < 0)
-			Log("AnswerQuestion %##s - UDPServerTransaction failed.  Trying TCP", e->name.c);
-		else if (trunc)
-			{ VLog("AnswerQuestion %##s - answer truncated.  Using TCP", e->name.c); e->UseTCP = mDNStrue; }
-		else reply = &buf;  // success
-		}
 	
-	if (!reply)
-		{
-		sd = ConnectToServer(d);
-		if (sd < 0) { Log("AnswerQuestion: ConnectToServer failed"); goto end; }
-		if (SendTCPMsg(sd, &q)) { Log("AnswerQuestion: SendTCPMsg failed"); close(sd); goto end; }
-		reply = ReadTCPMsg(sd, NULL);
-		close(sd);
-		}
+	if (sd < 0) sd = ConnectToServer(d);
+	if (sd < 0) { Log("AnswerQuestion: ConnectToServer failed"); goto end; }
+	if (SendTCPMsg(sd, &q)) { Log("AnswerQuestion: SendTCPMsg failed"); close(sd); goto end; }
+	reply = ReadTCPMsg(sd, NULL);
 
 	if ((reply->msg.h.flags.b[0] & kDNSFlag0_QROP_Mask) != (kDNSFlag0_QR_Response | kDNSFlag0_OP_StdQuery))
 		{ Log("AnswerQuestion: %##s type %d - Invalid response flags from server"); goto end; }
@@ -1442,22 +1314,18 @@ mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, AnswerListElem *e)
 		}
 	
 	end:
-	if (reply && reply != &buf) free(reply);
+	if (sd > -1 && CloseSDOnExit) close(sd);
+	if (reply) free(reply);
 	return AnswerList;
 	}
 
-// Routine forks a thread to set EventList to contain Add/Remove events, and deletes any removes from the KnownAnswer list
-mDNSlocal void *UpdateAnswerList(void *args)
+// Routine sets EventList to contain Add/Remove events, and deletes any removes from the KnownAnswer list
+mDNSlocal void UpdateAnswerList(DaemonInfo *d, AnswerListElem *a, int sd)
 	{
 	CacheRecord *cr, *NewAnswers, **na, **ka; // "new answer", "known answer"
-	DaemonInfo *d = ((UpdateAnswerListArgs *)args)->d;
-	AnswerListElem *a = ((UpdateAnswerListArgs *)args)->a;
 
-	free(args);
-	args = NULL;
-	
 	// get up to date answers
-	NewAnswers = AnswerQuestion(d, a);
+	NewAnswers = AnswerQuestion(d, a, sd);
 	
 	// first pass - mark all answers for deletion
 	for (ka = &a->KnownAnswers; *ka; ka = &(*ka)->next)
@@ -1511,9 +1379,7 @@ mDNSlocal void *UpdateAnswerList(void *args)
 		cr = NewAnswers;
 		NewAnswers = NewAnswers->next;
 		free(cr);
-		}
-	
-	return NULL;
+		}  	
 	}
 
 mDNSlocal void SendEvents(DaemonInfo *d, LLQEntry *e)
@@ -1537,7 +1403,7 @@ mDNSlocal void SendEvents(DaemonInfo *d, LLQEntry *e)
 		if (verbose) GetRRDisplayString_rdb(&cr->resrec, &cr->resrec.rdata->u, rrbuf);
 		VLog("%s (%s): %s", addrbuf, (mDNSs32)cr->resrec.rroriginalttl < 0 ? "Remove": "Add", rrbuf);				 
 		end = PutResourceRecordTTLJumbo(&response.msg, end, &response.msg.h.numAnswers, &cr->resrec, cr->resrec.rroriginalttl);
-		if (!end) { Log("Error: SendEvents - PutResourceRecordTTLJumbo returned NULL"); return; }
+		if (!end) { Log("Error: SendEvents - UpdateAnswerList returned NULL"); return; }
 		}
 			   
 	FormatLLQOpt(&opt, kLLQOp_Event, e->id, LLQLease(e));
@@ -1546,28 +1412,6 @@ mDNSlocal void SendEvents(DaemonInfo *d, LLQEntry *e)
 
 	response.len = (int)(end - (mDNSu8 *)&response.msg);
 	if (SendLLQ(d, &response, e->cli) < 0) LogMsg("Error: SendEvents - SendLLQ");		
-	}
-
-mDNSlocal void PrintLLQAnswers(DaemonInfo *d)
-	{
-	int i;
-	char rrbuf[80];
-	
-	Log("Printing LLQ Answer Table contents");
-
-	for (i = 0; i < LLQ_TABLESIZE; i++)
-		{
-		AnswerListElem *a = d->AnswerTable[i];
-		while(a)
-			{
-			int ancount = 0;
-			const CacheRecord *rr = a->KnownAnswers;
-			while (rr) { ancount++; rr = rr->next; }		
-			Log("%p : Question %##s;  type %d;  referenced by %d LLQs; %d answers:", a, a->name.c, a->type, a->refcount, ancount);
-			for (rr = a->KnownAnswers; rr; rr = rr->next) Log("\t%s", GetRRDisplayString_rdb(&rr->resrec, &rr->resrec.rdata->u, rrbuf));
-			a = a->next;
-			}
-		}
 	}
 
 mDNSlocal void PrintLLQTable(DaemonInfo *d)
@@ -1583,19 +1427,9 @@ mDNSlocal void PrintLLQTable(DaemonInfo *d)
 		e = d->LLQTable[i];
 		while(e)
 			{
-			char *state;
-			
-			switch (e->state)
-				{
-				case RequestReceived: state = "RequestReceived"; break;
-				case ChallengeSent:   state = "ChallengeSent";   break;
-				case Established:     state = "Established";     break;
-				default:              state = "unknown"; 					
-				}
-			inet_ntop(AF_INET, &e->cli.sin_addr, addr, 32);				
-			
-			Log("LLQ from %s in state %s; %##s; type %d; orig lease %d; remaining lease %d; AnswerList %p)",
-				addr, state, e->qname.c, e->qtype, e->lease, LLQLease(e), e->AnswerList);
+			inet_ntop(AF_INET, &e->cli.sin_addr, addr, 32);
+			Log("LLQ from %##s type %d lease %d (%d remaining)",
+				addr, e->qname.c, e->qtype, e->lease, LLQLease(e));
 			e = e->next;
 			}
 		}
@@ -1605,13 +1439,14 @@ mDNSlocal void PrintLLQTable(DaemonInfo *d)
 mDNSlocal void GenLLQEvents(DaemonInfo *d)
 	{
 	LLQEntry **e;
-	int i;
+	int i, sd;
 	struct timeval t;
-	UpdateAnswerListArgs *args;
-	
+
 	VLog("Generating LLQ Events");
 
 	gettimeofday(&t, NULL);
+	sd = ConnectToServer(d);
+	if (sd < 0) { Log("GenLLQEvents: ConnectToServer failed"); return; }
 
 	// get all answers up to date
 	for (i = 0; i < LLQ_TABLESIZE; i++)
@@ -1619,26 +1454,11 @@ mDNSlocal void GenLLQEvents(DaemonInfo *d)
 		AnswerListElem *a = d->AnswerTable[i];
 		while(a)
 			{
-			args = malloc(sizeof(*args));
-			if (!args) { LogErr("GenLLQEvents", "malloc"); return; }			
-			args->d = d;
-			args->a = a;
-			if (pthread_create(&a->tid, NULL, UpdateAnswerList, args) < 0) { LogErr("GenLLQEvents", "pthread_create"); return; }
-			usleep(1);
+			UpdateAnswerList(d, a, sd);
 			a = a->next;
 			}
 		}
 
-	for (i = 0; i < LLQ_TABLESIZE; i++)
-		{
-		AnswerListElem *a = d->AnswerTable[i];
-		while(a)
-			{
-			if (pthread_join(a->tid, NULL))  LogErr("GenLLQEvents", "pthread_join");
-			a = a->next;
-			}
-		}
-	
     // for each established LLQ, send events
 	for (i = 0; i < LLQ_TABLESIZE; i++)
 		{
@@ -1680,6 +1500,79 @@ mDNSlocal void GenLLQEvents(DaemonInfo *d)
 			a = a->next;
 			}
 		}	
+		
+	close(sd);
+	}
+
+// Monitor zone for changes that may produce LLQ events
+mDNSlocal void *LLQEventMonitor(void *DInfoPtr)
+	{
+	DaemonInfo *d = DInfoPtr;
+	PktMsg q;
+	mDNSu8 *end = q.msg.data;
+	const mDNSu8 *ptr;
+	mDNSOpaque16 id, flags = QueryFlags;
+	PktMsg reply;
+	mDNSs32 serial = 0;
+	mDNSBool SerialInitialized = mDNSfalse;
+	int sd;
+    LargeCacheRecord lcr;
+	ResourceRecord *rr = &lcr.r.resrec;
+	int i, sleeptime = 0;
+	domainname zone;
+	char pingmsg[4];
+	
+	// create question
+	id.NotAnInteger = 0;
+	InitializeDNSMessage(&q.msg.h, id, flags);
+	AssignDomainName(&zone, &d->zone);
+	end = putQuestion(&q.msg, end, end + AbsoluteMaxDNSMessageData, &zone, kDNSType_SOA, kDNSClass_IN);
+	if (!end) { Log("Error: LLQEventMonitor - putQuestion returned NULL"); return NULL; }
+	q.len = (int)(end - (mDNSu8 *)&q.msg);
+
+	sd = ConnectToServer(d);
+	if (sd < 0) { Log("LLQEventMonitor: ConnectToServer failed"); return NULL; }
+
+	while(1)
+		{
+		usleep(sleeptime);
+		sleeptime = LLQ_MONITOR_ERR_INTERVAL;  // if we bail on error below, rate limit retry
+		
+		// send message, receive response
+		if (SendTCPMsg(sd, &q)) { Log("LLQEventMonitor: SendTCPMsg failed"); continue; }
+		if (!ReadTCPMsg(sd, &reply)) { Log("LLQEventMonitor: ReadTCPMsg failed"); continue; }
+		end = (mDNSu8 *)&reply.msg + reply.len;
+		if (reply.msg.h.flags.b[1] & kDNSFlag1_RC) { Log("LLQEventMonitor - received non-zero rcode"); continue; }
+
+		// find answer
+		ptr = LocateAnswers(&reply.msg, end);
+		if (!ptr) { Log("Error: LLQEventMonitor - LocateAnswers returned NULL"); continue; }
+		for (i = 0; i < reply.msg.h.numAnswers; i++)
+			{
+			ptr = GetLargeResourceRecord(NULL, &reply.msg, ptr, end, 0, kDNSRecordTypePacketAns, &lcr);
+			if (!ptr) { Log("Error: LLQEventMonitor - GetLargeResourceRecord  returned NULL"); continue; }
+			if (rr->rrtype != kDNSType_SOA || rr->rrclass != kDNSClass_IN || !SameDomainName(rr->name, &zone)) continue;
+			if (!SerialInitialized)
+				{
+				// first time through loop
+				SerialInitialized = mDNStrue;
+				serial = rr->rdata->u.soa.serial;
+				sleeptime = LLQ_MONITOR_INTERVAL;
+				break;
+				}
+			else if (rr->rdata->u.soa.serial != serial)
+				{
+				// update serial, wake main thread
+				serial = rr->rdata->u.soa.serial;
+				VLog("LLQEventMonitor: zone changed. Signaling main thread.");
+				if (send(d->LLQServPollSock, pingmsg, sizeof(pingmsg), 0) != sizeof(pingmsg))
+					{ LogErr("LLQEventMonitor", "send"); break; }
+				}
+			sleeptime = LLQ_MONITOR_INTERVAL;
+			break;			
+			}
+		if (!ptr) Log("LLQEventMonitor: response to query did not contain SOA");
+		}
 	}
 
 mDNSlocal void SetAnswerList(DaemonInfo *d, LLQEntry *e)
@@ -1694,12 +1587,15 @@ mDNSlocal void SetAnswerList(DaemonInfo *d, LLQEntry *e)
 		AssignDomainName(&a->name, &e->qname);
 		a->type = e->qtype;
 		a->refcount = 0;
+		a->KnownAnswers = NULL;
 		a->EventList = NULL;
-		a->UseTCP = mDNSfalse;
 		a->next = d->AnswerTable[bucket];
 		d->AnswerTable[bucket] = a;
-		d->AnswerTableCount++;
-		a->KnownAnswers = AnswerQuestion(d, a);
+
+		// to get initial answer list, call UpdateAnswerList and move cache records from EventList to KnownAnswers
+		UpdateAnswerList(d, a, -1);
+		a->KnownAnswers = a->EventList;
+		a->EventList = NULL;
 		}
 	
 	e->AnswerList = a;
@@ -1754,11 +1650,8 @@ mDNSlocal void LLQRefresh(DaemonInfo *d, LLQEntry *e, LLQOptData *llq, mDNSOpaqu
 	
 	if (llq->lease)
 		{
-		struct timeval t;
 		if (llq->lease < LLQ_MIN_LEASE) llq->lease = LLQ_MIN_LEASE;
 		else if (llq->lease > LLQ_MAX_LEASE) llq->lease = LLQ_MIN_LEASE;
-		gettimeofday(&t, NULL);
-		e->expire = t.tv_sec + llq->lease;
 		}
 	
 	ack.src.sin_addr.s_addr = 0; // unused 
@@ -2090,7 +1983,6 @@ mDNSlocal void *TCPRequestForkFn(void *vptr)
 		}
 		
 	cleanup:
-	close(req->sd);
 	free(req);
 	if (in) free(in);
 	if (out) free(out);
@@ -2099,34 +1991,31 @@ mDNSlocal void *TCPRequestForkFn(void *vptr)
 
 mDNSlocal int RecvTCPRequest(int sd, DaemonInfo *d)
 	{
-	TCPRequestArgs *req = NULL;
+	TCPRequestArgs *req;
 	pthread_t tid;
 	unsigned int clilen = sizeof(req->cliaddr);
 	
 	req = malloc(sizeof(TCPRequestArgs));
-	if (!req) { LogErr("RecvTCPRequest", "malloc"); goto error; }
+	if (!req) { LogErr("RecvTCPRequest", "malloc"); return -1; }
 	bzero(req, sizeof(*req));
 	req->d = d;
 	req->sd = accept(sd, (struct sockaddr *)&req->cliaddr, &clilen);
-	if (req->sd < 0) { LogErr("RecvTCPRequest", "accept"); goto error; }	
-	if (clilen != sizeof(req->cliaddr)) { Log("Client address of unknown size %d", clilen); goto error; }
-	if (pthread_create(&tid, NULL, TCPRequestForkFn, req)) { LogErr("RecvTCPRequest", "pthread_create"); goto error; }
+	if (req->sd < 0) { LogErr("RecvTCPRequest", "accept"); return -1; }	
+	if (clilen != sizeof(req->cliaddr)) { Log("Client address of unknown size %d", clilen); free(req); return -1; }
+	if (pthread_create(&tid, NULL, TCPRequestForkFn, req)) { LogErr("RecvTCPRequest", "pthread_create"); free(req); return -1; }
 	pthread_detach(tid);
 	return 0;
-
-	error:
-	if (req) free(req);
-	return -1;
 	}
 
 // main event loop
 // listen for incoming requests, periodically check table for expired records, respond to signals
 mDNSlocal int ListenForUpdates(DaemonInfo *d)
 	{
-	int maxfdp1, nfds;
+	int err;
+	int maxfdp1;
 	fd_set rset;
-	struct timeval timenow, timeout, EventTS, tablecheck = { 0, 0 };
-	mDNSBool EventsPending = mDNSfalse;
+	struct timeval timenow, timeout = { 0, 0 };
+	long NextTableCheck = 0;
 	
    	VLog("Listening for requests...");
 
@@ -2137,71 +2026,41 @@ mDNSlocal int ListenForUpdates(DaemonInfo *d)
 	
 	while(1)
 		{
-		// set timeout
-		timeout.tv_sec = timeout.tv_usec = 0;
+		// expire records if necessary, set timeout
 		if (gettimeofday(&timenow, NULL)) { LogErr("ListenForUpdates", "gettimeofday"); return -1; }
-		if (EventsPending)
+		if (timenow.tv_sec >= NextTableCheck)
 			{
-			if (timenow.tv_sec - EventTS.tv_sec >= 5)           // if we've been waiting 5 seconds for a "quiet" period to send
-				{ GenLLQEvents(d); EventsPending = mDNSfalse; } // events, we go ahead and do it now
-			else timeout.tv_usec = 500000;                      // else do events after 1/2 second with no new events or LLQs
+			DeleteExpiredRecords(d);
+			NextTableCheck = timenow.tv_sec + EXPIRATION_INTERVAL;
 			}
-		if (!EventsPending)
-			{
-			// if no pending events, timeout when we need to check for expired records
-			if (tablecheck.tv_sec && timenow.tv_sec - tablecheck.tv_sec >= 0)
-				{ DeleteRecords(d, mDNSfalse); tablecheck.tv_sec = 0; } // table check overdue				
-			if (!tablecheck.tv_sec) tablecheck.tv_sec = timenow.tv_sec + EXPIRATION_INTERVAL;
-			timeout.tv_sec = tablecheck.tv_sec - timenow.tv_sec;
-			}
+		timeout.tv_sec = NextTableCheck - timenow.tv_sec;
 		
 		FD_SET(d->tcpsd, &rset);
 		FD_SET(d->udpsd, &rset);
 		FD_SET(d->LLQEventListenSock, &rset);
 		
-		nfds = select(maxfdp1, &rset, NULL, NULL, &timeout);		
-		if (nfds < 0)
+		err = select(maxfdp1, &rset, NULL, NULL, &timeout);		
+		if (err < 0)
 			{
 			if (errno == EINTR)
 				{
-				if (terminate)
-					{
-					// close sockets to prevent clients from making new requests during shutdown
-					close(d->tcpsd);
-					close(d->udpsd);
-					d->tcpsd = d->udpsd = -1;
-					DeleteRecords(d, mDNStrue);
-					return 0;
-					}
-				else if (dumptable) { PrintLeaseTable(d); PrintLLQTable(d); PrintLLQAnswers(d); dumptable = 0; }
+				if (terminate) { DeleteExpiredRecords(d); return 0; }
+				else if (dumptable) { PrintLeaseTable(d); PrintLLQTable(d); dumptable = 0; }
 				else Log("Received unhandled signal - continuing"); 
 				}
-			else
-				{
-				LogErr("ListenForUpdates", "select"); return -1;
-				}
+			else { LogErr("ListenForUpdates", "select"); return -1; }
 			}
-		else if (nfds)
+		else
 			{
 			if (FD_ISSET(d->tcpsd, &rset)) RecvTCPRequest(d->tcpsd, d);
 			if (FD_ISSET(d->udpsd, &rset)) RecvUDPRequest(d->udpsd, d); 
 			if (FD_ISSET(d->LLQEventListenSock, &rset))
 				{
 				// clear signalling data off socket
-				char buf[256];
-				recv(d->LLQEventListenSock, buf, 256, 0);
-				if (!EventsPending)
-					{
-					EventsPending = mDNStrue;
-					if (gettimeofday(&EventTS, NULL)) { LogErr("ListenForUpdates", "gettimeofday"); return -1; }					
-					}
+				char buf[32];
+				recv(d->LLQEventListenSock, buf, 32, 0);
+				GenLLQEvents(d);
 				}
-			}
-		else
-			{
-			// timeout
-			if (EventsPending) { GenLLQEvents(d); EventsPending = mDNSfalse; }
-			else { DeleteRecords(d, mDNSfalse); tablecheck.tv_sec = 0; }
 			}
 		}
 	return 0;
@@ -2217,26 +2076,17 @@ mDNSlocal void HndlSignal(int sig)
 
 int main(int argc, char *argv[])
 	{
+	pthread_t LLQtid;
 	DaemonInfo *d;
-	struct rlimit rlim;
-	
+
 	d = malloc(sizeof(*d));
 	if (!d) { LogErr("main", "malloc"); exit(1); }
-	bzero(d, sizeof(DaemonInfo));	
+	bzero(d, sizeof(DaemonInfo));
 	
 	if (signal(SIGTERM,     HndlSignal) == SIG_ERR) perror("Can't catch SIGTERM");
 	if (signal(INFO_SIGNAL, HndlSignal) == SIG_ERR) perror("Can't catch SIGINFO");
 	if (signal(SIGINT,      HndlSignal) == SIG_ERR) perror("Can't catch SIGINT");
 	if (signal(SIGPIPE,     SIG_IGN  )  == SIG_ERR) perror("Can't ignore SIGPIPE");
-
-	// remove open file limit
-	rlim.rlim_max = RLIM_INFINITY;
-	rlim.rlim_cur = RLIM_INFINITY;
-	if (setrlimit(RLIMIT_NOFILE, &rlim) < 0)
-		{
-		LogErr("main", "setrlimit");
-		Log("Using default file descriptor resource limit");
-		}
 	
 	if (ProcessArgs(argc, argv, d) < 0) exit(1);
 
@@ -2253,8 +2103,14 @@ int main(int argc, char *argv[])
 	if (InitLeaseTable(d) < 0) exit(1);
 	if (SetupSockets(d) < 0) exit(1); 
 	if (SetUpdateSRV(d) < 0) exit(1);
-
-	ListenForUpdates(d);
+	
+	if (pthread_create(&LLQtid, NULL, LLQEventMonitor, d)) { LogErr("main", "pthread_create"); }	
+	else
+		{
+		pthread_detach(LLQtid);
+		ListenForUpdates(d);
+		}
+		
 	if (ClearUpdateSRV(d) < 0) exit(1);  // clear update srv's even if ListenForUpdates or pthread_create returns an error
 	free(d);
 	exit(0);
