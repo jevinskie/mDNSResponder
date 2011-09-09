@@ -44,6 +44,15 @@
     Change History (most recent first):
 
 $Log: mDNS.c,v $
+Revision 1.307.2.8  2004/04/03 05:18:19  bradley
+Added cast to fix signed/unsigned warning due to int promotion.
+
+Revision 1.307.2.7  2004/03/30 06:46:24  cheshire
+Compiler warning fixes from Don Woodward at Roku Labs
+
+Revision 1.307.2.6  2004/03/09 03:03:38  cheshire
+<rdar://problem/3581961> Don't take lock until after mDNS_Update() has validated that the data is good
+
 Revision 1.307.2.5  2004/03/02 02:55:24  cheshire
 <rdar://problem/3549576> Properly support "_services._dns-sd._udp" meta-queries
 
@@ -2198,13 +2207,13 @@ mDNSlocal mDNSu16 GetRDLength(const ResourceRecord *const rr, mDNSBool estimate)
 	const domainname *const name = estimate ? &rr->name : mDNSNULL;
 	switch (rr->rrtype)
 		{
-		case kDNSType_A:	return(sizeof(rd->ip)); break;
+		case kDNSType_A:	return(sizeof(rd->ip));
 		case kDNSType_CNAME:// Same as PTR
 		case kDNSType_PTR:	return(CompressedDomainNameLength(&rd->name, name));
 		case kDNSType_HINFO:return(mDNSu16)(2 + (int)rd->data[0] + (int)rd->data[1 + (int)rd->data[0]]);
 		case kDNSType_NULL:	// Same as TXT -- not self-describing, so have to just trust rdlength
 		case kDNSType_TXT:  return(rr->rdlength); // TXT is not self-describing, so have to just trust rdlength
-		case kDNSType_AAAA:	return(sizeof(rd->ipv6)); break;
+		case kDNSType_AAAA:	return(sizeof(rd->ipv6));
 		case kDNSType_SRV:	return(mDNSu16)(6 + CompressedDomainNameLength(&rd->srv.target, name));
 		default:			debugf("Warning! Don't know how to get length of resource type %d", rr->rrtype);
 							return(rr->rdlength);
@@ -2778,7 +2787,7 @@ mDNSlocal const mDNSu8 *FindCompressionPointer(const mDNSu8 *const base, const m
 mDNSlocal mDNSu8 *putDomainNameAsLabels(const DNSMessage *const msg,
 	mDNSu8 *ptr, const mDNSu8 *const limit, const domainname *const name)
 	{
-	const mDNSu8 *const base        = (const mDNSu8 *const)msg;
+	const mDNSu8 *const base        = (const mDNSu8 *)msg;
 	const mDNSu8 *      np          = name->c;
 	const mDNSu8 *const max         = name->c + MAX_DOMAIN_NAME;	// Maximum that's valid
 	const mDNSu8 *      pointer     = mDNSNULL;
@@ -3783,7 +3792,7 @@ mDNSlocal mDNSBool AccelerateThisQuery(mDNS *const m, DNSQuestion *q)
 	if (TimeToSendThisQuestion(q, m->timenow + q->ThisQInterval/2))
 		{
 		// We forecast: qname (n) type (2) class (2)
-		mDNSu32 forecast = DomainNameLength(&q->qname) + 4;
+		mDNSu32 forecast = (mDNSu32)DomainNameLength(&q->qname) + 4;
 		CacheRecord *rr;
 		for (rr=m->rrcache_hash[HashSlot(&q->qname)]; rr; rr=rr->next)		// If we have a resource record in our cache,
 			if (rr->resrec.rdlength <= SmallRecordLimit &&					// which is small enough to sensibly fit in the packet
@@ -6172,10 +6181,10 @@ mDNSexport mStatus mDNS_Update(mDNS *const m, AuthRecord *const rr, mDNSu32 newt
 	const mDNSu16 newrdlength,
 	RData *const newrdata, mDNSRecordUpdateCallback *Callback)
 	{
-	mDNS_Lock(m);
-
 	if (!ValidateRData(rr->resrec.rrtype, newrdlength, newrdata))
 		{ LogMsg("Attempt to update record with invalid rdata: %s", GetRRDisplayString_rdb(m, &rr->resrec, &newrdata->u)); return(mStatus_Invalid); }
+
+	mDNS_Lock(m);
 
 	// If TTL is unspecified, leave TTL unchanged
 	if (newttl == 0) newttl = rr->resrec.rroriginalttl;
