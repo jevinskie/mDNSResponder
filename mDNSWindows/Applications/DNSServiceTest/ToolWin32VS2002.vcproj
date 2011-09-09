@@ -114,37 +114,20 @@
 			<Tool
 				Name="VCWebDeploymentTool"/>
 		</Configuration>
-		<Configuration
-			Name="all|Win32"
-			OutputDirectory="all"
-			IntermediateDirectory="all"
-			ConfigurationType="1">
-			<Tool
-				Name="VCCLCompilerTool"/>
-			<Tool
-				Name="VCCustomBuildTool"/>
-			<Tool
-				Name="VCLinkerTool"/>
-			<Tool
-				Name="VCMIDLTool"/>
-			<Tool
-				Name="VCPostBuildEventTool"/>
-			<Tool
-				Name="VCPreBuildEventTool"/>
-			<Tool
-				Name="VCPreLinkEventTool"/>
-			<Tool
-				Name="VCResourceCompilerTool"/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"/>
-			<Tool
-				Name="VCWebDeploymentTool"/>
-		</Configuration>
 	</Configurations>
 	<Files>
 		<Filter
 			Name="Rendezvous"
 			Filter="">
+			<File
+				RelativePath="..\..\..\mDNSCore\DNSCommon.c">
+			</File>
+			<File
+				RelativePath="..\..\..\mDNSCore\DNSCommon.h">
+			</File>
+			<File
+				RelativePath="..\..\..\mDNSCore\DNSDigest.c">
+			</File>
 			<File
 				RelativePath="..\..\DNSServices\DNSServiceDiscovery.c">
 			</File>
@@ -167,13 +150,16 @@
 				RelativePath="..\..\..\mDNSCore\mDNSDebug.h">
 			</File>
 			<File
-				RelativePath="..\..\..\mDNSCore\mDNSPlatformFunctions.h">
-			</File>
-			<File
 				RelativePath="..\..\mDNSWin32.c">
 			</File>
 			<File
 				RelativePath="..\..\mDNSWin32.h">
+			</File>
+			<File
+				RelativePath="..\..\..\mDNSCore\uDNS.c">
+			</File>
+			<File
+				RelativePath="..\..\..\mDNSCore\uDNS.h">
 			</File>
 		</Filter>
 		<File

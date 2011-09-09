@@ -3,6 +3,8 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -23,6 +25,38 @@
     Change History (most recent first):
 
 $Log: mDNSMacOS9.c,v $
+Revision 1.29  2004/05/26 20:53:16  cheshire
+Remove unncecessary "return( -1 );" at the end of mDNSPlatformUTC()
+
+Revision 1.28  2004/05/20 18:39:06  cheshire
+Fix build broken by addition of mDNSPlatformUTC requirement
+
+Revision 1.27  2004/04/21 02:49:11  cheshire
+To reduce future confusion, renamed 'TxAndRx' to 'McastTxRx'
+
+Revision 1.26  2004/04/09 17:43:03  cheshire
+Make sure to set the McastTxRx field so that duplicate suppression works correctly
+
+Revision 1.25  2004/03/15 18:55:38  cheshire
+Comment out debugging message
+
+Revision 1.24  2004/03/12 21:30:26  cheshire
+Build a System-Context Shared Library from mDNSCore, for the benefit of developers
+like Muse Research who want to be able to use mDNS/DNS-SD from GPL-licensed code.
+
+Revision 1.23  2004/02/09 23:24:43  cheshire
+Need to set TTL 255 to interoperate with peers that check TTL (oops!)
+
+Revision 1.22  2004/01/27 20:15:23  cheshire
+<rdar://problem/3541288>: Time to prune obsolete code for listening on port 53
+
+Revision 1.21  2004/01/24 04:59:16  cheshire
+Fixes so that Posix/Linux, OS9, Windows, and VxWorks targets build again
+
+Revision 1.20  2003/11/14 20:59:09  cheshire
+Clients can't use AssignDomainName macro because mDNSPlatformMemCopy is defined in mDNSPlatformFunctions.h.
+Best solution is just to combine mDNSClientAPI.h and mDNSPlatformFunctions.h into a single file.
+
 Revision 1.19  2003/08/18 23:09:20  cheshire
 <rdar://problem/3382647> mDNSResponder divide by zero in mDNSPlatformTimeNow()
 
@@ -31,15 +65,14 @@ Update to APSL 2.0
 
  */
 
+#include <stdio.h>
+#include <stdarg.h>						// For va_list support
+
 #include <LowMem.h>						// For LMGetCurApName()
 #include <TextUtils.h>					// For smSystemScript
 #include <UnicodeConverter.h>			// For ConvertFromPStringToUnicode()
 
-#include <stdio.h>
-#include <stdarg.h>						// For va_list support
-
 #include "mDNSClientAPI.h"				// Defines the interface provided to the client layer above
-#include "mDNSPlatformFunctions.h"		// Defines the interface to the supporting layer below
 
 #include "mDNSMacOS9.h"					// Defines the specific types needed to run mDNS on this platform
 
@@ -47,17 +80,29 @@ Update to APSL 2.0
 // Constants
 
 static const TSetBooleanOption kReusePortOption =
-	{ sizeof(TSetBooleanOption),      INET_IP, IP_REUSEPORT,      0, true };
+	{ kOTBooleanOptionSize,          INET_IP, IP_REUSEPORT,      0, true };
 
-// IP_RCVDSTADDR gives error #-3151 (kOTBadOptionErr)
-static const TSetBooleanOption kRcvDestAddrOption =
-	{ sizeof(TSetBooleanOption),      INET_IP, IP_REUSEPORT,     0, true };
+// IP_RCVDSTADDR with TSetByteOption/kOTOneByteOptionSize works on OS 9, OS X Classic, and OS 9 Carbon,
+// but gives error #-3151 (kOTBadOptionErr) on OS X Carbon.
+// If we instead use TSetBooleanOption/kOTBooleanOptionSize then OTOptionManagement on OS X Carbon
+// no longer returns -3151 but it still doesn't actually work -- no destination addresses
+// are delivered by OTRcvUData. I think it's just a bug in OS X Carbon.
+static const TSetByteOption kRcvDestAddrOption =
+	{ kOTOneByteOptionSize,          INET_IP, IP_RCVDSTADDR,     0, true };
+//static const TSetBooleanOption kRcvDestAddrOption =
+//	{ kOTBooleanOptionSize,          INET_IP, IP_RCVDSTADDR,     0, true };
+
+static const TSetByteOption kSetUnicastTTLOption =
+	{ kOTOneByteOptionSize,          INET_IP, IP_TTL,            0, 255 };
+
+static const TSetByteOption kSetMulticastTTLOption =
+	{ kOTOneByteOptionSize,          INET_IP, IP_MULTICAST_TTL,  0, 255 };
 
 static const TIPAddMulticastOption kAddLinkMulticastOption  =
 	{ sizeof(TIPAddMulticastOption), INET_IP, IP_ADD_MEMBERSHIP, 0, { 224,  0,  0,251 }, { 0,0,0,0 } };
 
-static const TIPAddMulticastOption kAddAdminMulticastOption =
-	{ sizeof(TIPAddMulticastOption), INET_IP, IP_ADD_MEMBERSHIP, 0, { 239,255,255,251 }, { 0,0,0,0 } };
+//static const TIPAddMulticastOption kAddAdminMulticastOption =
+//	{ sizeof(TIPAddMulticastOption), INET_IP, IP_ADD_MEMBERSHIP, 0, { 239,255,255,251 }, { 0,0,0,0 } };
 
 // Bind endpoint to port number. Don't specify any specific IP address --
 // we want to receive unicasts on all interfaces, as well as multicasts.
@@ -72,6 +117,14 @@ static const TNetbuf zeroTNetbuf = { 0 };
 // ***************************************************************************
 // Functions
 
+mDNSlocal void SafeDebugStr(unsigned char *buffer)
+	{
+	int i;
+	// Don't want semicolons in MacsBug messages -- they signify commands to execute
+	for (i=1; i<= buffer[0]; i++) if (buffer[i] == ';') buffer[i] = '.';
+	DebugStr(buffer);
+	}
+
 #if MDNS_DEBUGMSGS
 mDNSexport void debugf_(const char *format, ...)
 	{
@@ -80,16 +133,21 @@ mDNSexport void debugf_(const char *format, ...)
 	va_start(ptr,format);
 	buffer[0] = (unsigned char)mDNS_vsnprintf((char*)buffer+1, 255, format, ptr);
 	va_end(ptr);
-#if __ONLYSYSTEMTASK__
+#if MDNS_ONLYSYSTEMTASK
 	buffer[1+buffer[0]] = 0;
 	fprintf(stderr, "%s\n", buffer+1);
 	fflush(stderr);
 #else
-	DebugStr(buffer);
+	SafeDebugStr(buffer);
 #endif
 	}
 #endif
 
+#if MDNS_BUILDINGSHAREDLIBRARY >= 2
+// When building the non-debug version of the Extension, intended to go on end-user systems, we don't want
+// MacsBug breaks for *anything*, not even for the serious LogMsg messages that on OS X would be written to syslog
+mDNSexport void LogMsg(const char *format, ...) { (void)format; }
+#else
 mDNSexport void LogMsg(const char *format, ...)
 	{
 	unsigned char buffer[256];
@@ -97,24 +155,27 @@ mDNSexport void LogMsg(const char *format, ...)
 	va_start(ptr,format);
 	buffer[0] = (unsigned char)mDNS_vsnprintf((char*)buffer+1, 255, format, ptr);
 	va_end(ptr);
-#if __ONLYSYSTEMTASK__
+#if MDNS_ONLYSYSTEMTASK
 	buffer[1+buffer[0]] = 0;
 	fprintf(stderr, "%s\n", buffer+1);
 	fflush(stderr);
 #else
-	DebugStr(buffer);
+	SafeDebugStr(buffer);
 #endif
 	}
+#endif
 
 mDNSexport mStatus mDNSPlatformSendUDP(const mDNS *const m, const DNSMessage *const msg, const mDNSu8 *const end,
-	mDNSInterfaceID InterfaceID, mDNSIPPort srcPort, const mDNSAddr *dst, mDNSIPPort dstPort)
+	mDNSInterfaceID InterfaceID, const mDNSAddr *dst, mDNSIPPort dstPort)
 	{
 	// Note: If we did multi-homing, we'd have to use the InterfaceID parameter to specify from which interface to send this response
-	#pragma unused(InterfaceID, srcPort)
+	#pragma unused(InterfaceID)
 
 	InetAddress InetDest;
 	TUnitData senddata;
 	
+	if (dst->type != mDNSAddrType_IPv4) return(mStatus_NoError);
+
 	InetDest.fAddressType = AF_INET;
 	InetDest.fPort        = dstPort.NotAnInteger;
 	InetDest.fHost        = dst->ip.v4.NotAnInteger;
@@ -136,7 +197,7 @@ mDNSlocal OSStatus readpacket(mDNS *m)
 	mDNSInterfaceID interface;
 	mDNSIPPort senderport;
 	InetAddress sender;
-	char options[512];
+	char options[256];
 	DNSMessage packet;
 	TUnitData recvdata;
 	OTFlags flags = 0;
@@ -160,11 +221,28 @@ mDNSlocal OSStatus readpacket(mDNS *m)
 	senderaddr.type = mDNSAddrType_IPv4;
 	senderaddr.ip.v4.NotAnInteger = sender.fHost;
 	senderport.NotAnInteger = sender.fPort;
-	destaddr.type = mDNSAddrType_IPv4;
-	destaddr.ip.v4  = AllDNSLinkGroup;		// For now, until I work out how to get the dest address, assume it was sent to AllDNSLinkGroup
-	interface = m->HostInterfaces->InterfaceID;
 	
-	if (recvdata.opt.len) debugf("readpacket: got some option data at %X, len %d", options, recvdata.opt.len);
+	destaddr.type = mDNSAddrType_IPv4;
+	destaddr.ip.v4  = zeroIPAddr;
+
+	#if OTCARBONAPPLICATION
+	// IP_RCVDSTADDR is known to fail on OS X Carbon, so we'll just assume the packet was probably multicast
+	destaddr.ip.v4  = AllDNSLinkGroup;
+	#endif
+
+	if (recvdata.opt.len)
+		{
+		TOption *c = nil;
+		while (1)
+			{
+			err = OTNextOption(recvdata.opt.buf, recvdata.opt.len, &c);
+			if (err || !c) break;
+			if (c->level == INET_IP && c->name == IP_RCVDSTADDR && c->len - kOTOptionHeaderSize == sizeof(destaddr.ip.v4))
+				mDNSPlatformMemCopy(c->value, &destaddr.ip.v4, sizeof(destaddr.ip.v4));
+			}
+		}
+
+	interface = m->HostInterfaces->InterfaceID;
 
 	if      (flags & T_MORE)                                debugf("ERROR: OTRcvUData() buffer too small (T_MORE set)");
 	else if (recvdata.addr.len < sizeof(InetAddress))       debugf("ERROR: recvdata.addr.len (%d) too short", recvdata.addr.len);
@@ -174,15 +252,51 @@ mDNSlocal OSStatus readpacket(mDNS *m)
 	return(err);
 	}
 
+mDNSexport mStatus mDNSPlatformTCPConnect(const mDNSAddr *dst, mDNSOpaque16 dstport, mDNSInterfaceID InterfaceID,
+										  TCPConnectionCallback callback, void *context, int *descriptor)
+	{
+	(void)dst;			// Unused
+	(void)dstport;		// Unused
+	(void)InterfaceID;	// Unused
+	(void)callback;		// Unused
+	(void)context;		// Unused
+	(void)descriptor;	// Unused
+	return(mStatus_UnsupportedErr);
+	}
+
+mDNSexport void mDNSPlatformTCPCloseConnection(int sd)
+	{
+	(void)sd;			// Unused
+	}
+
+mDNSexport int mDNSPlatformReadTCP(int sd, void *buf, int buflen)
+	{
+	(void)sd;			// Unused
+	(void)buf;			// Unused
+	(void)buflen;		// Unused
+	return(0);
+	}
+
+mDNSexport int mDNSPlatformWriteTCP(int sd, const char *msg, int len)
+	{
+	(void)sd;			// Unused
+	(void)msg;			// Unused
+	(void)len;			// Unused
+	return(0);
+	}
 
 mDNSlocal void mDNSOptionManagement(mDNS *const m)
 	{
 	OSStatus err;
 
 	// Make sure the length in the TNetbuf agrees with the length in the TOptionHeader
-	m->p->optReq.opt.len = m->p->optBlock.h.len;
+	m->p->optReq.opt.len    = m->p->optBlock.h.len;
+	m->p->optReq.opt.maxlen = m->p->optBlock.h.len;
+	if (m->p->optReq.opt.maxlen < 4)
+		m->p->optReq.opt.maxlen = 4;
+
 	err = OTOptionManagement(m->p->ep, &m->p->optReq, NULL);
-	if (err) debugf("OTOptionManagement failed %d", err);
+	if (err) LogMsg("OTOptionManagement failed %d", err);
 	}
 
 mDNSlocal void mDNSinitComplete(mDNS *const m, mStatus result)
@@ -201,41 +315,48 @@ mDNSlocal pascal void mDNSNotifier(void *contextPtr, OTEventCode code, OTResult 
 			{
 			OSStatus err;
 			InetInterfaceInfo interfaceinfo;
-			if (result) { debugf("T_OPENCOMPLETE failed %d", result); mDNSinitComplete(m, result); return; }
+			if (result) { LogMsg("T_OPENCOMPLETE failed %d", result); mDNSinitComplete(m, result); return; }
 			//debugf("T_OPENCOMPLETE");
 			m->p->ep = (EndpointRef)cookie;
 			//debugf("OTInetGetInterfaceInfo");
 			// (In future may want to loop over all interfaces instead of just using kDefaultInetInterface)
 			err = OTInetGetInterfaceInfo(&interfaceinfo, kDefaultInetInterface);
-			if (err) { debugf("OTInetGetInterfaceInfo failed %d", err); mDNSinitComplete(m, err); return; }
+			if (err) { LogMsg("OTInetGetInterfaceInfo failed %d", err); mDNSinitComplete(m, err); return; }
 
 			// Make our basic standard host resource records (address, PTR, etc.)
+			m->p->interface.InterfaceID           = (mDNSInterfaceID)&m->p->interface;
 			m->p->interface.ip.type               = mDNSAddrType_IPv4;
 			m->p->interface.ip.ip.v4.NotAnInteger = interfaceinfo.fAddress;
 			m->p->interface.Advertise             = m->AdvertiseLocalAddresses;
-			m->p->interface.InterfaceID           = (mDNSInterfaceID)&m->p->interface;
-			mDNS_RegisterInterface(m, &m->p->interface);
+			m->p->interface.McastTxRx             = mDNStrue;
 			}
 			
 		case T_OPTMGMTCOMPLETE:
-			if (result) { debugf("T_OPTMGMTCOMPLETE failed %d", result); mDNSinitComplete(m, result); return; }
-			//debugf("T_OPTMGMTCOMPLETE");
+		case T_BINDCOMPLETE:
+			// IP_RCVDSTADDR is known to fail on OS X Carbon, so we don't want to abort for that error
+			// (see comment above at the definition of kRcvDestAddrOption)
+			#if OTCARBONAPPLICATION
+			if (result && m->p->mOTstate == mOT_RcvDestAddr)
+				LogMsg("Carbon IP_RCVDSTADDR option failed %d; continuing anyway", result);
+			else
+			#endif
+			if (result) { LogMsg("T_OPTMGMTCOMPLETE/T_BINDCOMPLETE %d failed %d", m->p->mOTstate, result); mDNSinitComplete(m, result); return; }
+			//LogMsg("T_OPTMGMTCOMPLETE/T_BINDCOMPLETE %d", m->p->mOTstate);
 			switch (++m->p->mOTstate)
 				{
 				case mOT_ReusePort:		m->p->optBlock.b = kReusePortOption;         mDNSOptionManagement(m); break;
-				case mOT_RcvDestAddr:	m->p->optBlock.b = kRcvDestAddrOption;       mDNSOptionManagement(m); break;
+				case mOT_RcvDestAddr:	m->p->optBlock.i = kRcvDestAddrOption;       mDNSOptionManagement(m); break;
+				case mOT_SetUTTL:		m->p->optBlock.i = kSetUnicastTTLOption;     mDNSOptionManagement(m); break;
+				case mOT_SetMTTL:		m->p->optBlock.i = kSetMulticastTTLOption;   mDNSOptionManagement(m); break;
 				case mOT_LLScope:		m->p->optBlock.m = kAddLinkMulticastOption;  mDNSOptionManagement(m); break;
-				case mOT_AdminScope:	m->p->optBlock.m = kAddAdminMulticastOption; mDNSOptionManagement(m); break;
+//				case mOT_AdminScope:	m->p->optBlock.m = kAddAdminMulticastOption; mDNSOptionManagement(m); break;
 				case mOT_Bind:			OTBind(m->p->ep, (TBind*)&mDNSbindReq, NULL); break;
+				case mOT_Ready:         mDNSinitComplete(m, mStatus_NoError);
+										// Can't do mDNS_RegisterInterface until *after* mDNSinitComplete has set m->mDNSPlatformStatus to mStatus_NoError
+										mDNS_RegisterInterface(m, &m->p->interface);
+										break;
+				default:                LogMsg("Unexpected m->p->mOTstate %d", m->p->mOTstate-1);
 				}
-			break;
-
-		case T_BINDCOMPLETE:
-			if (result) { debugf("T_BINDCOMPLETE failed %d", result); return; }
-			if (m->p->mOTstate != mOT_Bind) { debugf("T_BINDCOMPLETE in wrong mDNS state %d", m->p->mOTstate); return; }
-			m->p->mOTstate++;
-			//debugf("T_BINDCOMPLETE");
-			mDNSinitComplete(m, mStatus_NoError);
 			break;
 
 		case T_DATA:
@@ -243,8 +364,14 @@ mDNSlocal pascal void mDNSNotifier(void *contextPtr, OTEventCode code, OTResult 
 			while (readpacket(m) == kOTNoError) continue;	// Read packets until we run out
 			break;
 
-		case kOTProviderWillClose:
+		case kOTProviderWillClose: LogMsg("kOTProviderWillClose"); break;
 		case kOTProviderIsClosed:		// Machine is going to sleep, shutting down, or reconfiguring IP
+			LogMsg("kOTProviderIsClosed");
+			if (m->p->mOTstate == mOT_Ready)
+				{
+				m->p->mOTstate = mOT_Closed;
+				mDNS_DeregisterInterface(m, &m->p->interface);
+				}
 			if (m->p->ep) { OTCloseProvider(m->p->ep); m->p->ep = NULL; }
 			break;						// Do we need to do anything?
 
@@ -253,7 +380,7 @@ mDNSlocal pascal void mDNSNotifier(void *contextPtr, OTEventCode code, OTResult 
 		}
 	}
 
-#if __ONLYSYSTEMTASK__
+#if MDNS_ONLYSYSTEMTASK
 
 static Boolean     ONLYSYSTEMTASKevent;
 static void       *ONLYSYSTEMTASKcontextPtr;
@@ -275,22 +402,17 @@ mDNSlocal pascal void CallmDNSNotifier(void *contextPtr, OTEventCode code, OTRes
 	{
 	mDNS *const m = (mDNS *const)contextPtr;
 	if (!m) debugf("mDNSNotifier FATAL ERROR! No context");
-	
-	// Increment m->p->nesting to indicate to mDNSPlatformLock that there's no need
-	// to call OTEnterNotifier() (because we're already in OTNotifier context)
-	if (m->p->nesting) DebugStr("\pCallmDNSNotifier ERROR! OTEnterNotifier is supposed to suppress notifier callbacks");
-	m->p->nesting++;
+	if (m->p->nesting) LogMsg("CallmDNSNotifier ERROR! OTEnterNotifier is supposed to suppress notifier callbacks");
 	mDNSNotifier(contextPtr, code, result, cookie);
-	m->p->nesting--;
-	ScheduleNextTimerCallback(m);
 	}
 
 #endif
 
+static OTNotifyUPP CallmDNSNotifierUPP;
+
 mDNSlocal OSStatus mDNSOpenEndpoint(const mDNS *const m)
 	{
 	OSStatus err;
-	TEndpointInfo endpointinfo;
 	// m->optReq is pre-set to point to the shared m->optBlock
 	// m->optBlock is filled in by each OTOptionManagement call
 	m->p->optReq.opt.maxlen = sizeof(m->p->optBlock);
@@ -302,14 +424,8 @@ mDNSlocal OSStatus mDNSOpenEndpoint(const mDNS *const m)
 	//printf("Opening endpoint now...\n");
 	m->p->ep = NULL;
 	m->p->mOTstate = mOT_Start;
-//	err = OTAsyncOpenEndpoint(OTCreateConfiguration("udp(RxICMP=1)"), 0, &endpointinfo, CallmDNSNotifier, (void*)m); // works
-//	err = OTAsyncOpenEndpoint(OTCreateConfiguration("udp(RxICMP)"), 0, &endpointinfo, CallmDNSNotifier, (void*)m); // -3151 bad option
-//	err = OTAsyncOpenEndpoint(OTCreateConfiguration("udp,ip(RxICMP=1)"), 0, &endpointinfo, CallmDNSNotifier, (void*)m); // -3151
-//	err = OTAsyncOpenEndpoint(OTCreateConfiguration("udp,ip"), 0, &endpointinfo, CallmDNSNotifier, (void*)m); // works
-//	err = OTAsyncOpenEndpoint(OTCreateConfiguration("udp,rawip"), 0, &endpointinfo, CallmDNSNotifier, (void*)m); // -3221 invalid arg
-	err = OTAsyncOpenEndpoint(OTCreateConfiguration(kUDPName), 0, &endpointinfo, NewOTNotifyUPP(CallmDNSNotifier), (void*)m);
-	if (err) { debugf("ERROR: OTAsyncOpenEndpoint(UDP) failed with error <%d>", err); return(err); }
-	
+	err = OTAsyncOpenEndpoint(OTCreateConfiguration(kUDPName), 0, NULL, CallmDNSNotifierUPP, (void*)m);
+	if (err) { LogMsg("ERROR: OTAsyncOpenEndpoint(UDP) failed with error <%d>", err); return(err); }
 	return(kOTNoError);
 	}
 
@@ -333,10 +449,23 @@ mDNSlocal pascal void ClientNotifier(void *contextPtr, OTEventCode code, OTResul
 
 	switch (code)
 		{
-		case xOTStackIsLoading:   break;
-		case xOTStackWasLoaded:   m->mDNSPlatformStatus = mStatus_Waiting; m->p->mOTstate = mOT_Reset; break;
-		case xOTStackIsUnloading: break;
-		case kOTPortNetworkChange: break;
+		case xOTStackIsLoading:		break;
+		case xOTStackWasLoaded:		if (m->p->mOTstate == mOT_Closed)
+										{
+										LogMsg("kOTStackWasLoaded: Re-opening endpoint");
+										if (m->p->ep)
+											LogMsg("kOTStackWasLoaded: ERROR: m->p->ep already set");
+										m->mDNSPlatformStatus = mStatus_Waiting;
+										m->p->mOTstate = mOT_Reset;
+										#if !MDNS_ONLYSYSTEMTASK
+										mDNSOpenEndpoint(m);
+										#endif
+										}
+									else
+										LogMsg("kOTStackWasLoaded (no action)");
+									break;
+		case xOTStackIsUnloading:	break;
+		case kOTPortNetworkChange:	break;
 		default: debugf("ClientNotifier unknown code %X, %X, %d", contextPtr, code, result); break;
 		}
 	}
@@ -393,18 +522,20 @@ mDNSlocal void GetUserSpecifiedComputerName(domainlabel *const namelabel)
 
 static pascal void mDNSTimerTask(void *arg)
 	{
-#if __ONLYSYSTEMTASK__
+#if MDNS_ONLYSYSTEMTASK
 #pragma unused(arg)
 	ONLYSYSTEMTASKevent = true;
 #else
 	mDNS *const m = (mDNS *const)arg;
-	// Increment m->p->nesting to indicate to mDNSPlatformLock that there's no need
-	// to call OTEnterNotifier() (because we're already in OTNotifier context)
-	if (m->p->nesting) DebugStr("\pmDNSTimerTask ERROR! OTEnterNotifier is supposed to suppress timer callbacks too");
-	m->p->nesting++;
-	mDNS_Execute(m);
-	m->p->nesting--;
-	ScheduleNextTimerCallback(m);
+	if (!m->p->ep) LogMsg("mDNSTimerTask NO endpoint");
+	if (m->mDNS_busy) LogMsg("mDNS_busy");
+	if (m->p->nesting) LogMsg("mDNSTimerTask ERROR! OTEnterNotifier is supposed to suppress timer callbacks too");
+	
+	// If our timer fires at a time when we have no endpoint, ignore it --
+	// once we reopen our endpoint and get our T_BINDCOMPLETE message we'll call
+	// mDNS_RegisterInterface(), which does a lock/unlock, which retriggers the timer.
+	// Likewise, if m->mDNS_busy or m->p->nesting, we'll catch this on the unlock
+	if (m->p->ep && m->mDNS_busy == 0 && m->p->nesting == 0) mDNS_Execute(m);
 #endif
 	}
 
@@ -414,8 +545,22 @@ long sleep, wake, mode;
 
 mDNSexport mStatus mDNSPlatformInit(mDNS *const m)
 	{
-	OSStatus err;
+	OSStatus err = InitOpenTransport();
+
+	ClientNotifierContext = m;
+	// Note: OTRegisterAsClient returns kOTNotSupportedErr when running as Carbon code on OS X
+	// -- but that's okay, we don't need a ClientNotifier when running as Carbon code on OS X
+	OTRegisterAsClient(NULL, NewOTNotifyUPP(ClientNotifier));
 	
+	m->p->OTTimerTask = OTCreateTimerTask(NewOTProcessUPP(mDNSTimerTask), m);
+	m->p->nesting     = 0;
+
+#if TEST_SLEEP
+	sleep = TickCount() + 600;
+	wake = TickCount() + 1200;
+	mode = 0;
+#endif
+
 	// Set up the nice label
 	m->nicelabel.c[0] = 0;
 	GetUserSpecifiedComputerName(&m->nicelabel);
@@ -429,39 +574,37 @@ mDNSexport mStatus mDNSPlatformInit(mDNS *const m)
 
 	mDNS_GenerateFQDN(m);
 
-	ClientNotifierContext = m;
-
-#if !TARGET_API_MAC_CARBON
-	err = OTRegisterAsClient(LMGetCurApName(), NewOTNotifyUPP(ClientNotifier));
-	if (err) debugf("OTRegisterAsClient failed %d", err);
-#endif
-	
+	// When it's finished mDNSOpenEndpoint asynchronously calls mDNSinitComplete() and then mDNS_RegisterInterface()
+	CallmDNSNotifierUPP = NewOTNotifyUPP(CallmDNSNotifier);
 	err = mDNSOpenEndpoint(m);
-	if (err) { debugf("mDNSOpenEndpoint failed %d", err); return(err); }
-
-	m->p->OTTimerTask = OTCreateTimerTask(NewOTProcessUPP(mDNSTimerTask), m);
-	m->p->nesting     = 0;
-
-#if TEST_SLEEP
-	sleep = TickCount() + 600;
-	wake = TickCount() + 1200;
-	mode = 0;
-#endif
-
+	if (err)
+		{
+		LogMsg("mDNSOpenEndpoint failed %d", err);
+		if (m->p->OTTimerTask) OTDestroyTimerTask(m->p->OTTimerTask);
+		OTUnregisterAsClient();
+		CloseOpenTransport();
+		}
 	return(err);
 	}
 
 extern void mDNSPlatformClose (mDNS *const m)
 	{
-	if (m->p->OTTimerTask) { OTDestroyTimerTask(m->p->OTTimerTask); m->p->OTTimerTask = 0;    }
+	if (m->p->mOTstate == mOT_Ready)
+		{
+		m->p->mOTstate = mOT_Closed;
+		mDNS_DeregisterInterface(m, &m->p->interface);
+		}
 	if (m->p->ep)          { OTCloseProvider   (m->p->ep);          m->p->ep          = NULL; }
+	if (m->p->OTTimerTask) { OTDestroyTimerTask(m->p->OTTimerTask); m->p->OTTimerTask = 0;    }
+
+	OTUnregisterAsClient();
 	CloseOpenTransport();
 	}
 
+#if MDNS_ONLYSYSTEMTASK
 extern void mDNSPlatformIdle(mDNS *const m);
 mDNSexport void mDNSPlatformIdle(mDNS *const m)
 	{
-#if __ONLYSYSTEMTASK__
 	while (ONLYSYSTEMTASKcontextPtr)
 		{
 		void *contextPtr = ONLYSYSTEMTASKcontextPtr;
@@ -473,7 +616,6 @@ mDNSexport void mDNSPlatformIdle(mDNS *const m)
 		ONLYSYSTEMTASKevent = false;
 		mDNS_Execute(m);
 		}
-#endif
 
 	if (m->p->mOTstate == mOT_Reset)
 		{
@@ -494,42 +636,42 @@ mDNSexport void mDNSPlatformIdle(mDNS *const m)
 				break;
 		}
 #endif
-
 	}
+#endif
 
 mDNSexport void    mDNSPlatformLock(const mDNS *const m)
 	{
 	if (!m) { DebugStr("\pmDNSPlatformLock m NULL!"); return; }
 	if (!m->p) { DebugStr("\pmDNSPlatformLock m->p NULL!"); return; }
-	if (!m->p->ep) { DebugStr("\pmDNSPlatformLock m->p->ep NULL!"); return; }
 
 	// If we try to call OTEnterNotifier and fail because we're already running at
 	// Notifier context, then make sure we don't do the matching OTLeaveNotifier() on exit.
-	if (m->p->nesting || OTEnterNotifier(m->p->ep) == false) m->p->nesting++;
+	// If we haven't even opened our endpoint yet, then just increment m->p->nesting for the same reason
+	if (m->p->mOTstate == mOT_Ready && !m->p->ep) DebugStr("\pmDNSPlatformLock: m->p->mOTstate == mOT_Ready && !m->p->ep");
+	if (!m->p->ep || m->p->nesting || OTEnterNotifier(m->p->ep) == false) m->p->nesting++;
 	}
 
 mDNSlocal void ScheduleNextTimerCallback(const mDNS *const m)
 	{
-	SInt32 interval;
-	interval = m->NextScheduledEvent - mDNSPlatformTimeNow();
-	if      (interval < 0)                 interval = 0;
-	else if (interval > 0x7FFFFFFF / 1000) interval = 0x7FFFFFFF / mDNSPlatformOneSecond;
-	else                                   interval = interval * 1000 / mDNSPlatformOneSecond;
-	//debugf("mDNSPlatformScheduleTask Interval %d", interval);
-	OTScheduleTimerTask(m->p->OTTimerTask, (OTTimeout)interval);
+	if (m->mDNSPlatformStatus == mStatus_NoError)
+		{
+		SInt32 interval = m->NextScheduledEvent - mDNSPlatformTimeNow();
+		if      (interval < 1)                 interval = 1;
+		else if (interval > 0x70000000 / 1000) interval = 0x70000000 / mDNSPlatformOneSecond;
+		else                                   interval = (interval * 1000 + mDNSPlatformOneSecond-1)/ mDNSPlatformOneSecond;
+		OTScheduleTimerTask(m->p->OTTimerTask, (OTTimeout)interval);
+		}
 	}
 
 mDNSexport void    mDNSPlatformUnlock(const mDNS *const m)
 	{
 	if (!m) { DebugStr("\pmDNSPlatformUnlock m NULL!"); return; }
 	if (!m->p) { DebugStr("\pmDNSPlatformUnlock m->p NULL!"); return; }
-	if (!m->p->ep) { DebugStr("\pmDNSPlatformUnlock m->p->ep NULL!"); return; }
+
+	if (m->p->ep && m->mDNS_busy == 0) ScheduleNextTimerCallback(m);
+
 	if (m->p->nesting) m->p->nesting--;
-	else
-		{
-		ScheduleNextTimerCallback(m);
-		OTLeaveNotifier(m->p->ep);
-		}
+	else OTLeaveNotifier(m->p->ep);
 	}
 
 mDNSexport void     mDNSPlatformStrCopy(const void *src,       void *dst)             { OTStrCopy((char*)dst, (char*)src); }
@@ -542,3 +684,17 @@ mDNSexport void     mDNSPlatformMemFree    (void *mem)                          
 mDNSexport mStatus  mDNSPlatformTimeInit(mDNSs32 *timenow) { *timenow = mDNSPlatformTimeNow(); return(mStatus_NoError); }
 mDNSexport SInt32   mDNSPlatformTimeNow()                                             { return((SInt32)TickCount()); }
 mDNSexport SInt32   mDNSPlatformOneSecond = 60;
+
+mDNSexport mDNSs32	mDNSPlatformUTC(void)
+	{
+	// Classic Mac OS since Midnight, 1st Jan 1904
+	// Standard Unix counts from 1970
+	// This value adjusts for the 66 years and 17 leap-days difference
+	mDNSu32 SecsSince1904;
+	MachineLocation ThisLocation;
+	#define TIME_ADJUST (((1970 - 1904) * 365 + 17) * 24 * 60 * 60)
+	#define ThisLocationGMTdelta ((ThisLocation.u.gmtDelta << 8) >> 8)
+	GetDateTime(&SecsSince1904);
+	ReadLocation(&ThisLocation);
+	return((mDNSs32)(SecsSince1904 - ThisLocationGMTdelta - TIME_ADJUST));
+	}

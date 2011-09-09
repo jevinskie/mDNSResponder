@@ -1,7 +1,9 @@
 /*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
+ * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -23,6 +25,12 @@
     Change History (most recent first):
     
 $Log: DNSServices.h,v $
+Revision 1.10  2004/01/30 02:56:34  bradley
+Updated to support full Unicode display. Added support for all services on www.dns-sd.org.
+
+Revision 1.9  2003/10/31 12:16:03  bradley
+Added support for providing the resolved host name to the callback.
+
 Revision 1.8  2003/08/20 06:44:24  bradley
 Updated to latest internal version of the Rendezvous for Windows code: Added support for interface
 specific registrations; Added support for no-such-service registrations; Added support for host
@@ -648,6 +656,9 @@ enum
 
 	@field		textRecordRawSize
 					Number of bytes in raw TXT record. May be needed if a custom TXT record format is used.
+
+	@field		hostName
+					Host name of the resolved service.
 */
 
 typedef struct	DNSResolverEventResolveData		DNSResolverEventResolveData;
@@ -664,6 +675,7 @@ struct	DNSResolverEventResolveData
 	DNSResolverFlags		flags;
 	const void *			textRecordRaw;
 	DNSCount				textRecordRawSize;
+	const char *			hostName;
 };
 
 //---------------------------------------------------------------------------------------------------------------------------
@@ -1310,7 +1322,7 @@ DNSStatus
 //---------------------------------------------------------------------------------------------------------------------------
 /*!	@function	DNSNoSuchServiceRegistrationCreate
 
-	@abstract	Creates a registration object and publish the registration to assert non-existence of a particular service.
+	@abstract	Creates a registration object and publish the registration to assert non-existance of a particular service.
 
 	@param		inFlags
 					Flags to control the registration process.

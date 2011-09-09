@@ -3,6 +3,8 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -36,6 +38,23 @@
     Change History (most recent first):
 
 $Log: SamplemDNSClient.c,v $
+Revision 1.44  2004/05/28 02:20:06  cheshire
+If we allow dot or empty string for domain when resolving a service,
+it should be a synonym for "local"
+
+Revision 1.43  2004/02/03 22:07:50  cheshire
+<rdar://problem/3548184>: Widen columns to display non-local domains better
+
+Revision 1.42  2003/12/03 11:39:17  cheshire
+<rdar://problem/3468977> Browse output misaligned in mDNS command-line tool
+(Also fix it to add leading space when the hours part of the time is only one digit)
+
+Revision 1.41  2003/10/30 22:52:57  cheshire
+<rdar://problem/3468977> Browse output misaligned in mDNS command-line tool
+
+Revision 1.40  2003/09/26 01:07:06  cheshire
+Added test case to test fix for <rdar://problem/3427923>
+
 Revision 1.39  2003/08/18 19:05:45  cheshire
 <rdar://problem/3382423> UpdateRecord not working right
 Added "newrdlength" field to hold new length of updated rdata
@@ -127,7 +146,7 @@ static void printtimestamp(void)
 	struct tm tm;
 	gettimeofday(&tv, NULL);
 	localtime_r((time_t*)&tv.tv_sec, &tm);
-	printf("%d:%02d:%02d.%03d  ", tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec/1000);
+	printf("%2d:%02d:%02d.%03d  ", tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec/1000);
 	}
 
 #define DomainMsg(X) ((X) == DNSServiceDomainEnumerationReplyAddDomain        ? "Added"     :          \
@@ -159,9 +178,9 @@ static void browse_reply(DNSServiceBrowserReplyResultType resultType,
 	{
 	char *op = (resultType == DNSServiceBrowserReplyAddInstance) ? "Add" : "Rmv";
     (void)context; // Unused
-	if (num_printed++ == 0) printf("A/R Flags %-8s %-20s %s\n", "Domain", "Service Type", "Instance Name");
+	if (num_printed++ == 0) printf("Timestamp     A/R Flags %-24s %-24s %s\n", "Domain", "Service Type", "Instance Name");
 	printtimestamp();
-	printf("%s%6X %-8s %-20s %s\n", op, flags, replyDomain, replyType, replyName);
+	printf("%s%6X %-24s %-24s %s\n", op, flags, replyDomain, replyType, replyName);
 	}
 
 static void resolve_reply(struct sockaddr *interface, struct sockaddr *address, const char *txtRecord, DNSServiceDiscoveryReplyFlags flags, void *context)
@@ -307,7 +326,7 @@ int main(int argc, char **argv)
 	setlinebuf(stdout);				// Want to see lines as they appear, not block buffered
 
 	if (argc < 2) goto Fail;		// Minimum command line is the command name and one argument
-    operation = getopt(argc, (char * const *)argv, "EFBLRAUNTM");
+    operation = getopt(argc, (char * const *)argv, "EFBLRAUNTMI");
 	if (operation == -1) goto Fail;
 
     switch (operation)
@@ -321,7 +340,7 @@ int main(int argc, char **argv)
                     break;
 
         case 'B':	if (argc < optind+1) goto Fail;
-                    dom = (argc < optind+2) ? "" : argv[optind+1];
+                    dom = (argc < optind+2) ? "local" : argv[optind+1];
                     if (dom[0] == '.' && dom[1] == 0) dom[0] = 0;	// We allow '.' on the command line as a synonym for empty string
                     printf("Browsing for %s%s\n", argv[optind+0], dom);
                     client = DNSServiceBrowserCreate(argv[optind+0], dom, browse_reply, nil);
@@ -329,7 +348,7 @@ int main(int argc, char **argv)
 
         case 'L':	if (argc < optind+2) goto Fail;
                     dom = (argc < optind+3) ? "" : argv[optind+2];
-                    if (dom[0] == '.' && dom[1] == 0) dom[0] = 0;	// We allow '.' on the command line as a synonym for empty string
+					if (dom[0] == '.' && dom[1] == 0) dom = "local";   // We allow '.' on the command line as a synonym for "local"
                     printf("Lookup %s.%s%s\n", argv[optind+0], argv[optind+1], dom);
                     client = DNSServiceResolverResolve(argv[optind+0], argv[optind+1], dom, resolve_reply, nil);
                     break;
@@ -397,6 +416,16 @@ int main(int argc, char **argv)
                     break;
                     }
 
+        case 'I':	{
+                    pid_t pid = getpid();
+                    Opaque16 registerPort = { { pid >> 8, pid & 0xFF } };
+                    static const char TXT[] = "\x09" "Test Data";
+                    printf("Registering Service Test._testtxt._tcp.local.\n");
+                    client = DNSServiceRegistrationCreate("", "_testtxt._tcp.", "", registerPort.NotAnInteger, "", reg_reply, nil);
+                    if (client) DNSServiceRegistrationUpdateRecord(client, 0, 1+TXT[0], &TXT[0], 120);
+                    break;
+                    }
+
         default: goto Exit;
         }
 
@@ -424,5 +453,6 @@ Fail:
 	fprintf(stderr, "%s -N                             (Test adding a large NULL record)\n", argv[0]);
 	fprintf(stderr, "%s -T                            (Test creating a large TXT record)\n", argv[0]);
 	fprintf(stderr, "%s -M      (Test creating a registration with multiple TXT records)\n", argv[0]);
+	fprintf(stderr, "%s -I   (Test registering and then immediately updating TXT record)\n", argv[0]);
 	return 0;
 	}

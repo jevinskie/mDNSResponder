@@ -3,6 +3,8 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -23,8 +25,17 @@
     Change History (most recent first):
 
 $Log: Responder.c,v $
-Revision 1.16.2.1  2004/04/07 23:51:09  cheshire
-Remove obsolete comments referring to doing mDNS on port 53
+Revision 1.20  2004/05/18 23:51:26  cheshire
+Tidy up all checkin comments to use consistent "<rdar://problem/xxxxxxx>" format for bug numbers
+
+Revision 1.19  2004/03/12 08:03:14  cheshire
+Update comments
+
+Revision 1.18  2004/01/25 00:00:55  cheshire
+Change to use mDNSOpaque16fromIntVal() instead of shifting and masking
+
+Revision 1.17  2003/12/11 19:11:55  cheshire
+Fix compiler warning
 
 Revision 1.16  2003/08/14 02:19:55  cheshire
 <rdar://problem/3375491> Split generic ResourceRecord type into two separate types: AuthRecord and CacheRecord
@@ -60,7 +71,7 @@ Revision 1.6  2003/03/08 00:35:56  cheshire
 Switched to using new "mDNS_Execute" model (see "mDNSCore/Implementer Notes.txt")
 
 Revision 1.5  2003/02/20 06:48:36  cheshire
-Bug #: 3169535 Xserve RAID needs to do interface-specific registrations
+<rdar://problem/3169535> Xserve RAID needs to do interface-specific registrations
 Reviewed by: Josh Graessley, Bob Bradley
 
 Revision 1.4  2003/01/28 03:07:46  cheshire
@@ -357,13 +368,14 @@ enum {
 static void PrintUsage()
 {
     fprintf(stderr, 
-            "Usage: %s [-v level ] [-n name] [-t type] [-d domain] [-x TXT] [-p port] [-f file] [-b] [-P pidfile]\n", 
+            "Usage: %s [-v level ] [-r] [-n name] [-t type] [-d domain] [-x TXT] [-p port] [-f file] [-b] [-P pidfile]\n", 
             gProgramName);
     fprintf(stderr, "          -v verbose mode, level is a number from 0 to 2\n");
     fprintf(stderr, "             0 = no debugging info (default)\n");
     fprintf(stderr, "             1 = standard debugging info\n");
     fprintf(stderr, "             2 = intense debugging info\n");
     fprintf(stderr, "             can be cycled kill -USR1\n");
+    fprintf(stderr, "          -r also bind to port 53 (port 5353 is always bound)\n");
     fprintf(stderr, "          -n uses 'name' as the host name (default is none)\n");
     fprintf(stderr, "          -t uses 'type' as the service type (default is '%s')\n", kDefaultServiceType);
     fprintf(stderr, "          -d uses 'domain' as the service domain (default is '%s')\n", kDefaultServiceDomain);
@@ -376,6 +388,7 @@ static void PrintUsage()
     fprintf(stderr, "             only meaningful if -b also specified\n");
 }
 
+static   mDNSBool  gAvoidPort53      = mDNStrue;
 static const char *gRichTextHostName = "";
 static const char *gServiceType      = kDefaultServiceType;
 static const char *gServiceDomain    = kDefaultServiceDomain;
@@ -415,6 +428,9 @@ static void ParseArguments(int argc, char **argv)
                                 gProgramName);
                         exit(1);
                     }
+                    break;
+                case 'r':
+                    gAvoidPort53 = mDNSfalse;
                     break;
                 case 'n':
                     gRichTextHostName = optarg;
@@ -559,7 +575,6 @@ static mStatus RegisterOneService(const char *  richTextHostName,
 {
     mStatus             status;
     PosixService *      thisServ;
-    mDNSOpaque16        port;
     domainlabel         name;
     domainname          type;
     domainname          domain;
@@ -573,14 +588,12 @@ static mStatus RegisterOneService(const char *  richTextHostName,
         MakeDomainLabelFromLiteralString(&name,  richTextHostName);
         MakeDomainNameFromDNSNameString(&type, serviceType);
         MakeDomainNameFromDNSNameString(&domain, serviceDomain);
-        port.b[0] = (portNumber >> 8) & 0x0FF;
-        port.b[1] = (portNumber >> 0) & 0x0FF;;
         status = mDNS_RegisterService(&mDNSStorage, &thisServ->coreServ,
                 &name, &type, &domain,				// Name, type, domain
-                NULL, port, 						// Host and port
+                NULL, mDNSOpaque16fromIntVal(portNumber),
                 text, textLen,						// TXT data, length
                 NULL, 0,							// Subtypes
-                mDNSInterface_Any,					// Interace ID
+                mDNSInterface_Any,					// Interface ID
                 RegistrationCallback, thisServ);	// Callback and context
     }
     if (status == mStatus_NoError) {
@@ -608,20 +621,16 @@ static mStatus RegisterOneService(const char *  richTextHostName,
 }
 
 static mDNSBool ReadALine(char *buf, size_t bufSize, FILE *fp)
-{
-    mDNSBool good;
-    size_t len;
-    
-    good = (fgets(buf, bufSize, fp) != NULL);
-    if (good) {
-        len = strlen(buf);
+	{
+    mDNSBool good = (fgets(buf, bufSize, fp) != NULL);
+    if (good)
+    	{
+        size_t len = strlen(buf);
         good = (len > 0 && buf[len - 1] == '\n');
-    }
-    if (good) {
-        buf[len - 1] = 0;
-    }
+		if (good) buf[len - 1] = 0;
+	    }
     return good;
-}
+	}
 
 static mStatus RegisterServicesInFile(const char *filePath)
 {

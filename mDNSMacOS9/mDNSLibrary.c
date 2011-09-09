@@ -1,0 +1,80 @@
+/*
+ * Copyright (c) 2004 Apple Computer, Inc. All rights reserved.
+ *
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
+
+    Change History (most recent first):
+
+$Log: mDNSLibrary.c,v $
+Revision 1.1  2004/03/12 21:30:26  cheshire
+Build a System-Context Shared Library from mDNSCore, for the benefit of developers
+like Muse Research who want to be able to use mDNS/DNS-SD from GPL-licensed code.
+
+ */
+
+// Define the required CFM Shared Library entry and exit points
+#include <CodeFragments.h>
+#include "mDNSClientAPI.h"				// Defines the interface to the client layer above
+#include "mDNSMacOS9.h"					// Defines the specific types needed to run mDNS on this platform
+
+mDNS mDNSStorage;
+static mDNS_PlatformSupport PlatformSupportStorage;
+#define RR_CACHE_SIZE 64
+static CacheRecord rrcachestorage[RR_CACHE_SIZE];
+
+mDNSlocal void mDNS_StatusCallback(mDNS *const m, mStatus result)
+	{
+	if (result == mStatus_GrowCache)
+		{
+		// If we've run out of cache space, then double the total cache size and give the memory to mDNSCore
+		mDNSu32 numrecords = m->rrcache_size;
+		CacheRecord *storage = OTAllocMem(sizeof(CacheRecord) * numrecords);
+		LogMsg("mStatus_GrowCache %d", numrecords);
+		if (storage) mDNS_GrowCache(m, storage, numrecords);
+		}
+	}
+
+extern pascal OSErr mDNS_CFMInit(const CFragInitBlock *theInitBlock);
+pascal OSErr mDNS_CFMInit(const CFragInitBlock *theInitBlock)
+	{
+	extern pascal OSErr __initialize(const CFragInitBlock *theInitBlock);
+	__initialize(theInitBlock);	// MUST do this first!
+		{
+		mStatus err;
+		THz oldZone = GetZone();
+		SetZone(SystemZone());
+		LogMsg("mDNS/DNS-SD with Macsbug breaks -- do not ship this version to customers");
+		err = mDNS_Init(&mDNSStorage, &PlatformSupportStorage, rrcachestorage, RR_CACHE_SIZE,
+			mDNS_Init_AdvertiseLocalAddresses, mDNS_StatusCallback, mDNS_Init_NoInitCallbackContext);
+		SetZone(oldZone);
+		return((OSErr)err);
+		}
+	}
+	
+extern void mDNS_CFMTerm(void);
+void mDNS_CFMTerm(void)
+	{
+	extern pascal void  __terminate(void);
+	LogMsg("mDNS_CFMTerm");
+	mDNS_Close(&mDNSStorage);
+	__terminate();
+	}

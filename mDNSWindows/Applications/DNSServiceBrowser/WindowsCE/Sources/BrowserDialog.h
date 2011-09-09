@@ -1,7 +1,9 @@
 /*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
+ * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -23,6 +25,16 @@
     Change History (most recent first):
     
 $Log: BrowserDialog.h,v $
+Revision 1.4  2004/01/30 02:56:33  bradley
+Updated to support full Unicode display. Added support for all services on www.dns-sd.org.
+
+Revision 1.3  2003/10/14 03:28:50  bradley
+Insert services in sorted order to make them easier to find. Defer service adds/removes to the main
+thread to avoid potential problems with multi-threaded MFC message map access. Added some asserts.
+
+Revision 1.2  2003/10/10 03:43:34  bradley
+Added support for launching a web browser to go to the browsed web site on a single-tap.
+
 Revision 1.1  2003/08/21 02:16:10  bradley
 Rendezvous Browser for HTTP services for Windows CE/PocketPC.
 
@@ -62,22 +74,20 @@ class	BrowserDialog : public CDialog
 		//}}AFX_VIRTUAL
 		
 		static void
-			BrowserCallBack( 
+			OnBrowserCallBack( 
 				void *					inContext, 
 				DNSBrowserRef			inRef, 
 				DNSStatus				inStatusCode,  
 				const DNSBrowserEvent *	inEvent );
-		
-		void	BrowserAddService( const char *inName );
-		void	BrowserRemoveService( const char *inName );
 		
 	protected:
 		
 		struct	BrowserEntry
 		{
 			CString		name;
+			CString		ip;
+			CString		text;
 		};
-		
 		
 		HICON										mIcon;
 		DNSBrowserRef								mBrowser;
@@ -86,6 +96,9 @@ class	BrowserDialog : public CDialog
 		// Generated message map functions
 		//{{AFX_MSG(BrowserDialog)
 		virtual BOOL OnInitDialog();
+		afx_msg void OnBrowserListDoubleClick(NMHDR* pNMHDR, LRESULT* pResult);
+		afx_msg LONG OnServiceAdd( WPARAM inWParam, LPARAM inLParam );
+		afx_msg LONG OnServiceRemove( WPARAM inWParam, LPARAM inLParam );
 		//}}AFX_MSG
 		DECLARE_MESSAGE_MAP()
 };

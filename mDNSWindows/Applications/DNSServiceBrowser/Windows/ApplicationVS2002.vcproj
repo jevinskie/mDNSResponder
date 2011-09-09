@@ -16,12 +16,12 @@
 			IntermediateDirectory="Debug"
 			ConfigurationType="1"
 			UseOfMFC="1"
-			CharacterSet="2">
+			CharacterSet="1">
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories=".\Resources;..\;..\..\..\..\mDNSCore;..\..\..\mDNSWindows;..\..\..\DNSServices"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;DEBUG"
+				AdditionalIncludeDirectories=".\Resources;..\;..\..\..\;..\..\..\..\mDNSCore;..\..\..\DNSServices"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;DEBUG=1"
 				StringPooling="TRUE"
 				MinimalRebuild="FALSE"
 				BasicRuntimeChecks="3"
@@ -43,17 +43,17 @@
 				SuppressStartupBanner="TRUE"
 				Detect64BitPortabilityProblems="TRUE"
 				DebugInformationFormat="3"
-				CompileAs="0"/>
+				CompileAs="2"/>
 			<Tool
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalOptions="/MACHINE:I386"
-				AdditionalDependencies="ws2_32.lib nafxcwd.lib LIBCMTD.lib"
+				AdditionalOptions="/MACHINE:I386 /IGNORE:4089"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="Rendezvous Browser Debug.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
-				IgnoreDefaultLibraryNames="wsock32.lib;nafxcwd.lib;LIBCMTD.lib"
+				IgnoreDefaultLibraryNames="wsock32.lib"
 				GenerateDebugInformation="TRUE"
 				ProgramDatabaseFile=".\Debug/Application.pdb"
 				SubSystem="2"/>
@@ -85,17 +85,17 @@
 			IntermediateDirectory=".\Release"
 			ConfigurationType="1"
 			UseOfMFC="1"
-			CharacterSet="2"
+			CharacterSet="1"
 			WholeProgramOptimization="FALSE">
 			<Tool
 				Name="VCCLCompilerTool"
-				Optimization="1"
+				Optimization="2"
 				GlobalOptimizations="TRUE"
 				InlineFunctionExpansion="0"
 				FavorSizeOrSpeed="2"
-				OmitFramePointers="FALSE"
+				OmitFramePointers="TRUE"
 				OptimizeForWindowsApplication="FALSE"
-				AdditionalIncludeDirectories=".\Resources;..\;..\..\..\..\mDNSCore;..\..\..\mDNSWindows;..\..\..\DNSServices"
+				AdditionalIncludeDirectories=".\Resources;..\;..\..\..\;..\..\..\..\mDNSCore;..\..\..\DNSServices"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
 				StringPooling="TRUE"
 				MinimalRebuild="FALSE"
@@ -115,17 +115,17 @@
 				WarnAsError="TRUE"
 				SuppressStartupBanner="TRUE"
 				Detect64BitPortabilityProblems="TRUE"
-				CompileAs="0"/>
+				CompileAs="2"/>
 			<Tool
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalOptions="/MACHINE:I386"
-				AdditionalDependencies="ws2_32.lib nafxcw.lib LIBCMT.lib"
+				AdditionalOptions="/MACHINE:I386 /IGNORE:4089"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="Rendezvous Browser.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="TRUE"
-				IgnoreDefaultLibraryNames="wsock32.lib;nafxcw.lib;LIBCMT.lib"
+				IgnoreDefaultLibraryNames="wsock32.lib"
 				ProgramDatabaseFile=".\Release/Application.pdb"
 				SubSystem="2"
 				OptimizeReferences="2"
@@ -147,33 +147,6 @@
 				Name="VCResourceCompilerTool"
 				PreprocessorDefinitions="_AFXDLL;NDEBUG"
 				Culture="1033"/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"/>
-			<Tool
-				Name="VCWebDeploymentTool"/>
-		</Configuration>
-		<Configuration
-			Name="All|Win32"
-			OutputDirectory="All"
-			IntermediateDirectory="All"
-			ConfigurationType="1">
-			<Tool
-				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories=""/>
-			<Tool
-				Name="VCCustomBuildTool"/>
-			<Tool
-				Name="VCLinkerTool"/>
-			<Tool
-				Name="VCMIDLTool"/>
-			<Tool
-				Name="VCPostBuildEventTool"/>
-			<Tool
-				Name="VCPreBuildEventTool"/>
-			<Tool
-				Name="VCPreLinkEventTool"/>
-			<Tool
-				Name="VCResourceCompilerTool"/>
 			<Tool
 				Name="VCWebServiceProxyGeneratorTool"/>
 			<Tool
@@ -203,6 +176,12 @@
 				RelativePath="Sources\ChooserDialog.h">
 			</File>
 			<File
+				RelativePath="Sources\LoginDialog.cpp">
+			</File>
+			<File
+				RelativePath="Sources\LoginDialog.h">
+			</File>
+			<File
 				RelativePath="Sources\StdAfx.cpp">
 			</File>
 			<File
@@ -226,16 +205,46 @@
 			</File>
 		</Filter>
 		<Filter
-			Name="Rendezvous"
+			Name="Support"
 			Filter="">
 			<File
+				RelativePath="..\..\..\CommonServices.h">
+			</File>
+			<File
+				RelativePath="..\..\..\..\mDNSCore\DNSCommon.c">
+			</File>
+			<File
+				RelativePath="..\..\..\..\mDNSCore\DNSCommon.h">
+			</File>
+			<File
+				RelativePath="..\..\..\..\mDNSCore\DNSDigest.c">
+			</File>
+			<File
 				RelativePath="..\..\..\DNSServices\DNSServices.c">
+			</File>
+			<File
+				RelativePath="..\..\..\DebugServices.c">
+			</File>
+			<File
+				RelativePath="..\..\..\DebugServices.h">
 			</File>
 			<File
 				RelativePath="..\..\..\..\mDNSCore\mDNS.c">
 			</File>
 			<File
+				RelativePath="..\..\..\..\mDNSCore\mDNSClientAPI.h">
+			</File>
+			<File
+				RelativePath="..\..\..\..\mDNSCore\mDNSDebug.h">
+			</File>
+			<File
 				RelativePath="..\..\..\mDNSWin32.c">
+			</File>
+			<File
+				RelativePath="..\..\..\..\mDNSCore\uDNS.c">
+			</File>
+			<File
+				RelativePath="..\..\..\..\mDNSCore\uDNS.h">
 			</File>
 		</Filter>
 	</Files>

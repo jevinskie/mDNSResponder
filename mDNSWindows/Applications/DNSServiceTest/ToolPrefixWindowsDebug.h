@@ -1,7 +1,9 @@
 /*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
+ * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -23,6 +25,9 @@
     Change History (most recent first):
     
 $Log: ToolPrefixWindowsDebug.h,v $
+Revision 1.3  2004/01/30 03:04:32  bradley
+Updated for latest changes to mDNSWindows.
+
 Revision 1.2  2003/08/20 07:06:34  bradley
 Update to APSL 2.0. Updated change history to match other mDNSResponder files.
 

@@ -1,7 +1,9 @@
 /*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
+ * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -23,6 +25,12 @@
     Change History (most recent first):
     
 $Log: StdAfx.h,v $
+Revision 1.3  2004/01/30 02:56:32  bradley
+Updated to support full Unicode display. Added support for all services on www.dns-sd.org.
+
+Revision 1.2  2003/10/09 02:31:55  bradley
+Define WINVER if not already defined to avoid warning with Visual Studio .NET 2003.
+
 Revision 1.1  2003/08/21 02:06:47  bradley
 Moved Rendezvous Browser for non-Windows CE into Windows sub-folder.
 
@@ -49,17 +57,18 @@ Rendezvous Browser for Windows
 
 #define VC_EXTRALEAN		// Exclude rarely-used stuff from Windows headers
 
-#include <afxwin.h>         // MFC core and standard components
-#include <afxext.h>         // MFC extensions
-#include <afxdtctl.h>		// MFC support for Internet Explorer 4 Common Controls
+#ifndef WINVER				// Allow use of features specific to Windows 95 and Windows NT 4 or later.
+	#define WINVER 0x0400	// Change this to the appropriate value to target Windows 98 and Windows 2000 or later.
+#endif
+
+#include	<afxwin.h>		// MFC core and standard components
+#include	<afxext.h>		// MFC extensions
+#include	<afxdtctl.h>	// MFC support for Internet Explorer 4 Common Controls
 #ifndef _AFX_NO_AFXCMN_SUPPORT
-#include <afxcmn.h>			// MFC support for Windows Common Controls
+	#include	<afxcmn.h>	// MFC support for Windows Common Controls
 #endif // _AFX_NO_AFXCMN_SUPPORT
 
-#include <afxsock.h>		// MFC socket extensions
-
-//{{AFX_INSERT_LOCATION}}
-// Microsoft Visual C++ will insert additional declarations immediately before the previous line.
+#include	<winsock2.h>
 
 #include	<stdlib.h>
 

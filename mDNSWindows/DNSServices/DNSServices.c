@@ -1,7 +1,9 @@
 /*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
+ * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -23,6 +25,41 @@
     Change History (most recent first):
     
 $Log: DNSServices.c,v $
+Revision 1.26  2004/06/05 00:04:27  cheshire
+<rdar://problem/3668639>: wide-area domains should be returned in reg. domain enumeration
+
+Revision 1.25  2004/04/08 09:31:17  bradley
+Renamed local variable to avoid hiding a system global in some libraries.
+
+Revision 1.24  2004/01/30 02:56:34  bradley
+Updated to support full Unicode display. Added support for all services on www.dns-sd.org.
+
+Revision 1.23  2004/01/24 23:57:29  cheshire
+Change to use mDNSOpaque16fromIntVal() instead of shifting and masking
+
+Revision 1.22  2003/12/17 21:12:15  bradley
+<rdar://problem/3491823>: Use the default .local domain when registering with an empty domain.
+
+Revision 1.21  2003/11/20 22:29:56  cheshire
+Don't need to use MAX_ESCAPED_DOMAIN_LABEL for the name part -- that's not escaped
+
+Revision 1.20  2003/11/14 21:27:09  cheshire
+<rdar://problem/3484766>: Security: Crashing bug in mDNSResponder
+Fix code that should use buffer size MAX_ESCAPED_DOMAIN_NAME (1005) instead of 256-byte buffers.
+
+Revision 1.19  2003/11/14 20:59:10  cheshire
+Clients can't use AssignDomainName macro because mDNSPlatformMemCopy is defined in mDNSPlatformFunctions.h.
+Best solution is just to combine mDNSClientAPI.h and mDNSPlatformFunctions.h into a single file.
+
+Revision 1.18  2003/11/14 19:18:34  cheshire
+Move AssignDomainName macro to mDNSClientAPI.h to that client layers can use it too
+
+Revision 1.17  2003/10/31 12:16:03  bradley
+Added support for providing the resolved host name to the callback.
+
+Revision 1.16  2003/10/16 09:16:39  bradley
+Unified address copying to fix a problem with IPv6 resolves not being passed up as IPv6.
+
 Revision 1.15  2003/08/20 06:44:24  bradley
 Updated to latest internal version of the Rendezvous for Windows code: Added support for interface
 specific registrations; Added support for no-such-service registrations; Added support for host
@@ -102,7 +139,6 @@ DNS Services for Windows
 #endif
 
 #include	"mDNSClientAPI.h"
-#include	"mDNSPlatformFunctions.h"
 
 #include	"DNSServices.h"
 
@@ -289,8 +325,6 @@ struct	DNSHostRegistration
 	#define require_action_string( assertion, label, action, cstring )	do { if( !(assertion) ) { {action;}; goto label; } } while(0)
 #endif
 
-#define AssignDomainName(DST, SRC) mDNSPlatformMemCopy((SRC).c, (DST).c, DomainNameLength(&(SRC)))
-
 #if 0
 #pragma mark == Prototypes ==
 #endif
@@ -367,7 +401,7 @@ mDNSlocal void	DNSHostRegistrationPrivateCallBack( mDNS * const inMDNS, AuthReco
 
 mDNSlocal DNSStatus	DNSMemAlloc( size_t inSize, void *outMem );
 mDNSlocal void		DNSMemFree( void *inMem );
-mDNSlocal void		MDNSAddrToDNSAddress( const mDNSAddr *inAddr, DNSNetworkAddress *outAddr );
+mDNSlocal void		MDNSAddrToDNSAddress( const mDNSAddr *inAddr, mDNSIPPort inPort, DNSNetworkAddress *outAddr );
 
 // Platform Accessors
 
@@ -736,11 +770,11 @@ DNSStatus	DNSBrowserStartDomainSearch( DNSBrowserRef inRef, DNSBrowserFlags inFl
 	
 	// Start the browse operations.
 	
-	err = mDNS_GetDomains( gMDNSPtr, &inRef->domainQuestion, type, mDNSInterface_Any, DNSBrowserPrivateCallBack, inRef );
+	err = mDNS_GetDomains( gMDNSPtr, &inRef->domainQuestion, type, NULL, mDNSInterface_Any, DNSBrowserPrivateCallBack, inRef );
 	require_noerr( err, exit );
 	isDomainBrowsing = mDNStrue;
 	
-	err = mDNS_GetDomains( gMDNSPtr, &inRef->defaultDomainQuestion, defaultType, mDNSInterface_Any, DNSBrowserPrivateCallBack, inRef );
+	err = mDNS_GetDomains( gMDNSPtr, &inRef->defaultDomainQuestion, defaultType, NULL, mDNSInterface_Any, DNSBrowserPrivateCallBack, inRef );
 	require_noerr( err, exit );
 	
 	inRef->domainSearchFlags 	= inFlags;
@@ -815,7 +849,7 @@ DNSStatus
 	require_action( !inRef->isServiceBrowsing, exit, err = kDNSBadStateErr );
 	require_action( inType, exit, err = kDNSBadParamErr );
 	
-	// Default to the local domain when null is passed in.
+	// Default to the local domain when a NULL, empty, or "." domain is passed in.
 	
 	if( !inDomain || ( inDomain[ 0 ] == '\0' ) || ( inDomain[ 0 ] == '.' ) )
 	{
@@ -893,9 +927,9 @@ mDNSlocal void
 	domainlabel			name;
 	domainname			type;
 	domainname			domain;
-	char				nameString[ 256 ];
-	char				typeString[ 256 ];
-	char				domainString[ 256 ];
+	char				nameString  [ MAX_DOMAIN_LABEL + 1 ];	// Name part is not escaped
+	char				typeString  [ MAX_ESCAPED_DOMAIN_NAME ];
+	char				domainString[ MAX_ESCAPED_DOMAIN_NAME ];
 	DNSBrowserEvent		event;
 	mStatus				err;
 	
@@ -953,7 +987,7 @@ mDNSlocal void
 			if( err == mStatus_NoError )
 			{
 				serviceDataPtr->interfaceName = info.name;
-				MDNSAddrToDNSAddress( &info.ip, &serviceDataPtr->interfaceIP );
+				MDNSAddrToDNSAddress( &info.ip, zeroIPPort, &serviceDataPtr->interfaceIP );
 			}
 			else
 			{
@@ -975,7 +1009,6 @@ mDNSlocal void
 		
 		if( ( browserFlags & kDNSBrowserFlagAutoResolve ) && inAddRecord )
 		{
-			DNSStatus				err;
 			DNSResolverFlags		flags;
 			
 			flags = kDNSResolverFlagOnlyIfUnique | kDNSResolverFlagAutoReleaseByName;
@@ -1032,7 +1065,7 @@ mDNSlocal void
 			if( err == mStatus_NoError )
 			{
 				domainDataPtr->interfaceName = info.name;
-				MDNSAddrToDNSAddress( &info.ip, &domainDataPtr->interfaceIP );
+				MDNSAddrToDNSAddress( &info.ip, zeroIPPort, &domainDataPtr->interfaceIP );
 			}
 			else
 			{
@@ -1079,15 +1112,6 @@ mDNSlocal void
 	switch( inEvent->type )
 	{
 		case kDNSResolverEventTypeResolved:
-			verbosedebugf( DEBUG_NAME "private resolver callback: resolved (ref=0x%08X)", inRef );
-			verbosedebugf( DEBUG_NAME "    name:   \"%s\"", 	inEvent->data.resolved.name );
-			verbosedebugf( DEBUG_NAME "    type:   \"%s\"", 	inEvent->data.resolved.type );
-			verbosedebugf( DEBUG_NAME "    domain: \"%s\"", 	inEvent->data.resolved.domain );
-			verbosedebugf( DEBUG_NAME "    if:     %.4a", 		&inEvent->data.resolved.interfaceIP.u.ipv4.addr.v32 );
-			verbosedebugf( DEBUG_NAME "    ip:     %.4a:%u", 	&inEvent->data.resolved.address.u.ipv4.addr.v32, 
-															 	( inEvent->data.resolved.address.u.ipv4.port.v8[ 0 ] << 8 ) |
-															 	  inEvent->data.resolved.address.u.ipv4.port.v8[ 1 ] );
-			verbosedebugf( DEBUG_NAME "    text:   \"%s\"", 	inEvent->data.resolved.textRecord );
 			
 			// Re-package the resolver event as a browser event and call the callback.
 			
@@ -1376,6 +1400,7 @@ mDNSlocal void	DNSResolverPrivateCallBack( mDNS * const inMDNS, ServiceInfoQuery
 	char *					txtString;
 	mStatus					err;
 	mDNSBool				release;
+	char					hostName[ MAX_ESCAPED_DOMAIN_NAME ];
 	
 	txtString = NULL;
 	
@@ -1407,7 +1432,7 @@ mDNSlocal void	DNSResolverPrivateCallBack( mDNS * const inMDNS, ServiceInfoQuery
 		if( err == mStatus_NoError )
 		{
 			event.data.resolved.interfaceName = info.name;
-			MDNSAddrToDNSAddress( &info.ip, &event.data.resolved.interfaceIP );
+			MDNSAddrToDNSAddress( &info.ip, zeroIPPort, &event.data.resolved.interfaceIP );
 		}
 		else
 		{
@@ -1415,13 +1440,13 @@ mDNSlocal void	DNSResolverPrivateCallBack( mDNS * const inMDNS, ServiceInfoQuery
 		}
 	}
 	event.data.resolved.interfaceID						= inQuery->info->InterfaceID;
-	event.data.resolved.address.addressType				= kDNSNetworkAddressTypeIPv4;
-	event.data.resolved.address.u.ipv4.addr.v32 		= inQuery->info->ip.ip.v4.NotAnInteger;
-	event.data.resolved.address.u.ipv4.port.v16			= inQuery->info->port.NotAnInteger;
+	MDNSAddrToDNSAddress( &inQuery->info->ip, inQuery->info->port, &event.data.resolved.address );
 	event.data.resolved.textRecord						= txtString ? txtString : "";
 	event.data.resolved.flags 							= 0;
 	event.data.resolved.textRecordRaw					= (const void *) inQuery->info->TXTinfo;
 	event.data.resolved.textRecordRawSize				= (DNSCount) inQuery->info->TXTlen;
+	ConvertDomainNameToCString( &inQuery->qAv4.qname, hostName );
+	event.data.resolved.hostName						= hostName;
 	release												= (mDNSBool)( ( objectPtr->flags & kDNSResolverFlagOneShot ) != 0 );
 	objectPtr->callback( objectPtr->callbackContext, objectPtr, kDNSNoErr, &event );
 	
@@ -1556,7 +1581,6 @@ DNSStatus
 	domainlabel				name;
 	domainname				type;
 	domainname				domain;
-	mDNSIPPort				port;
 	mDNSu8					textRecord[ 256 ];
 	const mDNSu8 *			textRecordPtr;
 	domainname *			host;
@@ -1576,9 +1600,9 @@ DNSStatus
 	require_action( !inInterfaceName || 
 					( strlen( inInterfaceName ) < sizeof( objectPtr->interfaceName ) ), exit, err = kDNSBadParamErr );
 	
-	// Default to the local domain when null is passed in.
+	// Default to the local domain when a NULL, empty, or "." domain is passed in.
 	
-	if( !inDomain )
+	if( !inDomain || ( inDomain[ 0 ] == '\0' ) || ( inDomain[ 0 ] == '.' ) )
 	{
 		inDomain = kDNSLocalDomain;
 	}
@@ -1650,8 +1674,6 @@ DNSStatus
 	}
 	MakeDomainNameFromDNSNameString( &type, inType );
 	MakeDomainNameFromDNSNameString( &domain, inDomain );
-	port.b[ 0 ] = ( mDNSu8 )( inPort >> 8 );
-	port.b[ 1 ] = ( mDNSu8 )( inPort >> 0 );
 	
 	// Set up the host name (if not using the default).
 	
@@ -1665,7 +1687,7 @@ DNSStatus
 		
 	// Register the service with mDNS.
 	
-	err = mDNS_RegisterService( gMDNSPtr, &objectPtr->set, &name, &type, &domain, host, port, textRecordPtr, 
+	err = mDNS_RegisterService( gMDNSPtr, &objectPtr->set, &name, &type, &domain, host, mDNSOpaque16fromIntVal(inPort), textRecordPtr, 
 								(mDNSu16) inTextRecordSize, NULL, 0, interfaceID, 
 								DNSRegistrationPrivateCallBack, objectPtr );
 	require_noerr( err, exit );
@@ -1720,9 +1742,9 @@ DNSStatus
 	require_action( !inInterfaceName || 
 					( strlen( inInterfaceName ) < sizeof( objectPtr->interfaceName ) ), exit, err = kDNSBadParamErr );
 	
-	// Default to the local domain when null is passed in.
+	// Default to the local domain when a NULL, empty, or "." domain is passed in.
 	
-	if( !inDomain )
+	if( !inDomain || ( inDomain[ 0 ] == '\0' ) || ( inDomain[ 0 ] == '.' ) )
 	{
 		inDomain = kDNSLocalDomain;
 	}
@@ -1947,14 +1969,14 @@ mDNSlocal void	DNSRegistrationPrivateCallBack( mDNS * const inMDNS, ServiceRecor
 		case mStatus_NameConflict:
 		{
 			DNSStatus		err;
-			mDNSBool		remove;
+			mDNSBool		removeIt;
 			
 			debugf( DEBUG_NAME "registration callback: \"%##s\" name conflict", inSet->RR_SRV.resrec.name.c );
 			
 			// Name conflict. If the auto-rename option is enabled, uniquely rename the service and re-register it. Otherwise, 
 			// remove the object so they cannot try to use it in the callback and notify the client of the name conflict.
 			
-			remove = mDNStrue;
+			removeIt = mDNStrue;
 			if( object->flags & kDNSRegistrationFlagAutoRenameOnConflict )
 			{
 				err = mDNS_RenameAndReregisterService( inMDNS, inSet, mDNSNULL );
@@ -1962,10 +1984,10 @@ mDNSlocal void	DNSRegistrationPrivateCallBack( mDNS * const inMDNS, ServiceRecor
 				if( err == mStatus_NoError )
 				{
 					debugf( DEBUG_NAME "registration callback: auto-renamed to \"%##s\"", inSet->RR_SRV.resrec.name.c );
-					remove = mDNSfalse;
+					removeIt = mDNSfalse;
 				}
 			}
-			if( remove )
+			if( removeIt )
 			{
 				object = DNSRegistrationRemoveObject( object );
 				require( object, exit );
@@ -2324,9 +2346,9 @@ DNSStatus
 	require_action( !inInterfaceName || 
 					( strlen( inInterfaceName ) < sizeof( object->interfaceName ) ), exit, err = kDNSBadParamErr );
 	
-	// Default to the local domain when null is passed in.
+	// Default to the local domain when a NULL, empty, or "." domain is passed in.
 	
-	if( !inDomain )
+	if( !inDomain || ( inDomain[ 0 ] == '\0' ) || ( inDomain[ 0 ] == '.' ) )
 	{
 		inDomain = kDNSLocalDomain;
 	}
@@ -2945,7 +2967,7 @@ DNSStatus	DNSTextRecordEscape( const void *inTextRecord, size_t inTextSize, char
 			}
 			*dst++ = '\001';	// \001 record separator. May be overwritten later if this is the last record.
 		}
-		check( ( dst - dstStorage ) <= inTextSize );
+		check( (size_t)( dst - dstStorage ) <= inTextSize );
 		if( src != end )
 		{
 			// Malformed TXT record. Assume an old-style TXT record and use the TXT record as a whole.
@@ -3130,13 +3152,14 @@ exit:
 //	MDNSAddrToDNSAddress
 //===========================================================================================================================
 
-mDNSlocal void	MDNSAddrToDNSAddress( const mDNSAddr *inAddr, DNSNetworkAddress *outAddr )
+mDNSlocal void	MDNSAddrToDNSAddress( const mDNSAddr *inAddr, mDNSIPPort inPort, DNSNetworkAddress *outAddr )
 {
 	switch( inAddr->type )
 	{
 		case mDNSAddrType_IPv4:
 			outAddr->addressType		= kDNSNetworkAddressTypeIPv4;
 			outAddr->u.ipv4.addr.v32 	= inAddr->ip.v4.NotAnInteger;
+			outAddr->u.ipv4.port.v16	= inPort.NotAnInteger;
 			break;
 		
 		case mDNSAddrType_IPv6:
@@ -3145,6 +3168,7 @@ mDNSlocal void	MDNSAddrToDNSAddress( const mDNSAddr *inAddr, DNSNetworkAddress *
 			outAddr->u.ipv6.addr.v32[ 1 ] 	= inAddr->ip.v6.l[ 1 ];
 			outAddr->u.ipv6.addr.v32[ 2 ] 	= inAddr->ip.v6.l[ 2 ];
 			outAddr->u.ipv6.addr.v32[ 3 ] 	= inAddr->ip.v6.l[ 3 ];
+			outAddr->u.ipv6.port.v16		= inPort.NotAnInteger;
 			break;
 		
 		default:

@@ -3,6 +3,8 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -23,6 +25,61 @@
     Change History (most recent first):
 
 $Log: mDNSMacOSX.h,v $
+Revision 1.37  2004/06/04 08:58:30  ksekar
+<rdar://problem/3668624>: Keychain integration for secure dynamic update
+
+Revision 1.36  2004/05/26 17:06:33  cheshire
+<rdar://problem/3668515>: Don't rely on CFSocketInvalidate() to remove RunLoopSource
+
+Revision 1.35  2004/05/18 23:51:26  cheshire
+Tidy up all checkin comments to use consistent "<rdar://problem/xxxxxxx>" format for bug numbers
+
+Revision 1.34  2004/05/12 22:03:09  ksekar
+Made GetSearchDomainList a true platform-layer call (declaration moved
+from mDNSMacOSX.h to mDNSClientAPI.h), impelemted to return "local"
+only on non-OSX platforms.  Changed call to return a copy of the list
+to avoid shared memory issues.  Added a routine to free the list.
+
+Revision 1.33  2004/05/12 02:03:25  ksekar
+Non-local domains will only be browsed by default, and show up in
+_browse domain enumeration, if they contain an _browse._dns-sd ptr record.
+
+Revision 1.32  2004/04/21 02:20:47  cheshire
+Rename interface field 'CurrentlyActive' to more descriptive 'Exists'
+
+Revision 1.31  2004/04/09 17:40:26  cheshire
+Remove unnecessary "Multicast" field -- it duplicates the semantics of the existing TxAndRx field
+
+Revision 1.30  2004/01/28 02:30:08  ksekar
+Added default Search Domains to unicast browsing, controlled via
+Networking sharing prefs pane.  Stopped sending unicast messages on
+every interface.  Fixed unicast resolving via mach-port API.
+
+Revision 1.29  2004/01/27 22:57:48  cheshire
+<rdar://problem/3534352>: Need separate socket for issuing unicast queries
+
+Revision 1.28  2004/01/27 20:15:23  cheshire
+<rdar://problem/3541288>: Time to prune obsolete code for listening on port 53
+
+Revision 1.27  2004/01/24 08:46:26  bradley
+Added InterfaceID<->Index platform interfaces since they are now used by all platforms for the DNS-SD APIs.
+
+Revision 1.26  2003/12/08 21:00:46  rpantos
+Changes to support mDNSResponder on Linux.
+
+Revision 1.25  2003/11/08 22:18:29  cheshire
+<rdar://problem/3477870>: Don't need to show process ID in *every* mDNSResponder syslog message
+
+Revision 1.24  2003/11/08 22:13:00  cheshire
+Move extern declarations inside '#ifdef __cplusplus extern "C" {' section
+
+Revision 1.23  2003/09/23 16:38:25  cheshire
+When LogAllOperations is false, treat LogOperation() like debugf()
+(i.e. show in debug builds), rather than unconditionally ignoring
+
+Revision 1.22  2003/09/23 02:12:43  cheshire
+Also include port number in list of services registered via new UDS API
+
 Revision 1.21  2003/08/19 22:20:00  cheshire
 <rdar://problem/3376721> Don't use IPv6 on interfaces that have a routable IPv4 address configured
 More minor refinements
@@ -46,8 +103,7 @@ Revision 1.15  2003/08/05 00:32:28  cheshire
 <rdar://problem/3326712> Time to turn off MACOSX_MDNS_MALLOC_DEBUGGING
 
 Revision 1.14  2003/07/20 03:38:51  ksekar
-Bug #: 3320722
-Completed support for Unix-domain socket based API.
+<rdar://problem/3320722> Completed support for Unix-domain socket based API.
 
 Revision 1.13  2003/07/18 00:30:00  cheshire
 <rdar://problem/3268878> Remove mDNSResponder version from packet header and use HINFO record instead
@@ -60,7 +116,7 @@ Revision 1.11  2003/07/02 21:19:51  cheshire
 <rdar://problem/3313413> Update copyright notices, etc., in source code comments
 
 Revision 1.10  2003/06/25 23:42:19  ksekar
-Bug #: <rdar://problem/3249292>: Feature: New Rendezvous APIs (#7875)
+<rdar://problem/3249292>: Feature: New Rendezvous APIs (#7875)
 Reviewed by: Stuart Cheshire
 Added files necessary to implement Unix domain sockets based enhanced
 Rendezvous APIs, and integrated with existing Mach-port based daemon.
@@ -80,13 +136,13 @@ Revision 1.7  2003/04/26 02:39:24  cheshire
 Remove extern void LogMsg(const char *format, ...);
 
 Revision 1.6  2003/03/05 21:59:56  cheshire
-Bug #: 3189097 Additional debugging code in mDNSResponder
+<rdar://problem/3189097> Additional debugging code in mDNSResponder
 
 Revision 1.5  2003/03/05 01:50:38  cheshire
-Bug #: 3189097 Additional debugging code in mDNSResponder
+<rdar://problem/3189097> Additional debugging code in mDNSResponder
 
 Revision 1.4  2003/02/21 01:54:10  cheshire
-Bug #: 3099194 mDNSResponder needs performance improvements
+<rdar://problem/3099194> mDNSResponder needs performance improvements
 Switched to using new "mDNS_Execute" model (see "Implementer Notes.txt")
 
 Revision 1.3  2002/09/21 20:44:51  zarzycki
@@ -111,30 +167,40 @@ Defines mDNS_PlatformSupport_struct for OS X
 #include <IOKit/pwr_mgt/IOPMLib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "mDNSClientAPI.h"  // for domain name structure
+	
 
 typedef struct NetworkInterfaceInfoOSX_struct NetworkInterfaceInfoOSX;
+
+typedef struct
+	{
+	mDNS                    *m;
+	NetworkInterfaceInfoOSX *info;
+	int                      sktv4;
+	CFSocketRef              cfsv4;
+	CFRunLoopSourceRef       rlsv4;
+	int                      sktv6;
+	CFSocketRef	             cfsv6;
+	CFRunLoopSourceRef       rlsv6;
+	} CFSocketSet;
+
 struct NetworkInterfaceInfoOSX_struct
 	{
 	NetworkInterfaceInfo     ifinfo;			// MUST be the first element in this structure
 	NetworkInterfaceInfoOSX *next;
-	mDNS                    *m;
-	mDNSu32                  CurrentlyActive;	// 0 not active; 1 active; 2 active but TxRx state changed
+	mDNSu32                  Exists;			// 1 = currently exists in getifaddrs list; 0 = doesn't
+												// 2 = exists, but McastTxRx state changed
 	char                    *ifa_name;			// Memory for this is allocated using malloc
 	mDNSu32                  scope_id;			// interface index / IPv6 scope ID
 	u_short                  sa_family;
-#if mDNS_AllowPort53
-	int                      skt53;
-	CFSocketRef              cfs53;
-#endif
-	int                      sktv4;
-	CFSocketRef              cfsv4;
-	int                      sktv6;
-	CFSocketRef	             cfsv6;
+	mDNSBool                 Multicast;
+	CFSocketSet              ss;
 	};
 
 struct mDNS_PlatformSupport_struct
     {
     NetworkInterfaceInfoOSX *InterfaceList;
+    CFSocketSet              unicastsockets;
     domainlabel              userhostlabel;
     SCDynamicStoreRef        Store;
     CFRunLoopSourceRef       StoreRLS;
@@ -143,50 +209,12 @@ struct mDNS_PlatformSupport_struct
     CFRunLoopSourceRef       PowerRLS;
     };
 
-extern mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(const mDNS *const m, mDNSu32 index);
-extern mDNSu32 mDNSPlatformInterfaceIndexfromInterfaceID(const mDNS *const m, mDNSInterfaceID id);
 extern mDNSBool mDNSMacOSXSystemBuildNumber(char *HINFO_SWstring);
 
 extern const char mDNSResponderVersionString[];
 
-// Set this symbol to 1 to do extra debug checks on malloc() and free()
-// Set this symbol to 2 to write a log message for every malloc() and free()
-#define MACOSX_MDNS_MALLOC_DEBUGGING 0
-
-#if MACOSX_MDNS_MALLOC_DEBUGGING >= 1
-extern void *mallocL(char *msg, unsigned int size);
-extern void freeL(char *msg, void *x);
-#else
-#define mallocL(X,Y) malloc(Y)
-#define freeL(X,Y) free(Y)
-#endif
-
-#if MACOSX_MDNS_MALLOC_DEBUGGING >= 2
-#define LogMalloc LogMsg
-#else
-#define	LogMalloc(ARGS...) ((void)0)
-#endif
-
-#define LogAllOperations 0
-
-#if LogAllOperations
-#define LogOperation LogMsg
-#else
-#define	LogOperation(ARGS...) ((void)0)
-#endif
-
 #ifdef  __cplusplus
     }
 #endif
-
-// UDS Server <-> daemon crossover routines/globals
-extern mDNS mDNSStorage;            
-extern int udsserver_init(void);
-extern int udsserver_add_rl_source(void);
-extern mDNSs32 udsserver_idle(mDNSs32 nextevent);  // takes the next scheduled event time, does idle work,
-                                                   // and returns the updated nextevent time
-extern void udsserver_info(void);
-extern void udsserver_handle_configchange(void);
-extern int udsserver_exit(void);
 
 #endif

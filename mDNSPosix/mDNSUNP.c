@@ -3,6 +3,8 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -23,6 +25,19 @@
     Change History (most recent first):
 
 $Log: mDNSUNP.c,v $
+Revision 1.16  2004/03/20 05:37:09  cheshire
+Fix contributed by Terry Lambert & Alfred Perlstein:
+Don't use uint8_t -- it requires stdint.h, which doesn't exist on FreeBSD 4.x
+
+Revision 1.15  2004/02/14 01:09:45  rpantos
+Just use HAVE_IPV6 rather than defined(HAVE_IPV6).
+
+Revision 1.14  2003/12/11 18:53:40  cheshire
+Fix compiler warning reported by Paul Guyot
+
+Revision 1.13  2003/12/08 20:47:02  rpantos
+Add support for mDNSResponder on Linux.
+
 Revision 1.12  2003/09/02 20:47:13  cheshire
 Fix signed/unsigned warning
 
@@ -105,7 +120,7 @@ struct ifi_info *get_ifi_info(int family, int doaliases)
     struct ifreq        *ifr, ifrcopy;
     struct sockaddr_in  *sinptr;
     
-#if defined(AF_INET6) && defined(HAVE_IPV6)
+#if defined(AF_INET6) && HAVE_IPV6
     struct sockaddr_in6 *sinptr6;
 #endif
 
@@ -121,7 +136,7 @@ struct ifi_info *get_ifi_info(int family, int doaliases)
     lastlen = 0;
     len = 100 * sizeof(struct ifreq);   /* initial buffer size guess */
     for ( ; ; ) {
-        buf = malloc(len);
+        buf = (char*)malloc(len);
         if (buf == NULL) {
             goto gotError;
         }
@@ -175,7 +190,7 @@ struct ifi_info *get_ifi_info(int family, int doaliases)
         if ((flags & IFF_UP) == 0)
             continue;   /* ignore if interface not up */
 
-        ifi = calloc(1, sizeof(struct ifi_info));
+        ifi = (struct ifi_info*)calloc(1, sizeof(struct ifi_info));
         if (ifi == NULL) {
             goto gotError;
         }
@@ -193,7 +208,7 @@ struct ifi_info *get_ifi_info(int family, int doaliases)
         case AF_INET:
             sinptr = (struct sockaddr_in *) &ifr->ifr_addr;
             if (ifi->ifi_addr == NULL) {
-                ifi->ifi_addr = calloc(1, sizeof(struct sockaddr_in));
+                ifi->ifi_addr = (struct sockaddr*)calloc(1, sizeof(struct sockaddr_in));
                 if (ifi->ifi_addr == NULL) {
                     goto gotError;
                 }
@@ -205,7 +220,7 @@ struct ifi_info *get_ifi_info(int family, int doaliases)
                         goto gotError;
                     }
                     sinptr = (struct sockaddr_in *) &ifrcopy.ifr_broadaddr;
-                    ifi->ifi_brdaddr = calloc(1, sizeof(struct sockaddr_in));
+                    ifi->ifi_brdaddr = (struct sockaddr*)calloc(1, sizeof(struct sockaddr_in));
                     if (ifi->ifi_brdaddr == NULL) {
                         goto gotError;
                     }
@@ -219,7 +234,7 @@ struct ifi_info *get_ifi_info(int family, int doaliases)
                         goto gotError;
                     }
                     sinptr = (struct sockaddr_in *) &ifrcopy.ifr_dstaddr;
-                    ifi->ifi_dstaddr = calloc(1, sizeof(struct sockaddr_in));
+                    ifi->ifi_dstaddr = (struct sockaddr*)calloc(1, sizeof(struct sockaddr_in));
                     if (ifi->ifi_dstaddr == NULL) {
                         goto gotError;
                     }
@@ -229,7 +244,7 @@ struct ifi_info *get_ifi_info(int family, int doaliases)
             }
             break;
 
-#if defined(AF_INET6) && defined(HAVE_IPV6)
+#if defined(AF_INET6) && HAVE_IPV6
         case AF_INET6:
             sinptr6 = (struct sockaddr_in6 *) &ifr->ifr_addr;
             if (ifi->ifi_addr == NULL) {
@@ -292,7 +307,7 @@ free_ifi_info(struct ifi_info *ifihead)
 
 ssize_t 
 recvfrom_flags(int fd, void *ptr, size_t nbytes, int *flagsp,
-               struct sockaddr *sa, socklen_t *salenptr, struct my_in_pktinfo *pktp)
+               struct sockaddr *sa, socklen_t *salenptr, struct my_in_pktinfo *pktp, u_char *ttl)
 {
     struct msghdr   msg;
     struct iovec    iov[1];
@@ -305,6 +320,8 @@ recvfrom_flags(int fd, void *ptr, size_t nbytes, int *flagsp,
       char              control[1024];
     } control_un;
 
+	*ttl = 255;			// If kernel fails to provide TTL data then assume the TTL was 255 as it should be
+
     msg.msg_control = control_un.control;
     msg.msg_controllen = sizeof(control_un.control);
     msg.msg_flags = 0;
@@ -312,9 +329,9 @@ recvfrom_flags(int fd, void *ptr, size_t nbytes, int *flagsp,
     memset(&msg, 0, sizeof(msg));   /* make certain msg_accrightslen = 0 */
 #endif /* CMSG_FIRSTHDR */
 
-    msg.msg_name = (void *) sa;
+    msg.msg_name = (char *) sa;
     msg.msg_namelen = *salenptr;
-    iov[0].iov_base = ptr;
+    iov[0].iov_base = (char *)ptr;
     iov[0].iov_len = nbytes;
     msg.msg_iov = iov;
     msg.msg_iovlen = 1;
@@ -401,7 +418,20 @@ struct in_pktinfo
         }
 #endif
 
-#if defined(IPV6_PKTINFO) && defined(HAVE_IPV6)
+#ifdef  IP_RECVTTL
+        if (cmptr->cmsg_level == IPPROTO_IP &&
+            cmptr->cmsg_type == IP_RECVTTL) {
+			*ttl = *(u_char*)CMSG_DATA(cmptr);
+            continue;
+        }
+        else if (cmptr->cmsg_level == IPPROTO_IP &&
+            cmptr->cmsg_type == IP_TTL) {		// some implementations seem to send IP_TTL instead of IP_RECVTTL
+			*ttl = *(int*)CMSG_DATA(cmptr);
+            continue;
+        }
+#endif
+
+#if defined(IPV6_PKTINFO) && HAVE_IPV6
         if (cmptr->cmsg_level == IPPROTO_IPV6 && 
             cmptr->cmsg_type == IPV6_PKTINFO) {
             struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)&pktp->ipi_addr;
@@ -414,6 +444,14 @@ struct in_pktinfo
             sin6->sin6_scope_id = 0;
             sin6->sin6_port     = 0;
 			pktp->ipi_ifindex   = ip6_info->ipi6_ifindex;
+            continue;
+        }
+#endif
+
+#if defined(IPV6_HOPLIMIT) && HAVE_IPV6
+        if (cmptr->cmsg_level == IPPROTO_IPV6 && 
+            cmptr->cmsg_type == IPV6_HOPLIMIT) {
+			*ttl = *(int*)CMSG_DATA(cmptr);
             continue;
         }
 #endif

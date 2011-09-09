@@ -3,15 +3,12 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Tool", "ToolWin32VS2002.vcp
 EndProject
 Global
 	GlobalSection(SolutionConfiguration) = preSolution
-		ConfigName.0 = all
-		ConfigName.1 = Debug
-		ConfigName.2 = Release
+		ConfigName.0 = Debug
+		ConfigName.1 = Release
 	EndGlobalSection
 	GlobalSection(ProjectDependencies) = postSolution
 	EndGlobalSection
 	GlobalSection(ProjectConfiguration) = postSolution
-		{F66EFE7E-50A6-44D4-87C7-742B303BA852}.all.ActiveCfg = all|Win32
-		{F66EFE7E-50A6-44D4-87C7-742B303BA852}.all.Build.0 = all|Win32
 		{F66EFE7E-50A6-44D4-87C7-742B303BA852}.Debug.ActiveCfg = Debug|Win32
 		{F66EFE7E-50A6-44D4-87C7-742B303BA852}.Debug.Build.0 = Debug|Win32
 		{F66EFE7E-50A6-44D4-87C7-742B303BA852}.Release.ActiveCfg = Release|Win32

@@ -1,7 +1,9 @@
 /*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
+ * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -23,8 +25,13 @@
     Change History (most recent first):
     
 $Log: mDNSWin32.h,v $
-Revision 1.9.2.1  2004/04/03 05:26:08  bradley
-Integrated changes from TOT to remove legacy port 53 support.
+Revision 1.11  2004/01/30 02:44:32  bradley
+Added support for IPv6 (v4 & v6, v4-only, v6-only, AAAA over v4, etc.). Added support for DNS-SD
+InterfaceID<->Interface Index mappings. Added support for loopback usage when no other interfaces
+are available. Updated unlock signaling to no longer require timenow - NextScheduledTime to be >= 0
+(it no longer is). Added unicast-capable detection to avoid using unicast when there is other mDNS
+software running on the same machine. Removed unneeded sock_XtoY routines. Added support for
+reporting HINFO records with the  Windows and mDNSResponder version information.
 
 Revision 1.10  2003/10/24 23:23:02  bradley
 Removed legacy port 53 support as it is no longer needed.
@@ -67,27 +74,17 @@ Multicast DNS platform plugin for Win32
 #ifndef	__MDNS_WIN32__
 #define	__MDNS_WIN32__
 
-#if( !defined( WIN32_LEAN_AND_MEAN ) )
-	#define	WIN32_LEAN_AND_MEAN		// Needed to avoid redefinitions by Windows interfaces.
-#endif
+#include	"CommonServices.h"
 
-#include	<windows.h>
-#include	<winsock2.h>
-#include	<Ws2tcpip.h>
+#if( !defined( _WIN32_WCE ) )
+	#include	<mswsock.h>
+#endif
 
 #include	"mDNSClientAPI.h"
 
 #ifdef	__cplusplus
 	extern "C" {
 #endif
-
-//---------------------------------------------------------------------------------------------------------------------------
-/*!	@typedef	SocketRef
-
-	@abstract	Socket file descriptor alias for improved readability.
-*/
-
-typedef SOCKET		SocketRef;
 
 //---------------------------------------------------------------------------------------------------------------------------
 /*!	@struct		mDNSInterfaceData
@@ -99,18 +96,17 @@ typedef struct	mDNSInterfaceData	mDNSInterfaceData;
 struct	mDNSInterfaceData
 {
 	mDNSInterfaceData *			next;
-	char						name[ 256 ];
+	char						name[ 128 ];
+	uint32_t					index;
+	uint32_t					scopeID;
 	SocketRef					sock;
+#if( !defined( _WIN32_WCE ) )
+	LPFN_WSARECVMSG				wsaRecvMsgFunctionPtr;
+#endif
 	HANDLE						readPendingEvent;
-	NetworkInterfaceInfo		hostSet;
+	NetworkInterfaceInfo		interfaceInfo;
+	mDNSAddr					defaultAddr;
 	mDNSBool					hostRegistered;
-	
-	int							sendMulticastCounter;
-	int							sendUnicastCounter;
-	int							sendErrorCounter;
-	
-	int							recvCounter;
-	int							recvErrorCounter;
 };
 
 //---------------------------------------------------------------------------------------------------------------------------
@@ -129,8 +125,7 @@ struct	mDNS_PlatformSupport_struct
 	HANDLE						wakeupEvent;
 	HANDLE						initEvent;
 	mStatus						initStatus;
-	
-	SocketRef					interfaceListChangedSocketRef;
+	SocketRef					interfaceListChangedSocket;
 	int							interfaceCount;
 	mDNSInterfaceData *			interfaceList;
 	DWORD						threadID;
@@ -152,6 +147,12 @@ struct ifaddrs
 	struct sockaddr	*	ifa_broadaddr;
 	struct sockaddr	*	ifa_dstaddr;
 	void *				ifa_data;
+	
+	struct
+	{
+		uint32_t		index;
+	
+	}	ifa_extra;
 };
 
 //---------------------------------------------------------------------------------------------------------------------------
@@ -169,26 +170,6 @@ int	getifaddrs( struct ifaddrs **outAddrs );
 */
 
 void	freeifaddrs( struct ifaddrs *inAddrs );
-
-//---------------------------------------------------------------------------------------------------------------------------
-/*!	@function	sock_pton
-
-	@abstract	Converts a 'p'resentation address string into a 'n'umeric sockaddr structure.
-	
-	@result		0 if successful or an error code on failure.
-*/
-
-int	sock_pton( const char *inString, int inFamily, void *outAddr, size_t inAddrSize, size_t *outAddrSize );
-
-//---------------------------------------------------------------------------------------------------------------------------
-/*!	@function	sock_ntop
-
-	@abstract	Converts a 'n'umeric sockaddr structure into a 'p'resentation address string.
-	
-	@result		Ptr to 'p'resentation address string buffer if successful or NULL on failure.
-*/
-
-char *	sock_ntop( const void *inAddr, size_t inAddrSize, char *inBuffer, size_t inBufferSize );
 
 #ifdef	__cplusplus
 	}

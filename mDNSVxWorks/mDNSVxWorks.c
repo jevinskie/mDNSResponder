@@ -3,6 +3,8 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -22,16 +24,37 @@
 
 	Contains:	mDNS platform plugin for VxWorks.
 
-	Copyright:  Copyright (C) 2002-2003 Apple Computer, Inc., All Rights Reserved.
+	Copyright:  Copyright (C) 2002-2004 Apple Computer, Inc., All Rights Reserved.
 
 	Change History (most recent first):
 
 $Log: mDNSVxWorks.c,v $
-Revision 1.7.2.2  2004/04/09 17:57:31  cheshire
-Make sure to set the TxAndRx field so that duplicate suppression works correctly
+Revision 1.16  2004/04/22 05:11:28  bradley
+Added mDNSPlatformUTC for TSIG signed dynamic updates.
 
-Revision 1.7.2.1  2004/04/03 21:31:20  bradley
-Integrated changes from TOT to remove legacy port 53 support.
+Revision 1.15  2004/04/21 02:49:12  cheshire
+To reduce future confusion, renamed 'TxAndRx' to 'McastTxRx'
+
+Revision 1.14  2004/04/09 17:43:04  cheshire
+Make sure to set the McastTxRx field so that duplicate suppression works correctly
+
+Revision 1.13  2004/01/27 20:15:24  cheshire
+<rdar://problem/3541288>: Time to prune obsolete code for listening on port 53
+
+Revision 1.12  2004/01/24 09:12:37  bradley
+Avoid TOS socket options to workaround a TOS routing problem with VxWorks and multiple interfaces
+when sending unicast responses, which resulted in packets going out the wrong interface.
+
+Revision 1.11  2004/01/24 04:59:16  cheshire
+Fixes so that Posix/Linux, OS9, Windows, and VxWorks targets build again
+
+Revision 1.10  2003/11/14 21:27:09  cheshire
+<rdar://problem/3484766>: Security: Crashing bug in mDNSResponder
+Fix code that should use buffer size MAX_ESCAPED_DOMAIN_NAME (1005) instead of 256-byte buffers.
+
+Revision 1.9  2003/11/14 20:59:09  cheshire
+Clients can't use AssignDomainName macro because mDNSPlatformMemCopy is defined in mDNSPlatformFunctions.h.
+Best solution is just to combine mDNSClientAPI.h and mDNSPlatformFunctions.h into a single file.
 
 Revision 1.8  2003/10/28 10:08:27  bradley
 Removed legacy port 53 support as it is no longer needed.
@@ -110,7 +133,6 @@ mDNS platform plugin for VxWorks.
 #endif
 
 #include	"mDNSClientAPI.h"
-#include	"mDNSPlatformFunctions.h"
 
 #include	"mDNSVxWorks.h"
 
@@ -442,7 +464,6 @@ mStatus
 		const DNSMessage * const	inMsg, 
 		const mDNSu8 * const		inMsgEnd, 
 		mDNSInterfaceID 			inInterfaceID, 
-		mDNSIPPort					inSrcPort, 
 		const mDNSAddr *			inDstIP, 
 		mDNSIPPort 					inDstPort )
 {
@@ -450,8 +471,6 @@ mStatus
 	MDNSInterfaceItem *		item;
 	struct sockaddr_in		addr;
 	int						n;
-	
-	DEBUG_UNUSED( inSrcPort );
 	
 	dlog( kDebugLevelChatty, DEBUG_NAME "platform send UDP\n" );
 	
@@ -508,6 +527,43 @@ exit:
 	dlog( kDebugLevelChatty, DEBUG_NAME "platform send UDP done\n" );
 	return( err );
 }
+
+//===========================================================================================================================
+//	Connection-oriented (TCP) functions
+//===========================================================================================================================
+
+mDNSexport mStatus mDNSPlatformTCPConnect(const mDNSAddr *dst, mDNSOpaque16 dstport, mDNSInterfaceID InterfaceID,
+										  TCPConnectionCallback callback, void *context, int *descriptor)
+	{
+	(void)dst;			// Unused
+	(void)dstport;		// Unused
+	(void)InterfaceID;	// Unused
+	(void)callback;		// Unused
+	(void)context;		// Unused
+	(void)descriptor;	// Unused
+	return(mStatus_UnsupportedErr);
+	}
+
+mDNSexport void mDNSPlatformTCPCloseConnection(int sd)
+	{
+	(void)sd;			// Unused
+	}
+
+mDNSexport int mDNSPlatformReadTCP(int sd, void *buf, int buflen)
+	{
+	(void)sd;			// Unused
+	(void)buf;			// Unused
+	(void)buflen;			// Unused
+	return(0);
+	}
+
+mDNSexport int mDNSPlatformWriteTCP(int sd, const char *msg, int len)
+	{
+	(void)sd;			// Unused
+	(void)msg;			// Unused
+	(void)len;			// Unused
+	return(0);
+	}
 
 //===========================================================================================================================
 //	mDNSPlatformLock
@@ -666,6 +722,15 @@ mDNSexport mStatus mDNSPlatformTimeInit( mDNSs32 *outTimeNow )
 mDNSs32	mDNSPlatformTimeNow( void )
 {
 	return( (mDNSs32) tickGet() );
+}
+
+//===========================================================================================================================
+//	mDNSPlatformUTC
+//===========================================================================================================================
+
+mDNSexport mDNSs32	mDNSPlatformUTC( void )
+{
+	return( -1 );
 }
 
 //===========================================================================================================================
@@ -990,7 +1055,7 @@ mDNSlocal mStatus	SetupInterface( mDNS * const inMDNS, const struct ifaddrs *inA
 	item->hostSet.ip.type 				= mDNSAddrType_IPv4;
 	item->hostSet.ip.ip.v4.NotAnInteger	= ipv4->sin_addr.s_addr;
 	item->hostSet.Advertise       		= inMDNS->AdvertiseLocalAddresses;
-	item->hostSet.TxAndRx       		= mDNStrue;
+	item->hostSet.McastTxRx       		= mDNStrue;
 
 	err = mDNS_RegisterInterface( inMDNS, &item->hostSet );
 	require_noerr( err, exit );

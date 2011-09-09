@@ -1,7 +1,9 @@
 /*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
+ * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -23,6 +25,21 @@
     Change History (most recent first):
 	
 $Log: Tool.c,v $
+Revision 1.12  2004/04/09 21:03:15  bradley
+Changed port numbers to use network byte order for consistency with other platforms.
+
+Revision 1.11  2004/01/30 03:04:32  bradley
+Updated for latest changes to mDNSWindows.
+
+Revision 1.10  2003/10/31 12:18:31  bradley
+Added display of the resolved host name. Show separate TXT record entries on separate lines.
+
+Revision 1.9  2003/10/22 02:00:20  bradley
+Fixed proxy IP setup to be in network byte order so it works on Mac and Windows.
+
+Revision 1.8  2003/10/04 04:47:08  bradley
+Changed DNSServiceRegistrationCreate to treat the port in network byte order for end-to-end consistency.
+
 Revision 1.7  2003/08/20 07:06:34  bradley
 Update to APSL 2.0. Updated change history to match other mDNSResponder files.
 
@@ -289,7 +306,7 @@ static int ProcessArgs( int argc, char* argv[] )
 	const char *					name;
 	const char *					type;
 	const char *					domain;
-	int								port;
+	uint16_t						port;
 	const char *					text;
 	size_t							textSize;
 	DNSBrowserRef					browser;
@@ -433,10 +450,10 @@ static int ProcessArgs( int argc, char* argv[] )
 			name 		= argv[ i++ ];
 			type 		= argv[ i++ ];
 			domain	 	= argv[ i++ ];
-			port 		= atoi( argv[ i++ ] );
+			port 		= (uint16_t) atoi( argv[ i++ ] );
 			text 		= argv[ i ];
 			textSize	= strlen( text );
-			if( ( domain[ 0 ] == '.' ) && ( domain[ 1 ] == '\0' ) )
+			if( ( domain[ 0 ] == '\0' ) || ( ( domain[ 0 ] == '.' ) && ( domain[ 1 ] == '\0' ) ) )
 			{
 				domain = "local.";
 			}
@@ -450,7 +467,7 @@ static int ProcessArgs( int argc, char* argv[] )
 		{
 			DNSHostRegistrationFlags		hostFlags;
 			
-			// 'r'egister 'p'roxy 's'ervice <name> <type> <domain> <port> <txt>
+			// 'r'egister 'p'roxy 's'ervice <host> <ip> <name> <type> <domain> <port> <txt>
 						
 			require_action_string( argc > ( i + 7 ), exit, err = kDNSBadParamErr, "missing arguments" );
 			++i;
@@ -459,7 +476,7 @@ static int ProcessArgs( int argc, char* argv[] )
 			name 		= argv[ i++ ];
 			type 		= argv[ i++ ];
 			domain	 	= argv[ i++ ];
-			port 		= atoi( argv[ i++ ] );
+			port 		= (uint16_t) atoi( argv[ i++ ] );
 			text 		= argv[ i ];
 			textSize	= strlen( text );
 			if( ( domain[ 0 ] == '\0' ) || ( ( domain[ 0 ] == '.' ) && ( domain[ 1 ] == '\0' ) ) )
@@ -468,8 +485,11 @@ static int ProcessArgs( int argc, char* argv[] )
 			}
 			
 			sscanf( ip, "%u.%u.%u.%u", &b[ 0 ], &b[ 1 ], &b[ 2 ], &b[ 3 ] );
-			addr.addressType 		= kDNSNetworkAddressTypeIPv4;
-			addr.u.ipv4.addr.v32 	= (DNSUInt32)( ( b[ 0 ] << 24 ) | ( b[ 1 ] << 16 ) | ( b[ 2 ] <<  8 ) | ( b[ 3 ] <<  0 ) );
+			addr.addressType 			= kDNSNetworkAddressTypeIPv4;
+			addr.u.ipv4.addr.v8[ 0 ] 	= (DNSUInt8) b[ 0 ];
+			addr.u.ipv4.addr.v8[ 1 ] 	= (DNSUInt8) b[ 1 ];
+			addr.u.ipv4.addr.v8[ 2 ] 	= (DNSUInt8) b[ 2 ];
+			addr.u.ipv4.addr.v8[ 3 ] 	= (DNSUInt8) b[ 3 ];
 			
 			fprintf( stdout, "registering proxy service \"%s.%s.%s\" port %d text \"%s\"\n", name, type, domain, port, text );
 			
@@ -570,16 +590,16 @@ static int ProcessArgs( int argc, char* argv[] )
 			name 		= argv[ i++ ];
 			type 		= argv[ i++ ];
 			domain	 	= argv[ i++ ];
-			port 		= atoi( argv[ i++ ] );
+			port 		= (uint16_t) atoi( argv[ i++ ] );
 			text 		= argv[ i ];
 			textSize	= strlen( text );
-			if( ( domain[ 0 ] == '.' ) && ( domain[ 1 ] == '\0' ) )
+			if( ( domain[ 0 ] == '\0' ) || ( ( domain[ 0 ] == '.' ) && ( domain[ 1 ] == '\0' ) ) )
 			{
 				domain = "local.";
 			}
 			fprintf( stdout, "registering service \"%s.%s.%s\" port %d text \"%s\"\n", name, type, domain, port, text );
 			
-			emulatedRef = DNSServiceRegistrationCreate( name, type, domain, (uint16_t) port, text, 
+			emulatedRef = DNSServiceRegistrationCreate( name, type, domain, htons( port ), text, 
 														EmulatedRegistrationCallBack, NULL );
 			require_action_string( emulatedRef, exit, err = kDNSUnknownErr, "create emulated registration failed" );
 		}
@@ -758,10 +778,11 @@ static void BrowserCallBack( void *inContext, DNSBrowserRef inRef, DNSStatus inS
 			const uint8_t *		end;
 			int					i;
 			
-			fprintf( stdout, "resolved       \"%s.%s%s\" to %s:%u on interface 0x%08X (%s)%s\n", 
+			fprintf( stdout, "resolved       \"%s.%s%s\" to \"%s\" (%s:%u) on interface 0x%08X (%s)%s\n", 
 					 inEvent->data.resolved->name, 
 					 inEvent->data.resolved->type, 
 					 inEvent->data.resolved->domain, 
+					 inEvent->data.resolved->hostName, 
 					 IPv4ToString( inEvent->data.resolved->address.u.ipv4.addr, ip ), 
 					 ( inEvent->data.resolved->address.u.ipv4.port.v8[ 0 ] << 8 ) | 
 					   inEvent->data.resolved->address.u.ipv4.port.v8[ 1 ], 
@@ -820,10 +841,11 @@ static void ResolverCallBack( void *inContext, DNSResolverRef inRef, DNSStatus i
 			const uint8_t *		end;
 			int					i;
 			
-			fprintf( stdout, "resolved       \"%s.%s%s\" to %s:%u on interface 0x%08X (%s)%s\n", 
+			fprintf( stdout, "resolved       \"%s.%s%s\" to \"%s\" (%s:%u) on interface 0x%08X (%s)%s\n", 
 					 inEvent->data.resolved.name, 
 					 inEvent->data.resolved.type, 
 					 inEvent->data.resolved.domain, 
+					 inEvent->data.resolved.hostName, 
 					 IPv4ToString( inEvent->data.resolved.address.u.ipv4.addr, ip ), 
 					 ( inEvent->data.resolved.address.u.ipv4.port.v8[ 0 ] << 8 ) | 
 					   inEvent->data.resolved.address.u.ipv4.port.v8[ 1 ], 

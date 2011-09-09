@@ -3,6 +3,8 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -36,6 +38,50 @@
     Change History (most recent first):
 
 $Log: NetMonitor.c,v $
+Revision 1.63  2004/05/18 23:51:26  cheshire
+Tidy up all checkin comments to use consistent "<rdar://problem/xxxxxxx>" format for bug numbers
+
+Revision 1.62  2004/03/16 18:24:25  cheshire
+If packet destination was not multicast, then display it
+
+Revision 1.61  2004/02/20 09:36:46  cheshire
+Also show TTL in packet header, if it's not 255
+
+Revision 1.60  2004/02/07 02:11:35  cheshire
+Make mDNSNetMonitor smarter about sending targeted unicast HINFO queries
+
+Revision 1.59  2004/02/03 21:42:55  cheshire
+Add constants kReportTopServices and kReportTopHosts
+
+Revision 1.58  2004/01/27 20:15:23  cheshire
+<rdar://problem/3541288>: Time to prune obsolete code for listening on port 53
+
+Revision 1.57  2004/01/24 23:59:42  cheshire
+Change to use mDNSVal16() instead of shifting and ORing
+
+Revision 1.56  2004/01/24 05:25:34  cheshire
+mDNSNetMonitor now uses the new ability to send unicast queries so that
+it causes less perturbation of the network traffic it's monitoring.
+
+Revision 1.55  2003/12/23 00:21:31  cheshire
+Send HINFO queries to determine the mDNSResponder version of each host
+
+Revision 1.54  2003/12/17 01:06:39  cheshire
+Also show host name along with HINFO data
+
+Revision 1.53  2003/12/17 00:51:22  cheshire
+Changed mDNSNetMonitor and mDNSIdentify to link the object files
+instead of #including the "DNSCommon.c" "uDNS.c" and source files
+
+Revision 1.52  2003/12/17 00:21:51  cheshire
+If we received one, display host's HINFO record in final summary
+
+Revision 1.51  2003/12/13 03:05:28  ksekar
+<rdar://problem/3192548>: DynDNS: Unicast query of service records
+
+Revision 1.50  2003/12/08 20:47:02  rpantos
+Add support for mDNSResponder on Linux.
+
 Revision 1.49  2003/10/30 19:38:56  cheshire
 Fix warning on certain compilers
 
@@ -213,6 +259,7 @@ Added NetMonitor.c
 #include <stdlib.h>			// For malloc()
 #include <string.h>			// For bcopy()
 #include <time.h>			// For "struct tm" etc.
+#include <signal.h>			// For SIGINT, SIGTERM
 #include <netdb.h>			// For gethostbyname()
 #include <sys/socket.h>		// For AF_INET, AF_INET6, etc.
 #include <arpa/inet.h>		// For inet_addr()
@@ -266,6 +313,12 @@ struct FilterList_struct
 	FilterList *next;
 	mDNSAddr FilterAddr;
 	};
+
+//*************************************************************************************************************
+// Constants
+
+#define kReportTopServices 15
+#define kReportTopHosts    15
 
 //*************************************************************************************************************
 // Globals
@@ -322,6 +375,12 @@ typedef struct
 	unsigned long pkts[HostPkt_NumTypes];
 	unsigned long totalops;
 	unsigned long stat[OP_NumTypes];
+	domainname hostname;
+	domainname revname;
+	UTF8str255 HIHardware;
+	UTF8str255 HISoftware;
+	mDNSu32    NumQueries;
+	mDNSs32    LastQuery;
 	} HostEntry;
 
 #define HostEntryTotalPackets(H) ((H)->pkts[HostPkt_Q] + (H)->pkts[HostPkt_L] + (H)->pkts[HostPkt_R] + (H)->pkts[HostPkt_B])
@@ -350,8 +409,9 @@ mDNSlocal HostEntry *FindHost(const mDNSAddr *addr, HostList* list)
 	return NULL;
 	}
 	
-mDNSlocal HostEntry *AddHost(HostList* list)
+mDNSlocal HostEntry *AddHost(const mDNSAddr *addr, HostList* list)
 	{
+	int i;
 	HostEntry *entry;
 	if (list->num >= list->max)
 		{
@@ -362,29 +422,130 @@ mDNSlocal HostEntry *AddHost(HostList* list)
 		list->max = newMax;
 		list->hosts = newHosts;
 		}
+
 	entry = list->hosts + list->num++;
+
+	entry->addr = *addr;
+	for (i=0; i<HostPkt_NumTypes; i++) entry->pkts[i] = 0;
+	entry->totalops = 0;
+	for (i=0; i<OP_NumTypes;      i++) entry->stat[i] = 0;
+	entry->hostname.c[0] = 0;
+	entry->revname.c[0] = 0;
+	entry->HIHardware.c[0] = 0;
+	entry->HISoftware.c[0] = 0;
+	entry->NumQueries = 0;
+
+	if (entry->addr.type == mDNSAddrType_IPv4)
+		{
+		mDNSv4Addr ip = entry->addr.ip.v4;
+		char buffer[32];
+		mDNS_snprintf(buffer, sizeof(buffer), "%d.%d.%d.%d.in-addr.arpa.", ip.b[3], ip.b[2], ip.b[1], ip.b[0]);
+		MakeDomainNameFromDNSNameString(&entry->revname, buffer);
+		}
+
 	return(entry);
 	}
 
-mDNSlocal HostEntry *GotPacketFromHost(const mDNSAddr *addr, HostPkt_Type t)
+mDNSlocal HostEntry *GotPacketFromHost(const mDNSAddr *addr, HostPkt_Type t, mDNSOpaque16 id)
 	{
 	if (ExactlyOneFilter) return(NULL);
 	else
 		{
 		HostList *list = (addr->type == mDNSAddrType_IPv4) ? &IPv4HostList : &IPv6HostList;
 		HostEntry *entry = FindHost(addr, list);
-		if (!entry)
-			{
-			int i;
-			entry = AddHost(list);
-			if (!entry) return(NULL);
-			entry->addr = *addr;
-			for (i=0; i<HostPkt_NumTypes; i++) entry->pkts[i] = 0;
-			entry->totalops = 0;
-			for (i=0; i<OP_NumTypes;      i++) entry->stat[i] = 0;
-			}
-		entry->pkts[t]++;
+		if (!entry) entry = AddHost(addr, list);
+		if (!entry) return(NULL);
+		// Don't count our own interrogation packets
+		if (id.NotAnInteger != 0xFFFF) entry->pkts[t]++;
 		return(entry);
+		}
+	}
+
+mDNSlocal void RecordHostInfo(HostEntry *entry, const ResourceRecord *const pktrr)
+	{
+	if (!entry->hostname.c[0])
+		{
+		if (pktrr->rrtype == kDNSType_A || pktrr->rrtype == kDNSType_AAAA)
+			{
+			// Should really check that the rdata in the address record matches the source address of this packet
+			entry->NumQueries = 0;
+			AssignDomainName(entry->hostname, pktrr->name);
+			}
+
+		if (pktrr->rrtype == kDNSType_PTR)
+			if (SameDomainName(&entry->revname, &pktrr->name))
+				{
+				entry->NumQueries = 0;
+				AssignDomainName(entry->hostname, pktrr->rdata->u.name);
+				}
+		}
+	else if (pktrr->rrtype == kDNSType_HINFO)
+		{
+		RDataBody *rd = &pktrr->rdata->u;
+		mDNSu8 *rdend = (mDNSu8 *)rd + pktrr->rdlength;
+		mDNSu8 *hw = rd->txt.c;
+		mDNSu8 *sw = hw + 1 + (mDNSu32)hw[0];
+		if (sw + 1 + sw[0] <= rdend)
+			{
+			AssignDomainName(entry->hostname, pktrr->name);
+			mDNSPlatformMemCopy(hw, entry->HIHardware.c, 1 + (mDNSu32)hw[0]);
+			mDNSPlatformMemCopy(sw, entry->HISoftware.c, 1 + (mDNSu32)sw[0]);
+			}
+		}
+	}
+
+mDNSlocal void SendUnicastQuery(mDNS *const m, HostEntry *entry, domainname *name, mDNSu16 rrtype, mDNSInterfaceID InterfaceID)
+	{
+	const mDNSOpaque16 id = { { 0xFF, 0xFF } };
+	DNSMessage query;
+	mDNSu8       *qptr        = query.data;
+	const mDNSu8 *const limit = query.data + sizeof(query.data);
+	const mDNSAddr *target    = &entry->addr;
+	InitializeDNSMessage(&query.h, id, QueryFlags);
+	qptr = putQuestion(&query, qptr, limit, name, rrtype, kDNSClass_IN);
+	entry->LastQuery = m->timenow;
+	entry->NumQueries++;
+
+	// Note: When there are multiple mDNSResponder agents running on a single machine
+	// (e.g. Apple mDNSResponder plus a SliMP3 server with embedded mDNSResponder)
+	// it is possible that unicast queries may not go to the primary system responder.
+	// We try the first query using unicast, but if that doesn't work we try again via multicast.
+	if (entry->NumQueries > 2)
+		{
+		target = &AllDNSLinkGroup_v4;
+		}
+	else
+		{
+		//mprintf("%#a Q\n", target);
+		InterfaceID = mDNSInterface_Any;	// Send query from our unicast reply socket
+		m->ExpectUnicastResponse = m->timenow;
+		}
+
+	mDNSSendDNSMessage(&mDNSStorage, &query, qptr, InterfaceID, target, MulticastDNSPort);
+	}
+
+mDNSlocal void AnalyseHost(mDNS *const m, HostEntry *entry, const mDNSInterfaceID InterfaceID)
+	{
+	// If we've done four queries without answer, give up
+	if (entry->NumQueries >= 4) return;
+
+	// If we've done a query in the last second, give the host a chance to reply before trying again
+	if (entry->NumQueries && m->timenow - entry->LastQuery < mDNSPlatformOneSecond) return;
+
+	// If we don't know the host name, try to find that first
+	if (!entry->hostname.c[0])
+		{
+		if (entry->revname.c[0])
+			{
+			SendUnicastQuery(m, entry, &entry->revname, kDNSType_PTR, InterfaceID);
+			//mprintf("%##s PTR %d\n", entry->revname.c, entry->NumQueries);
+			}
+		}
+	// If we have the host name but no HINFO, now ask for that
+	else if (!entry->HIHardware.c[0])
+		{
+		SendUnicastQuery(m, entry, &entry->hostname, kDNSType_HINFO, InterfaceID);
+		//mprintf("%##s HINFO %d\n", entry->hostname.c, entry->NumQueries);
 		}
 	}
 
@@ -410,6 +571,10 @@ mDNSlocal void ShowSortedHostList(HostList *list, int max)
 			HostEntryTotalPackets(e), e->pkts[HostPkt_Q], e->pkts[HostPkt_L], e->pkts[HostPkt_R]);
 		if (e->pkts[HostPkt_B]) mprintf("Bad: %8lu", e->pkts[HostPkt_B]);
 		mprintf("\n");
+		if (!e->HISoftware.c[0] && e->NumQueries > 2)
+			mDNSPlatformMemCopy("\x0E*** Jaguar ***", &e->HISoftware, 15);
+		if (e->hostname.c[0] || e->HIHardware.c[0] || e->HISoftware.c[0])
+			mprintf("%##-45s %#-14s %#s\n", e->hostname.c, e->HIHardware.c, e->HISoftware.c);
 		}
 	}
 
@@ -477,6 +642,7 @@ mDNSlocal void recordstat(HostEntry *entry, domainname *fqdn, int op, mDNSu16 rr
 mDNSlocal void printstats(int max)
 	{
 	int i;
+	if (!stats) return;
 	for (i=0; i<max; i++)
 		{
 		int max = 0;
@@ -492,7 +658,8 @@ mDNSlocal void printstats(int max)
 		}
 	}
 
-mDNSlocal const mDNSu8 *FindUpdate(mDNS *const m, const DNSMessage *const query, const mDNSu8 *ptr, const mDNSu8 *const end, DNSQuestion *q, LargeCacheRecord *pkt)
+mDNSlocal const mDNSu8 *FindUpdate(mDNS *const m, const DNSMessage *const query, const mDNSu8 *ptr, const mDNSu8 *const end,\
+	DNSQuestion *q, LargeCacheRecord *pkt)
 	{
 	int i;
 	for (i = 0; i < query->h.numAuthorities; i++)
@@ -514,7 +681,7 @@ mDNSlocal void DisplayTimestamp(void)
 	mprintf("\n%d:%02d:%02d.%06d\n", tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
 	}
 
-mDNSlocal void DisplayPacketHeader(const DNSMessage *const msg, const mDNSu8 *const end, const mDNSAddr *srcaddr, mDNSIPPort srcport)
+mDNSlocal void DisplayPacketHeader(const DNSMessage *const msg, const mDNSu8 *const end, const mDNSAddr *srcaddr, mDNSIPPort srcport, const mDNSAddr *dstaddr, mDNSu8 ttl)
 	{
 	const char *const ptype =   (msg->h.flags.b[0] & kDNSFlag0_QR_Response)             ? "-R- " :
 								(srcport.NotAnInteger == MulticastDNSPort.NotAnInteger) ? "-Q- " : "-LQ-";
@@ -523,7 +690,11 @@ mDNSlocal void DisplayPacketHeader(const DNSMessage *const msg, const mDNSu8 *co
 	mprintf("%#-16a %s             Q:%3d  Ans:%3d  Auth:%3d  Add:%3d  Size:%5d bytes",
 		srcaddr, ptype, msg->h.numQuestions, msg->h.numAnswers, msg->h.numAuthorities, msg->h.numAdditionals, end - (mDNSu8 *)msg);
 
-	if (msg->h.id.NotAnInteger) mprintf("  ID:%u", ((mDNSu16)msg->h.id.b[0])<<8 | msg->h.id.b[1]);
+	if (msg->h.id.NotAnInteger) mprintf("  ID:%u", mDNSVal16(msg->h.id));
+
+	if (ttl != 255) mprintf("  TTL:%u", ttl);
+
+	if (!mDNSAddrIsDNSMulticast(dstaddr)) mprintf("   To: %#a", dstaddr);
 
 	if (msg->h.flags.b[0] & kDNSFlag0_TC)
 		{
@@ -574,7 +745,7 @@ mDNSlocal void DisplayResourceRecord(const mDNSAddr *const srcaddr, const char *
 							n += mprintf("%.*s", MaxWidth - n, buffer);
 							} break;
 		case kDNSType_AAAA:	n += mprintf("%.16a", &rd->ipv6); break;
-		case kDNSType_SRV:	n += mprintf("%##s:%d", &rd->srv.target, ((mDNSu16)rd->srv.port.b[0] << 8) | rd->srv.port.b[1]); break;
+		case kDNSType_SRV:	n += mprintf("%##s:%d", &rd->srv.target, mDNSVal16(rd->srv.port)); break;
 		default:			{
 							mDNSu8 *s = rd->data;
 							while (s < rdend && p < buffer+MaxWidth)
@@ -620,17 +791,21 @@ mDNSlocal void DisplayError(const mDNSAddr *srcaddr, const mDNSu8 *ptr, const mD
 	HexDump(ptr, end);
 	}
 
-mDNSlocal void DisplayQuery(mDNS *const m, const DNSMessage *const msg, const mDNSu8 *const end, const mDNSAddr *srcaddr, mDNSIPPort srcport, const mDNSInterfaceID InterfaceID)
+mDNSlocal void DisplayQuery(mDNS *const m, const DNSMessage *const msg, const mDNSu8 *const end,
+	const mDNSAddr *srcaddr, mDNSIPPort srcport, const mDNSAddr *dstaddr, const mDNSInterfaceID InterfaceID, mDNSu8 ttl)
 	{
 	int i;
 	const mDNSu8 *ptr = msg->data;
 	const mDNSu8 *auth = LocateAuthorities(msg, end);
 	mDNSBool MQ = (srcport.NotAnInteger == MulticastDNSPort.NotAnInteger);
-	HostEntry *entry = GotPacketFromHost(srcaddr, MQ ? HostPkt_Q : HostPkt_L);
+	HostEntry *entry = GotPacketFromHost(srcaddr, MQ ? HostPkt_Q : HostPkt_L, msg->h.id);
 	LargeCacheRecord pkt;
 
-	DisplayPacketHeader(msg, end, srcaddr, srcport);
-	if (MQ) NumPktQ++; else NumPktL++;
+	DisplayPacketHeader(msg, end, srcaddr, srcport, dstaddr, ttl);
+	if (msg->h.id.NotAnInteger != 0xFFFF)
+		{
+		if (MQ) NumPktQ++; else NumPktL++;
+		}
 
 	for (i=0; i<msg->h.numQuestions; i++)
 		{
@@ -656,7 +831,7 @@ mDNSlocal void DisplayQuery(mDNS *const m, const DNSMessage *const msg, const mD
 			if (srcport.NotAnInteger == MulticastDNSPort.NotAnInteger) NumQuestions++;
 			else { NumLegacy++; ptype = "(LQ)"; }
 			mprintf("%#-16a %-5s %-5s      %##s\n", srcaddr, ptype, DNSTypeName(q.qtype), q.qname.c);
-			recordstat(entry, &q.qname, OP_query, q.qtype);
+			if (msg->h.id.NotAnInteger != 0xFFFF) recordstat(entry, &q.qname, OP_query, q.qtype);
 			}
 		}
 
@@ -680,17 +855,20 @@ mDNSlocal void DisplayQuery(mDNS *const m, const DNSMessage *const msg, const mD
 		ptr = skipResourceRecord(msg, ptr, end);
 		if (!ptr) { DisplayError(srcaddr, ep, end, "AUTHORITY"); return; }
 		}
+
+	if (entry) AnalyseHost(m, entry, InterfaceID);
 	}
 
-mDNSlocal void DisplayResponse(mDNS *const m, const DNSMessage *const msg, const mDNSu8 *end, const mDNSAddr *srcaddr, mDNSIPPort srcport, const mDNSInterfaceID InterfaceID)
+mDNSlocal void DisplayResponse(mDNS *const m, const DNSMessage *const msg, const mDNSu8 *end,
+	const mDNSAddr *srcaddr, mDNSIPPort srcport, const mDNSAddr *dstaddr, const mDNSInterfaceID InterfaceID, mDNSu8 ttl)
 	{
 	int i;
 	const mDNSu8 *ptr = msg->data;
-	HostEntry *entry = GotPacketFromHost(srcaddr, HostPkt_R);
+	HostEntry *entry = GotPacketFromHost(srcaddr, HostPkt_R, msg->h.id);
 	LargeCacheRecord pkt;
 
-	DisplayPacketHeader(msg, end, srcaddr, srcport);
-	NumPktR++;
+	DisplayPacketHeader(msg, end, srcaddr, srcport, dstaddr, ttl);
+	if (msg->h.id.NotAnInteger != 0xFFFF) NumPktR++;
 
 	for (i=0; i<msg->h.numQuestions; i++)
 		{
@@ -698,7 +876,10 @@ mDNSlocal void DisplayResponse(mDNS *const m, const DNSMessage *const msg, const
 		const mDNSu8 *ep = ptr;
 		ptr = getQuestion(msg, ptr, end, InterfaceID, &q);
 		if (!ptr) { DisplayError(srcaddr, ep, end, "QUESTION"); return; }
-		mprintf("%#-16a (?)  **** ERROR: SHOULD NOT HAVE Q IN mDNS RESPONSE **** %-5s %##s\n", srcaddr, DNSTypeName(q.qtype), q.qname.c);
+		if (mDNSAddrIsDNSMulticast(dstaddr))
+			mprintf("%#-16a (?)   **** ERROR: SHOULD NOT HAVE Q IN mDNS RESPONSE **** %-5s %##s\n", srcaddr, DNSTypeName(q.qtype), q.qname.c);
+		else
+			mprintf("%#-16a (Q)   %-5s      %##s\n", srcaddr, DNSTypeName(q.qtype), q.qname.c);
 		}
 
 	for (i=0; i<msg->h.numAnswers; i++)
@@ -710,7 +891,8 @@ mDNSlocal void DisplayResponse(mDNS *const m, const DNSMessage *const msg, const
 			{
 			NumAnswers++;
 			DisplayResourceRecord(srcaddr, (pkt.r.resrec.RecordType & kDNSRecordTypePacketUniqueMask) ? "(AN)" : "(AN+)", &pkt.r.resrec);
-			recordstat(entry, &pkt.r.resrec.name, OP_answer, pkt.r.resrec.rrtype);
+			if (msg->h.id.NotAnInteger != 0xFFFF) recordstat(entry, &pkt.r.resrec.name, OP_answer, pkt.r.resrec.rrtype);
+			if (entry) RecordHostInfo(entry, &pkt.r.resrec);
 			}
 		else
 			{
@@ -736,6 +918,24 @@ mDNSlocal void DisplayResponse(mDNS *const m, const DNSMessage *const msg, const
 		if (!ptr) { DisplayError(srcaddr, ep, end, "ADDITIONAL"); return; }
 		NumAdditionals++;
 		DisplayResourceRecord(srcaddr, (pkt.r.resrec.RecordType & kDNSRecordTypePacketUniqueMask) ? "(AD)" : "(AD+)", &pkt.r.resrec);
+		if (entry) RecordHostInfo(entry, &pkt.r.resrec);
+		}
+	
+	if (entry) AnalyseHost(m, entry, InterfaceID);
+	}
+
+mDNSlocal void ProcessUnicastResponse(mDNS *const m, const DNSMessage *const msg, const mDNSu8 *end, const mDNSAddr *srcaddr, const mDNSInterfaceID InterfaceID)
+	{
+	int i;
+	const mDNSu8 *ptr = LocateAnswers(msg, end);
+	HostEntry *entry = GotPacketFromHost(srcaddr, HostPkt_R, msg->h.id);
+	//mprintf("%#a R\n", srcaddr);
+
+	for (i=0; i<msg->h.numAnswers + msg->h.numAuthorities + msg->h.numAdditionals; i++)
+		{
+		LargeCacheRecord pkt;
+		ptr = GetLargeResourceRecord(m, msg, ptr, end, InterfaceID, 0, &pkt);
+		if (pkt.r.resrec.rroriginalttl && entry) RecordHostInfo(entry, &pkt.r.resrec);
 		}
 	}
 
@@ -763,7 +963,7 @@ mDNSexport void mDNSCoreReceive(mDNS *const m, DNSMessage *const msg, const mDNS
 	msg->h.numAnswers     = (mDNSu16)((mDNSu16)ptr[2] <<  8 | ptr[3]);
 	msg->h.numAuthorities = (mDNSu16)((mDNSu16)ptr[4] <<  8 | ptr[5]);
 	msg->h.numAdditionals = (mDNSu16)((mDNSu16)ptr[6] <<  8 | ptr[7]);
-	
+
 	if (ttl < 254)
 		{
 		debugf("** Apparent spoof mDNS %s packet from %#-15a to %#-15a TTL %d on %p with %2d Question%s %2d Answer%s %2d Authorit%s %2d Additional%s",
@@ -779,14 +979,24 @@ mDNSexport void mDNSCoreReceive(mDNS *const m, DNSMessage *const msg, const mDNS
 	// All IPv6 packets should just be duplicates of the v4 packets.
 	if (AddressMatchesFilterList(srcaddr))
 		{
-		if      (QR_OP == StdQ) DisplayQuery   (m, msg, end, srcaddr, srcport, InterfaceID);
-		else if (QR_OP == StdR) DisplayResponse(m, msg, end, srcaddr, srcport, InterfaceID);
+		mDNS_Lock(m);
+		if (!mDNSAddrIsDNSMulticast(dstaddr))
+			{
+			if      (QR_OP == StdQ) mprintf("Unicast query from %#a\n", srcaddr);
+			else if (QR_OP == StdR) ProcessUnicastResponse(m, msg, end, srcaddr,                   InterfaceID);
+			}
 		else
 			{
-			debugf("Unknown DNS packet type %02X%02X (ignored)", msg->h.flags.b[0], msg->h.flags.b[1]);
-			GotPacketFromHost(srcaddr, HostPkt_B);
-			NumPktB++;
+			if      (QR_OP == StdQ) DisplayQuery          (m, msg, end, srcaddr, srcport, dstaddr, InterfaceID, ttl);
+			else if (QR_OP == StdR) DisplayResponse       (m, msg, end, srcaddr, srcport, dstaddr, InterfaceID, ttl);
+			else
+				{
+				debugf("Unknown DNS packet type %02X%02X (ignored)", msg->h.flags.b[0], msg->h.flags.b[1]);
+				GotPacketFromHost(srcaddr, HostPkt_B, msg->h.id);
+				NumPktB++;
+				}
 			}
+		mDNS_Unlock(m);
 		}
 	}
 
@@ -794,6 +1004,7 @@ mDNSlocal mStatus mDNSNetMonitor(void)
 	{
 	struct tm tm;
 	int h, m, s, mul, div, TotPkt;
+	sigset_t signals;
 	
 	mStatus status = mDNS_Init(&mDNSStorage, &PlatformStorage,
 		mDNS_Init_NoCache, mDNS_Init_ZeroCacheSize,
@@ -802,7 +1013,16 @@ mDNSlocal mStatus mDNSNetMonitor(void)
 	if (status) return(status);
 
 	gettimeofday(&tv_start, NULL);
-	ExampleClientEventLoop(&mDNSStorage);	// Wait for user to hit Ctrl-C
+	mDNSPosixListenForSignalInEventLoop(SIGINT);
+	mDNSPosixListenForSignalInEventLoop(SIGTERM);
+
+	do 
+		{
+		struct timeval	timeout = { 0x3FFFFFFF, 0 };	// wait until SIGINT or SIGTERM
+		mDNSBool		gotSomething;
+		mDNSPosixRunEventLoopOnce(&mDNSStorage, &timeout, &signals, &gotSomething);
+		}
+	while ( !( sigismember( &signals, SIGINT) || sigismember( &signals, SIGTERM)));
 	
 	// Now display final summary
 	TotPkt = NumPktQ + NumPktL + NumPktR;
@@ -847,12 +1067,12 @@ mDNSlocal mStatus mDNSNetMonitor(void)
 	mprintf("Total Answers/Announcements:      %7d   (avg%5d/min)\n", NumAnswers,     NumAnswers     * mul / div);
 	mprintf("Total Additional Records:         %7d   (avg%5d/min)\n", NumAdditionals, NumAdditionals * mul / div);
 	mprintf("\n");
-	printstats(15);
+	printstats(kReportTopServices);
 
 	if (!ExactlyOneFilter)
 		{
-		ShowSortedHostList(&IPv4HostList, 15);
-		ShowSortedHostList(&IPv6HostList, 15);
+		ShowSortedHostList(&IPv4HostList, kReportTopHosts);
+		ShowSortedHostList(&IPv6HostList, kReportTopHosts);
 		}
 
 	mDNS_Close(&mDNSStorage);
@@ -868,9 +1088,9 @@ mDNSexport int main(int argc, char **argv)
 
 	for (i=1; i<argc; i++)
 		{
-		FilterList *f;
 		struct in_addr s4;
 		struct in6_addr s6;
+		FilterList *f;
 		mDNSAddr a;
 		a.type = mDNSAddrType_IPv4;
 

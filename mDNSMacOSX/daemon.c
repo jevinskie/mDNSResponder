@@ -3,6 +3,8 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -36,32 +38,143 @@
     Change History (most recent first):
 
 $Log: daemon.c,v $
-Revision 1.134.2.8  2005/01/28 04:03:24  cheshire
-<rdar://problem/3759302> SUPan: Current method of doing subtypes causes name collisions
-Summary: Pulled in ConstructServiceName, CountSubTypes and AllocateSubTypes from Tiger version.
+Revision 1.175  2004/06/10 20:23:21  cheshire
+Also list interfaces in SIGINFO output
 
-Revision 1.134.2.7  2004/06/18 17:28:19  cheshire
-<rdar://problem/3588761> Current method of doing subtypes causes name collisions
+Revision 1.174  2004/06/08 18:54:48  ksekar
+<rdar://problem/3681378>: mDNSResponder leaks after exploring in Printer Setup Utility
 
-Revision 1.134.2.6  2004/04/06 19:50:36  cheshire
+Revision 1.173  2004/06/08 17:35:12  cheshire
+<rdar://problem/3683988> Detect and report if mDNSResponder uses too much CPU
+
+Revision 1.172  2004/06/05 00:04:26  cheshire
+<rdar://problem/3668639>: wide-area domains should be returned in reg. domain enumeration
+
+Revision 1.171  2004/06/04 08:58:30  ksekar
+<rdar://problem/3668624>: Keychain integration for secure dynamic update
+
+Revision 1.170  2004/05/30 20:01:50  ksekar
+<rdar://problem/3668635>: wide-area default registrations should be in
+.local too - fixed service registration when clients pass an explicit
+domain (broken by previous checkin)
+
+Revision 1.169  2004/05/30 01:30:16  ksekar
+<rdar://problem/3668635>: wide-area default registrations should be in
+.local too
+
+Revision 1.168  2004/05/18 23:51:26  cheshire
+Tidy up all checkin comments to use consistent "<rdar://problem/xxxxxxx>" format for bug numbers
+
+Revision 1.167  2004/05/14 16:39:47  ksekar
+Browse for iChat locally for now.
+
+Revision 1.166  2004/05/13 21:33:52  ksekar
+Clean up non-local registration control via config file.  Force iChat
+registrations to be local for now.
+
+Revision 1.165  2004/05/13 04:54:20  ksekar
+Unified list copy/free code.  Added symetric list for
+
+Revision 1.164  2004/05/12 22:03:08  ksekar
+Made GetSearchDomainList a true platform-layer call (declaration moved
+from mDNSMacOSX.h to mDNSClientAPI.h), impelemted to return "local"
+only on non-OSX platforms.  Changed call to return a copy of the list
+to avoid shared memory issues.  Added a routine to free the list.
+
+Revision 1.163  2004/05/12 02:03:25  ksekar
+Non-local domains will only be browsed by default, and show up in
+_browse domain enumeration, if they contain an _browse._dns-sd ptr record.
+
+Revision 1.162  2004/04/14 23:09:29  ksekar
+Support for TSIG signed dynamic updates.
+
+Revision 1.161  2004/04/07 01:20:04  cheshire
+Hash slot value should be unsigned
+
+Revision 1.160  2004/04/06 19:51:24  cheshire
 <rdar://problem/3605898> mDNSResponder will not launch if "nobody" user doesn't exist.
 After more discussion, we've decided to use userid -2 if "nobody" user doesn't exist.
 
-Revision 1.134.2.5  2004/04/03 01:29:07  cheshire
+Revision 1.159  2004/04/03 01:36:55  cheshire
 <rdar://problem/3605898> mDNSResponder will not launch if "nobody" user doesn't exist.
 If "nobody" user doesn't exist, log a message and continue as "root"
 
-Revision 1.134.2.4  2004/04/02 21:50:21  cheshire
+Revision 1.158  2004/04/02 21:39:05  cheshire
 Fix errors in comments
 
-Revision 1.134.2.3  2003/12/12 01:21:30  cheshire
-<rdar://problem/3491108> mDNSResponder should not run as root
+Revision 1.157  2004/03/19 18:49:10  ksekar
+Increased size check in freeL() to account for LargeCacheRecord
+structs larger than 8k
 
-Revision 1.134.2.2  2003/12/05 00:03:35  cheshire
-<rdar://problem/3487869> Use buffer size MAX_ESCAPED_DOMAIN_NAME instead of 256
+Revision 1.156  2004/03/19 18:19:19  ksekar
+Fixed daemon.c to compile with malloc debugging turned on.
 
-Revision 1.134.2.1  2003/12/03 11:00:09  cheshire
-Update "mDNSResponderVersion" mechanism to allow dots so we can do mDNSResponder-58.1 for SUPan
+Revision 1.155  2004/03/13 01:57:34  ksekar
+<rdar://problem/3192546>: DynDNS: Dynamic update of service records
+
+Revision 1.154  2004/03/12 08:42:47  cheshire
+<rdar://problem/3548256>: Should not allow empty string for resolve domain
+
+Revision 1.153  2004/03/12 08:08:51  cheshire
+Update comments
+
+Revision 1.152  2004/02/05 19:39:29  cheshire
+Move creation of /var/run/mDNSResponder.pid to uds_daemon.c,
+so that all platforms get this functionality
+
+Revision 1.151  2004/02/03 22:35:34  cheshire
+<rdar://problem/3548256>: Should not allow empty string for resolve domain
+
+Revision 1.150  2004/01/28 21:14:23  cheshire
+Reconcile debug_mode and gDebugLogging into a single flag (mDNS_DebugMode)
+
+Revision 1.149  2004/01/28 02:30:08  ksekar
+Added default Search Domains to unicast browsing, controlled via
+Networking sharing prefs pane.  Stopped sending unicast messages on
+every interface.  Fixed unicast resolving via mach-port API.
+
+Revision 1.148  2004/01/25 00:03:20  cheshire
+Change to use mDNSVal16() instead of private PORT_AS_NUM() macro
+
+Revision 1.147  2004/01/19 19:51:46  cheshire
+Fix compiler error (mixed declarations and code) on some versions of Linux
+
+Revision 1.146  2003/12/08 21:00:46  rpantos
+Changes to support mDNSResponder on Linux.
+
+Revision 1.145  2003/12/05 22:08:07  cheshire
+Update version string to "mDNSResponder-61", including new mechanism to allow dots (e.g. 58.1)
+
+Revision 1.144  2003/11/19 23:21:08  ksekar
+<rdar://problem/3486646>: config change handler not called for dns-sd services
+
+Revision 1.143  2003/11/14 21:18:32  cheshire
+<rdar://problem/3484766>: Security: Crashing bug in mDNSResponder
+Fix code that should use buffer size MAX_ESCAPED_DOMAIN_NAME (1005) instead of 256-byte buffers.
+
+Revision 1.142  2003/11/08 22:18:29  cheshire
+<rdar://problem/3477870>: Don't need to show process ID in *every* mDNSResponder syslog message
+
+Revision 1.141  2003/11/07 02:30:57  cheshire
+Also check per-slot cache use counts in SIGINFO state log
+
+Revision 1.140  2003/10/21 19:58:26  cheshire
+<rdar://problem/3459037> Syslog messages should show TTL as signed (for overdue records)
+
+Revision 1.139  2003/10/21 00:10:18  rpantos
+<rdar://problem/3409401>: mDNSResponder should not run as root
+
+Revision 1.138  2003/10/07 20:16:58  cheshire
+Shorten syslog message a bit
+
+Revision 1.137  2003/09/23 02:12:43  cheshire
+Also include port number in list of services registered via new UDS API
+
+Revision 1.136  2003/09/23 02:07:25  cheshire
+Include port number in DNSServiceRegistration START/STOP messages
+
+Revision 1.135  2003/09/23 01:34:02  cheshire
+In SIGINFO state log, show remaining TTL on cache records, and port number on ServiceRegistrations
 
 Revision 1.134  2003/08/21 20:01:37  cheshire
 <rdar://problem/3387941> Traffic reduction: Detect long-lived Resolve() calls, and report them in syslog
@@ -109,8 +222,7 @@ Revision 1.122  2003/07/23 00:00:04  cheshire
 Add comments
 
 Revision 1.121  2003/07/20 03:38:51  ksekar
-Bug #: 3320722
-Completed support for Unix-domain socket based API.
+<rdar://problem/3320722> Completed support for Unix-domain socket based API.
 
 Revision 1.120  2003/07/18 00:30:00  cheshire
 <rdar://problem/3268878> Remove mDNSResponder version from packet header and use HINFO record instead
@@ -139,7 +251,7 @@ standard error file descriptors to /dev/null just like any other
 well behaved daemon
 
 Revision 1.112  2003/06/25 23:42:19  ksekar
-Bug #: <rdar://problem/3249292>: Feature: New Rendezvous APIs (#7875)
+<rdar://problem/3249292>: Feature: New Rendezvous APIs (#7875)
 Reviewed by: Stuart Cheshire
 Added files necessary to implement Unix domain sockets based enhanced
 Rendezvous APIs, and integrated with existing Mach-port based daemon.
@@ -185,7 +297,7 @@ Revision 1.101  2003/05/22 00:26:55  cheshire
 Modify error message to explain that this is technically legal, but may indicate a bug.
 
 Revision 1.100  2003/05/21 21:02:24  ksekar
-Bug #: <rdar://problem/3247035>: Service should be prefixed
+<rdar://problem/3247035>: Service should be prefixed
 Changed kmDNSBootstrapName to "com.apple.mDNSResponderRestart" since we're changing the main
 Mach message port to "com.apple.mDNSResponder.
 
@@ -231,12 +343,11 @@ Add $Log header
 #include "mDNSClientAPI.h"			// Defines the interface to the client layer above
 #include "mDNSMacOSX.h"				// Defines the specific types needed to run mDNS on this platform
 
-extern mDNSs32 CountSubTypes(char *regtype);
-extern AuthRecord *AllocateSubTypes(mDNSs32 NumSubTypes, char *p);
+#include "uds_daemon.h"				// Interface to the server side implementation of dns_sd.h
+
+#include "GenLinkedList.h"
 
 #include <DNSServiceDiscovery/DNSServiceDiscovery.h>
-
-#define ENABLE_UDS 1
 
 //*************************************************************************************************************
 // Macros
@@ -247,14 +358,18 @@ extern AuthRecord *AllocateSubTypes(mDNSs32 NumSubTypes, char *p);
 #define STRINGIFY_ARGUMENT_WITHOUT_EXPANSION(s) #s 
 #define STRINGIFY(s) STRINGIFY_ARGUMENT_WITHOUT_EXPANSION(s)
 
+// convenience definition 
+#define	_UNUSED	__attribute__ ((unused))
+
 //*************************************************************************************************************
 // Globals
 
+#define LOCAL_DEFAULT_REG 1 // empty string means register in the local domain
+#define DEFAULT_REG_DOMAIN "apple.com." // used if the above flag is turned off
 mDNSexport mDNS mDNSStorage;
 static mDNS_PlatformSupport PlatformStorage;
 #define RR_CACHE_SIZE 64
 static CacheRecord rrcachestorage[RR_CACHE_SIZE];
-static const char PID_FILE[] = "/var/run/mDNSResponder.pid";
 
 static const char kmDNSBootstrapName[] = "com.apple.mDNSResponderRestart";
 static mach_port_t client_death_port = MACH_PORT_NULL;
@@ -271,12 +386,6 @@ static mach_port_t server_priv_port  = MACH_PORT_NULL;
 #define MDNS_MM_TIMEOUT 250
 
 static int restarting_via_mach_init = 0;
-
-#if MDNS_DEBUGMSGS
-int debug_mode = 1;
-#else
-int debug_mode = 0;
-#endif
 
 //*************************************************************************************************************
 // Active client list structures
@@ -299,11 +408,18 @@ struct DNSServiceBrowserResult_struct
 	};
 
 typedef struct DNSServiceBrowser_struct DNSServiceBrowser;
+
+typedef struct DNSServiceBrowserQuestion
+	{
+    struct DNSServiceBrowserQuestion *next;
+    DNSQuestion q;
+	} DNSServiceBrowserQuestion;
+
 struct DNSServiceBrowser_struct
 	{
 	DNSServiceBrowser *next;
 	mach_port_t ClientMachPort;
-	DNSQuestion q;
+    DNSServiceBrowserQuestion *qlist;
 	DNSServiceBrowserResult *results;
 	mDNSs32 lastsuccess;
 	};
@@ -318,15 +434,30 @@ struct DNSServiceResolver_struct
 	mDNSs32          ReportTime;
 	};
 
+
+typedef struct ExtraRecordRef
+	{
+    ExtraResourceRecord *localRef;  // extra added to .local service
+    ExtraResourceRecord *globalRef; // extra added to default global service (may be NULL)
+    struct ExtraRecordRef *next;
+	} ExtraRecordRef;
+
 typedef struct DNSServiceRegistration_struct DNSServiceRegistration;
 struct DNSServiceRegistration_struct
 	{
 	DNSServiceRegistration *next;
 	mach_port_t ClientMachPort;
 	mDNSBool autoname;
-	mDNSBool autorename;
+	mDNSBool autorenameLS;
+    mDNSBool autorenameGS;
+    mDNSBool deallocate;  // gs and ls (below) will receive separate MemFree callbacks,
+                          // the latter of which must deallocate the wrapper structure.
+                          // ls MemFree callback: if (!gs) free wrapper;  else set deallocate flag
+                          // gs callback: if (deallocate) free wrapper;  else free (gs), gs = NULL 
 	domainlabel name;
-	ServiceRecordSet s;
+    ExtraRecordRef   *ExtraRefList;
+    ServiceRecordSet *gs; // default "global" (wide area) service (may be NULL)
+    ServiceRecordSet ls;  // .local service (also used if client passes an explicit domain)
 	// Don't add any fields after ServiceRecordSet.
 	// This is where the implicit extra space goes if we allocate an oversized ServiceRecordSet object
 	};
@@ -352,7 +483,7 @@ static void validatelists(mDNS *const m)
 	AuthRecord                  *rr;
 	CacheRecord                 *cr;
 	DNSQuestion                 *q;
-	mDNSs32 slot;
+	mDNSu32 slot;
 	
 	for (e = DNSServiceDomainEnumerationList; e; e=e->next)
 		if (e->ClientMachPort == 0 || e->ClientMachPort == (mach_port_t)~0)
@@ -371,12 +502,12 @@ static void validatelists(mDNS *const m)
 			LogMsg("!!!! DNSServiceRegistrationList: %p is garbage (%X) !!!!", r, r->ClientMachPort);
 
 	for (rr = m->ResourceRecords; rr; rr=rr->next)
-		if (rr->RecordType == 0 || rr->RecordType == 0xFF)
-			LogMsg("!!!! ResourceRecords list: %p is garbage (%X) !!!!", rr, rr->RecordType);
+		if (rr->resrec.RecordType == 0 || rr->resrec.RecordType == 0xFF)
+			LogMsg("!!!! ResourceRecords list: %p is garbage (%X) !!!!", rr, rr->resrec.RecordType);
 
 	for (rr = m->DuplicateRecords; rr; rr=rr->next)
-		if (rr->RecordType == 0 || rr->RecordType == 0xFF)
-			LogMsg("!!!! DuplicateRecords list: %p is garbage (%X) !!!!", rr, rr->RecordType);
+		if (rr->resrec.RecordType == 0 || rr->resrec.RecordType == 0xFF)
+			LogMsg("!!!! DuplicateRecords list: %p is garbage (%X) !!!!", rr, rr->resrec.RecordType);
 
 	for (q = m->Questions; q; q=q->next)
 		if (q->ThisQInterval == (mDNSs32)~0)
@@ -384,8 +515,8 @@ static void validatelists(mDNS *const m)
 
 	for (slot = 0; slot < CACHE_HASH_SLOTS; slot++)
 		for (cr = mDNSStorage.rrcache_hash[slot]; cr; cr=cr->next)
-			if (cr->RecordType == 0 || cr->RecordType == 0xFF)
-				LogMsg("!!!! Cache slot %lu: %p is garbage (%X) !!!!", slot, rr, rr->RecordType);
+			if (cr->resrec.RecordType == 0 || cr->resrec.RecordType == 0xFF)
+				LogMsg("!!!! Cache slot %lu: %p is garbage (%X) !!!!", slot, rr, rr->resrec.RecordType);
 	}
 
 void *mallocL(char *msg, unsigned int size)
@@ -417,7 +548,7 @@ void freeL(char *msg, void *x)
 		unsigned long *mem = ((unsigned long *)x) - 2;
 		if (mem[0] != 0xDEAD1234)
 			{ LogMsg("free( %s @ %p ) !!!! NOT ALLOCATED !!!!", msg, &mem[2]); return; }
-		if (mem[1] > 8000)
+		if (mem[1] > 24000)
 			{ LogMsg("free( %s : %ld @ %p) too big!", msg, mem[1], &mem[2]); return; }
 		LogMalloc("free( %s : %ld @ %p)", msg, mem[1], &mem[2]);
 		//bzero(mem, mem[1]+8);
@@ -432,24 +563,45 @@ void freeL(char *msg, void *x)
 //*************************************************************************************************************
 // Client Death Detection
 
-mDNSlocal void FreeDNSServiceRegistration(DNSServiceRegistration *x)
+mDNSlocal void FreeSRS(ServiceRecordSet *s)
 	{
-	while (x->s.Extras)
+	while (s->Extras)
 		{
-		ExtraResourceRecord *extras = x->s.Extras;
-		x->s.Extras = x->s.Extras->next;
+		ExtraResourceRecord *extras = s->Extras;
+		s->Extras = s->Extras->next;
 		if (extras->r.resrec.rdata != &extras->r.rdatastorage)
 			freeL("Extra RData", extras->r.resrec.rdata);
 		freeL("ExtraResourceRecord", extras);
 		}
 
-	if (x->s.RR_TXT.resrec.rdata != &x->s.RR_TXT.rdatastorage)
-			freeL("TXT RData", x->s.RR_TXT.resrec.rdata);
+	if (s->RR_TXT.resrec.rdata != &s->RR_TXT.rdatastorage)
+			freeL("TXT RData", s->RR_TXT.resrec.rdata);
 
-	if (x->s.SubTypes) freeL("ServiceSubTypes", x->s.SubTypes);
-	
-	freeL("DNSServiceRegistration", x);
+	if (s->SubTypes) freeL("ServiceSubTypes", s->SubTypes);	
 	}
+
+mDNSlocal void FreeDNSServiceRegistration(ServiceRecordSet *srs)
+	{
+	DNSServiceRegistration *x = srs->ServiceContext;
+	ExtraRecordRef *ref, *fptr;
+	
+	FreeSRS(srs); 
+	if (srs == x->gs)
+		{
+		freeL("DNSServiceRegistration GlobalService", srs);
+		x->gs = NULL;
+		}
+	else x->deallocate = mDNStrue;
+
+	if (x->deallocate && !x->gs)
+		{
+		ref = x->ExtraRefList;
+		while (ref)			
+			{ fptr = ref; ref = ref->next; freeL("ExtraRecordRef", fptr); }
+		freeL("DNSServiceRegistration", x);
+		}
+	}
+
 
 // AbortClient finds whatever client is identified by the given Mach port,
 // stops whatever operation that client was doing, and frees its memory.
@@ -479,12 +631,19 @@ mDNSlocal void AbortClient(mach_port_t ClientMachPort, void *m)
 	while (*b && (*b)->ClientMachPort != ClientMachPort) b = &(*b)->next;
 	if (*b)
 		{
-		DNSServiceBrowser *x = *b;
+		DNSServiceBrowser *x = *b;		
+		DNSServiceBrowserQuestion *freePtr, *qptr = x->qlist;
 		*b = (*b)->next;
-		if (m && m != x)
-			LogMsg("%5d: DNSServiceBrowser(%##s) STOP; WARNING m %p != x %p", ClientMachPort, x->q.qname.c, m, x);
-		else LogOperation("%5d: DNSServiceBrowser(%##s) STOP", ClientMachPort, x->q.qname.c);
-		mDNS_StopBrowse(&mDNSStorage, &x->q);
+		while (qptr)
+			{
+			if (m && m != x)
+				LogMsg("%5d: DNSServiceBrowser(%##s) STOP; WARNING m %p != x %p", ClientMachPort, qptr->q.qname.c, m, x);
+			else LogOperation("%5d: DNSServiceBrowser(%##s) STOP", ClientMachPort, qptr->q.qname.c);
+			mDNS_StopBrowse(&mDNSStorage, &qptr->q);
+			freePtr = qptr;
+			qptr = qptr->next;			
+			freeL("DNSServiceBrowserQuestion", freePtr);
+			}
 		while (x->results)
 			{
 			DNSServiceBrowserResult *r = x->results;
@@ -513,16 +672,30 @@ mDNSlocal void AbortClient(mach_port_t ClientMachPort, void *m)
 		{
 		DNSServiceRegistration *x = *r;
 		*r = (*r)->next;
-		x->autorename = mDNSfalse;
+		x->autorenameLS = mDNSfalse;
+		x->autorenameGS = mDNSfalse;
 		if (m && m != x)
-			LogMsg("%5d: DNSServiceRegistration(%##s) STOP; WARNING m %p != x %p", ClientMachPort, x->s.RR_SRV.resrec.name.c, m, x);
-		else LogOperation("%5d: DNSServiceRegistration(%##s) STOP", ClientMachPort, x->s.RR_SRV.resrec.name.c);
+			{
+			LogMsg("%5d: DNSServiceRegistration(%##s, %u) STOP; WARNING m %p != x %p", ClientMachPort, x->ls.RR_SRV.resrec.name.c, SRS_PORT(&x->ls), m, x);
+			if (x->gs) LogMsg("%5d: DNSServiceRegistration(%##s, %u) STOP; WARNING m %p != x %p", ClientMachPort, x->gs->RR_SRV.resrec.name.c, SRS_PORT(x->gs), m, x);
+			}
+		else
+			{
+			LogOperation("%5d: DNSServiceRegistration(%##s, %u) STOP", ClientMachPort, x->ls.RR_SRV.resrec.name.c, SRS_PORT(&x->ls));
+			if (x->gs) LogOperation("%5d: DNSServiceRegistration(%##s, %u) STOP", ClientMachPort, x->gs->RR_SRV.resrec.name.c, SRS_PORT(x->gs));
+			}
 		// If mDNS_DeregisterService() returns mStatus_NoError, that means that the service was found in the list,
 		// is sending its goodbye packet, and we'll get an mStatus_MemFree message when we can free the memory.
 		// If mDNS_DeregisterService() returns an error, it means that the service had already been removed from
 		// the list, so we should go ahead and free the memory right now
-		if (mDNS_DeregisterService(&mDNSStorage, &x->s) != mStatus_NoError)
-			FreeDNSServiceRegistration(x);
+		if (x->gs && mDNS_DeregisterService(&mDNSStorage, x->gs))
+			{
+			// Deregister returned an error, so we free immediately
+			FreeSRS(x->gs);
+			x->gs = NULL;
+			}
+		if (mDNS_DeregisterService(&mDNSStorage, &x->ls))
+			FreeDNSServiceRegistration(&x->ls);
 		return;
 		}
 
@@ -537,15 +710,25 @@ mDNSlocal void AbortClientWithLogMessage(mach_port_t c, char *reason, char *msg,
 	DNSServiceBrowser           *b = DNSServiceBrowserList;
 	DNSServiceResolver          *l = DNSServiceResolverList;
 	DNSServiceRegistration      *r = DNSServiceRegistrationList;
+	DNSServiceBrowserQuestion   *qptr;
+
 	while (e && e->ClientMachPort != c) e = e->next;
 	while (b && b->ClientMachPort != c) b = b->next;
 	while (l && l->ClientMachPort != c) l = l->next;
 	while (r && r->ClientMachPort != c) r = r->next;
-	if      (e) LogMsg("%5d: DomainEnumeration(%##s) %s%s",                   c, e->dom.qname.c,            reason, msg);
-	else if (b) LogMsg("%5d: Browser(%##s) %s%s",                             c, b->q.qname.c,              reason, msg);
-	else if (l) LogMsg("%5d: Resolver(%##s) %s%s",                            c, l->i.name.c,               reason, msg);
-	else if (r) LogMsg("%5d: Registration(%##s) %s%s",                        c, r->s.RR_SRV.resrec.name.c, reason, msg);
-	else        LogMsg("%5d: (%s) %s, but no record of client can be found!", c,                            reason, msg);
+	if      (e)     LogMsg("%5d: DomainEnumeration(%##s) %s%s",                   c, e->dom.qname.c,            reason, msg);
+	else if (b)
+		{
+		for (qptr = b->qlist; qptr; qptr = qptr->next)
+			        LogMsg("%5d: Browser(%##s) %s%s",                             c, qptr->q.qname.c,              reason, msg);
+		}
+	else if (l)     LogMsg("%5d: Resolver(%##s) %s%s",                            c, l->i.name.c,               reason, msg);
+	else if (r)
+		{
+		            LogMsg("%5d: Registration(%##s) %s%s",                        c, r->ls.RR_SRV.resrec.name.c, reason, msg);
+		if (r->gs)  LogMsg("%5d: Registration(%##s) %s%s",                        c, r->gs->RR_SRV.resrec.name.c, reason, msg);
+		}
+	else            LogMsg("%5d: (%s) %s, but no record of client can be found!", c,                            reason, msg);
 
 	AbortClient(c, m);
 	}
@@ -556,14 +739,20 @@ mDNSlocal mDNSBool CheckForExistingClient(mach_port_t c)
 	DNSServiceBrowser           *b = DNSServiceBrowserList;
 	DNSServiceResolver          *l = DNSServiceResolverList;
 	DNSServiceRegistration      *r = DNSServiceRegistrationList;
+	DNSServiceBrowserQuestion   *qptr;
+	
 	while (e && e->ClientMachPort != c) e = e->next;
 	while (b && b->ClientMachPort != c) b = b->next;
 	while (l && l->ClientMachPort != c) l = l->next;
 	while (r && r->ClientMachPort != c) r = r->next;
 	if (e) LogMsg("%5d: DomainEnumeration(%##s) already exists!", c, e->dom.qname.c);
-	if (b) LogMsg("%5d: Browser(%##s) already exists!",           c, b->q.qname.c);
+	if (b)
+		{
+		for (qptr = b->qlist; qptr; qptr = qptr->next)
+			LogMsg("%5d: Browser(%##s) already exists!",          c, qptr->q.qname.c);
+		}
 	if (l) LogMsg("%5d: Resolver(%##s) already exists!",          c, l->i.name.c);
-	if (r) LogMsg("%5d: Registration(%##s) already exists!",      c, r->s.RR_SRV.resrec.name.c);
+	if (r) LogMsg("%5d: Registration(%##s) already exists!",      c, r->ls.RR_SRV.resrec.name.c);
 	return(e || b || l || r);
 	}
 
@@ -579,7 +768,7 @@ mDNSlocal void ClientDeathCallback(CFMachPortRef unusedport, void *voidmsg, CFIn
 		AbortClient(deathMessage->not_port, NULL);
 
 		/* Deallocate the send right that came in the dead name notification */
-		mach_port_destroy( mach_task_self(), deathMessage->not_port );
+		mach_port_destroy(mach_task_self(), deathMessage->not_port);
 		}
 	}
 
@@ -661,8 +850,8 @@ mDNSexport kern_return_t provide_DNSServiceDomainEnumerationCreate_rpc(mach_port
 		{ AbortBlockedClient(x->ClientMachPort, "local enumeration", x); return(mStatus_UnknownErr); }
 
 	// Do the operation
-	err           = mDNS_GetDomains(&mDNSStorage, &x->dom, dt1, mDNSInterface_Any, FoundDomain, x);
-	if (!err) err = mDNS_GetDomains(&mDNSStorage, &x->def, dt2, mDNSInterface_Any, FoundDomain, x);
+	err           = mDNS_GetDomains(&mDNSStorage, &x->dom, dt1, NULL, mDNSInterface_LocalOnly, FoundDomain, x);
+	if (!err) err = mDNS_GetDomains(&mDNSStorage, &x->def, dt2, NULL, mDNSInterface_LocalOnly, FoundDomain, x);
 	if (err) { AbortClient(client, x); errormsg = "mDNS_GetDomains"; goto fail; }
 	
 	// Succeeded: Wrap up and return
@@ -717,43 +906,70 @@ mDNSexport kern_return_t provide_DNSServiceBrowserCreate_rpc(mach_port_t unuseds
 	(void)unusedserver;		// Unused
 	mStatus err = mStatus_NoError;
 	const char *errormsg = "Unknown";
+	DNameListElem *SearchDomains = NULL, *sdPtr;
+	DNSServiceBrowserQuestion *qptr;
+	
 	if (client == (mach_port_t)-1)      { err = mStatus_Invalid; errormsg = "Client id -1 invalid";     goto fail; }
 	if (CheckForExistingClient(client)) { err = mStatus_Invalid; errormsg = "Client id already in use"; goto fail; }
 
 	// Check other parameters
 	domainname t, d;
-	t.c[0] = 0;
-	mDNSs32 NumSubTypes = CountSubTypes(regtype);
-	if (NumSubTypes < 0 || NumSubTypes > 1) { errormsg = "Bad Service SubType"; goto badparam; }
-	if (NumSubTypes == 1 && !AppendDNSNameString(&t, regtype + strlen(regtype) + 1))
-	                                        { errormsg = "Bad Service SubType"; goto badparam; }
-	if (!regtype[0] || !AppendDNSNameString(&t, regtype))                  { errormsg = "Illegal regtype"; goto badparam; }
-	if (!MakeDomainNameFromDNSNameString(&d, *domain ? domain : "local.")) { errormsg = "Illegal domain";  goto badparam; }
+	if (!regtype[0] || !MakeDomainNameFromDNSNameString(&t, regtype))      { errormsg = "Illegal regtype"; goto badparam; }
 
 	// Allocate memory, and handle failure
 	DNSServiceBrowser *x = mallocL("DNSServiceBrowser", sizeof(*x));
 	if (!x) { err = mStatus_NoMemoryErr; errormsg = "No memory"; goto fail; }
-
+	
 	// Set up object, and link into list
 	x->ClientMachPort = client;
 	x->results = NULL;
 	x->lastsuccess = 0;
+	x->qlist = NULL;	
 	x->next = DNSServiceBrowserList;
 	DNSServiceBrowserList = x;
 
-	// Do the operation
-	LogOperation("%5d: DNSServiceBrowse(%##s%##s) START", client, t.c, d.c);
-	err = mDNS_StartBrowse(&mDNSStorage, &x->q, &t, &d, mDNSInterface_Any, FoundInstance, x);
-	if (err) { AbortClient(client, x); errormsg = "mDNS_StartBrowse"; goto fail; }
-
+	//!!!KRS browse locally for ichat
+	if (!domain[0] && (!strcmp(regtype, "_ichat._tcp.") || !strcmp(regtype, "_presence._tcp.")))
+		domain = "local.";
+	
+	if (domain[0])
+		{
+		// Start browser for an explicit domain
+		x->qlist = mallocL("DNSServiceBrowserQuestion", sizeof(DNSServiceBrowserQuestion));
+		x->qlist->next = NULL;
+		if (!x->qlist)  { err = mStatus_UnknownErr; AbortClient(client, x); errormsg = "malloc"; goto fail; }
+		
+		if (!MakeDomainNameFromDNSNameString(&d, domain)) { errormsg = "Illegal domain";  goto badparam; }
+		LogOperation("%5d: DNSServiceBrowse(%##s%##s) START", client, t.c, d.c);
+		err = mDNS_StartBrowse(&mDNSStorage, &x->qlist->q, &t, &d, mDNSInterface_Any, FoundInstance, x);
+		if (err) { AbortClient(client, x); errormsg = "mDNS_StartBrowse"; goto fail; }
+		}
+	else
+		{
+		// Start browser on all domains
+		SearchDomains = mDNSPlatformGetSearchDomainList();
+		if (!SearchDomains) { AbortClient(client, x); errormsg = "GetSearchDomainList"; goto fail; }
+		for (sdPtr = SearchDomains; sdPtr; sdPtr = sdPtr->next)
+			{
+			qptr = mallocL("DNSServiceBrowserQuestion", sizeof(DNSServiceBrowserQuestion));
+			if (!qptr)  { err = mStatus_UnknownErr; AbortClient(client, x); errormsg = "malloc"; goto fail; }
+			qptr->next = x->qlist;
+			x->qlist = qptr;
+			LogOperation("%5d: DNSServiceBrowse(%##s%##s) START", client, t.c, sdPtr->name.c);
+			err = mDNS_StartBrowse(&mDNSStorage, &qptr->q, &t, &sdPtr->name, mDNSInterface_Any, FoundInstance, x);
+			if (err) { AbortClient(client, x); errormsg = "mDNS_StartBrowse"; goto fail; }			
+			}		
+		}
 	// Succeeded: Wrap up and return
 	EnableDeathNotificationForClient(client, x);
+	mDNS_FreeDNameList(SearchDomains);
 	return(mStatus_NoError);
-
-badparam:
+	
+	badparam:
 	err = mStatus_BadParamErr;
 fail:
 	LogMsg("%5d: DNSServiceBrowse(\"%s\", \"%s\") failed: %s (%ld)", client, regtype, domain, errormsg, err);
+	if (SearchDomains) mDNS_FreeDNameList(SearchDomains);
 	return(err);
 	}
 
@@ -834,8 +1050,8 @@ mDNSlocal void FoundInstanceInfo(mDNS *const m, ServiceInfoQuery *query)
 		}
 	cstring[i-1] = 0;		// Put the terminating NULL on the end
 	
-	LogOperation("%5d: DNSServiceResolver(%##s) -> %#a:%d", x->ClientMachPort,
-		x->i.name.c, &query->info->ip, (int)query->info->port.b[0] << 8 | query->info->port.b[1]);
+	LogOperation("%5d: DNSServiceResolver(%##s) -> %#a:%u", x->ClientMachPort,
+		x->i.name.c, &query->info->ip, mDNSVal16(query->info->port));
 	status = DNSServiceResolverReply_rpc(x->ClientMachPort,
 		(char*)&interface, (char*)&address, cstring, 0, MDNS_MM_TIMEOUT);
 	if (status == MACH_SEND_TIMED_OUT)
@@ -857,7 +1073,7 @@ mDNSexport kern_return_t provide_DNSServiceResolverResolve_rpc(mach_port_t unuse
 	domainname t, d, srv;
 	if (!name[0]    || !MakeDomainLabelFromLiteralString(&n, name))        { errormsg = "Bad Instance Name"; goto badparam; }
 	if (!regtype[0] || !MakeDomainNameFromDNSNameString(&t, regtype))      { errormsg = "Bad Service Type";  goto badparam; }
-	if (!MakeDomainNameFromDNSNameString(&d, *domain ? domain : "local.")) { errormsg = "Bad Domain";        goto badparam; }
+	if (!domain[0]  || !MakeDomainNameFromDNSNameString(&d, domain))       { errormsg = "Bad Domain";        goto badparam; }
 	if (!ConstructServiceName(&srv, &n, &t, &d))                           { errormsg = "Bad Name";          goto badparam; }
 
 	// Allocate memory, and handle failure
@@ -885,7 +1101,7 @@ mDNSexport kern_return_t provide_DNSServiceResolverResolve_rpc(mach_port_t unuse
 	EnableDeathNotificationForClient(client, x);
 	return(mStatus_NoError);
 
-badparam:
+badparam: 
 	err = mStatus_BadParamErr;
 fail:
 	LogMsg("%5d: DNSServiceResolve(\"%s\", \"%s\", \"%s\") failed: %s (%ld)", client, name, regtype, domain, errormsg, err);
@@ -902,7 +1118,7 @@ mDNSlocal void RegCallback(mDNS *const m, ServiceRecordSet *const sr, mStatus re
 	if (result == mStatus_NoError)
 		{
 		kern_return_t status;
-		LogOperation("%5d: DNSServiceRegistration(%##s) Name Registered", x->ClientMachPort, sr->RR_SRV.resrec.name.c);
+		LogOperation("%5d: DNSServiceRegistration(%##s, %u) Name Registered", x->ClientMachPort, sr->RR_SRV.resrec.name.c, SRS_PORT(sr));
 		status = DNSServiceRegistrationReply_rpc(x->ClientMachPort, result, MDNS_MM_TIMEOUT);
 		if (status == MACH_SEND_TIMED_OUT)
 			AbortBlockedClient(x->ClientMachPort, "registration success", x);
@@ -910,7 +1126,7 @@ mDNSlocal void RegCallback(mDNS *const m, ServiceRecordSet *const sr, mStatus re
 
 	else if (result == mStatus_NameConflict)
 		{
-		LogOperation("%5d: DNSServiceRegistration(%##s) Name Conflict", x->ClientMachPort, sr->RR_SRV.resrec.name.c);
+		LogOperation("%5d: DNSServiceRegistration(%##s, %u) Name Conflict", x->ClientMachPort, sr->RR_SRV.resrec.name.c, SRS_PORT(sr));
 		// Note: By the time we get the mStatus_NameConflict message, the service is already deregistered
 		// and the memory is free, so we don't have to wait for an mStatus_MemFree message as well.
 		if (x->autoname)
@@ -925,18 +1141,22 @@ mDNSlocal void RegCallback(mDNS *const m, ServiceRecordSet *const sr, mStatus re
 				AbortBlockedClient(x->ClientMachPort, "registration conflict", x);
 			}
 		}
-
+	
 	else if (result == mStatus_MemFree)
 		{
-		if (x->autorename)
+		mDNSBool *autorename = (sr == &x->ls ? &x->autorenameLS : &x->autorenameGS); 
+		if (*autorename)
 			{
 			debugf("RegCallback renaming %#s to %#s", x->name.c, mDNSStorage.nicelabel.c);
-			x->autorename = mDNSfalse;
+			*autorename = mDNSfalse;
 			x->name = mDNSStorage.nicelabel;
-			mDNS_RenameAndReregisterService(m, &x->s, &x->name);
+			mDNS_RenameAndReregisterService(m, sr, &x->name);
 			}
 		else
 			{
+			// SANITY CHECK: Should only get mStatus_MemFree as a result of calling mDNS_DeregisterService()
+			// and should only get it with x->autorename false if we've already removed the record from our
+			// list, but this check is just to make sure...
 			DNSServiceRegistration **r = &DNSServiceRegistrationList;
 			while (*r && *r != x) r = &(*r)->next;
 			if (*r)
@@ -944,14 +1164,18 @@ mDNSlocal void RegCallback(mDNS *const m, ServiceRecordSet *const sr, mStatus re
 				LogMsg("RegCallback: %##s Still in DNSServiceRegistration list; removing now", sr->RR_SRV.resrec.name.c);
 				*r = (*r)->next;
 				}
-			LogOperation("%5d: DNSServiceRegistration(%##s) Memory Free", x->ClientMachPort, sr->RR_SRV.resrec.name.c);
-			FreeDNSServiceRegistration(x);
+			// END SANITY CHECK
+			LogOperation("%5d: DNSServiceRegistration(%##s, %u) Memory Free", x->ClientMachPort, sr->RR_SRV.resrec.name.c, SRS_PORT(sr));
+			FreeDNSServiceRegistration(sr);
 			}
 		}
 	
 	else
-		LogMsg("%5d: DNSServiceRegistration(%##s) Unknown Result %ld",
-			x->ClientMachPort, sr->RR_SRV.resrec.name.c, result);
+		{
+		LogMsg("%5d: DNSServiceRegistration(%##s, %u) Unknown Result %ld",
+			x->ClientMachPort, sr->RR_SRV.resrec.name.c, SRS_PORT(sr), result);
+		if (sr == x->gs) { freeL("RegCallback - ServiceRecordSet", x->gs); x->gs = NULL; }
+		}
 	}
 
 mDNSlocal void CheckForDuplicateRegistrations(DNSServiceRegistration *x, domainname *srv, mDNSIPPort port)
@@ -965,23 +1189,35 @@ mDNSlocal void CheckForDuplicateRegistrations(DNSServiceRegistration *x, domainn
 			count++;
 
 	if (count > 1)
-		LogMsg("%5d: Client application registered %d identical instances of service %##s port %d.",
-			x->ClientMachPort, count, srv->c, (int)port.b[0] << 8 | port.b[1]);
+		LogMsg("%5d: Client application registered %d identical instances of service %##s port %u.",
+			x->ClientMachPort, count, srv->c, mDNSVal16(port));
 	}
 
-mDNSexport kern_return_t provide_DNSServiceRegistrationCreate_rpc(mach_port_t unusedserver, mach_port_t client,
-	DNSCString name, DNSCString regtype, DNSCString domain, int notAnIntPort, DNSCString txtRecord)
+// Pass NULL for x to allocate the structure (for local service).  Call again w/ initialized x to add a global service.
+mDNSlocal DNSServiceRegistration *RegisterService(mach_port_t client, DNSCString name, DNSCString regtype, DNSCString domain,
+												  int notAnIntPort, DNSCString txtRecord, DNSServiceRegistration *x)
 	{
-	// Check client parameter
-	(void)unusedserver;		// Unused
+	ServiceRecordSet *srs = NULL;  // record set to use in registration operation
 	mStatus err = mStatus_NoError;
 	const char *errormsg = "Unknown";
-	if (client == (mach_port_t)-1)      { err = mStatus_Invalid; errormsg = "Client id -1 invalid";     goto fail; }
-	if (CheckForExistingClient(client)) { err = mStatus_Invalid; errormsg = "Client id already in use"; goto fail; }
-
-	// Check for sub-types after the service type
-	mDNSs32 NumSubTypes = CountSubTypes(regtype);
-	if (NumSubTypes < 0) { errormsg = "Bad Service SubType"; goto badparam; }
+	
+    // Check for sub-types after the service type
+	AuthRecord *SubTypes = mDNSNULL;
+	mDNSu32 i, NumSubTypes = 0;
+	char *comma = regtype;
+	while (*comma && *comma != ',') comma++;
+	if (*comma)					// If we found a comma...
+		{
+		*comma = 0;				// Overwrite the first comma with a nul
+		char *p = comma + 1;	// Start scanning from the next character
+		while (*p)
+			{
+			if ( !(*p && *p != ',')) { errormsg = "Bad Service SubType";  goto badparam; }
+			while (*p && *p != ',') p++;
+			if (*p) *p++ = 0;
+			NumSubTypes++;
+			}
+		}
 
 	// Check other parameters
 	domainlabel n;
@@ -989,8 +1225,9 @@ mDNSexport kern_return_t provide_DNSServiceRegistrationCreate_rpc(mach_port_t un
 	domainname srv;
 	if (!name[0]) n = mDNSStorage.nicelabel;
 	else if (!MakeDomainLabelFromLiteralString(&n, name))                  { errormsg = "Bad Instance Name"; goto badparam; }
-	if (!regtype[0] || !MakeDomainNameFromDNSNameString(&t, regtype))      { errormsg = "Bad Service Type";  goto badparam; }
-	if (!MakeDomainNameFromDNSNameString(&d, *domain ? domain : "local.")) { errormsg = "Bad Domain";        goto badparam; }
+	if (!regtype[0] || !MakeDomainNameFromDNSNameString(&t, regtype))      { errormsg = "Bad Service Type";  goto badparam; }	
+	
+	if (!MakeDomainNameFromDNSNameString(&d, domain))                      { errormsg = "Bad Domain";        goto badparam; }
 	if (!ConstructServiceName(&srv, &n, &t, &d))                           { errormsg = "Bad Name";          goto badparam; }
 
 	mDNSIPPort port;
@@ -1028,50 +1265,100 @@ mDNSexport kern_return_t provide_DNSServiceRegistrationCreate_rpc(mach_port_t un
 		size = data_len;
 
 	// Allocate memory, and handle failure
-	DNSServiceRegistration *x = mallocL("DNSServiceRegistration", sizeof(*x) - sizeof(RDataBody) + size);
-	if (!x) { err = mStatus_NoMemoryErr; errormsg = "No memory"; goto fail; }
-
-	AuthRecord *SubTypes = AllocateSubTypes(NumSubTypes, regtype);
-	if (NumSubTypes && !SubTypes)
-		{ freeL("DNSServiceRegistration", x); err = mStatus_NoMemoryErr; errormsg = "No memory"; goto fail; }
-
-	// Set up object, and link into list
-	x->ClientMachPort = client;
-	x->autoname = (!name[0]);
-	x->autorename = mDNSfalse;
-	x->name = n;
-	x->next = DNSServiceRegistrationList;
-	DNSServiceRegistrationList = x;
+	if (!x)
+		{
+		x = mallocL("DNSServiceRegistration", sizeof(*x) - sizeof(RDataBody) + size);
+		if (!x) { err = mStatus_NoMemoryErr; errormsg = "No memory"; goto fail; }		
+		bzero(x, sizeof(*x) - sizeof(RDataBody) + size);
+		// Set up object, and link into list
+		x->ClientMachPort = client;
+		x->autoname = (!name[0]);
+		x->name = n;
+		x->next = DNSServiceRegistrationList;
+		DNSServiceRegistrationList = x;		
+		srs = &x->ls; 
+		}
+	else
+		{
+		x->gs = mallocL("DNSServiceRegistration GlobalService", sizeof(ServiceRecordSet) - sizeof(RDataBody) + size);
+		if (!x->gs) { err = mStatus_NoMemoryErr; errormsg = "No memory"; goto fail; } 
+		srs = x->gs;
+		bzero(srs, sizeof(ServiceRecordSet) - sizeof(RDataBody) + size);
+		}
+	
+	if (NumSubTypes)
+		{
+		SubTypes = mallocL("ServiceSubTypes", NumSubTypes * sizeof(AuthRecord));
+		if (!SubTypes) { freeL("DNSServiceRegistration", x); err = mStatus_NoMemoryErr; errormsg = "No memory"; goto fail; }
+		for (i = 0; i < NumSubTypes; i++)
+			{
+			comma++;				// Advance over the nul character
+			MakeDomainNameFromDNSNameString(&SubTypes[i].resrec.name, comma);
+			while (*comma) comma++;	// Advance comma to point to the next terminating nul
+			}
+		}
 
 	// Do the operation
-	LogOperation("%5d: DNSServiceRegistration(\"%s\", \"%s\", \"%s\") START", x->ClientMachPort, name, regtype, domain);
+	LogOperation("%5d: DNSServiceRegistration(\"%s\", \"%s\", \"%s\", %u) START",
+		x->ClientMachPort, name, regtype, domain, mDNSVal16(port));
 	// Some clients use mDNS for lightweight copy protection, registering a pseudo-service with
 	// a port number of zero. When two instances of the protected client are allowed to run on one
 	// machine, we don't want to see misleading "Bogus client" messages in syslog and the console.
 	if (port.NotAnInteger) CheckForDuplicateRegistrations(x, &srv, port);
 
-	err = mDNS_RegisterService(&mDNSStorage, &x->s,
-		&x->name, &t, &d,		// Name, type, domain
+	err = mDNS_RegisterService(&mDNSStorage, srs,
+		&x->name, &t, &d,       // Name, type, domain
 		mDNSNULL, port,			// Host and port
 		txtinfo, data_len,		// TXT data, length
 		SubTypes, NumSubTypes,	// Subtypes
 		mDNSInterface_Any,		// Interface ID
 		RegCallback, x);		// Callback and context
 
-	if (err) { AbortClient(client, x); errormsg = "mDNS_RegisterService"; goto fail; }
-
-	// Succeeded: Wrap up and return
-	EnableDeathNotificationForClient(client, x);
-	return(mStatus_NoError);
-
+	if (err)
+		{
+		if (srs == &x->ls) AbortClient(client, x);  // don't abort client for global service
+		else FreeDNSServiceRegistration(x->gs);  
+		errormsg = "mDNS_RegisterService";
+		goto fail; 
+		}
+	return x;
+	
 badtxt:
 	LogMsg("%5d: TXT record: %.100s...", client, txtRecord);
 badparam:
 	err = mStatus_BadParamErr;
 fail:
 	LogMsg("%5d: DNSServiceRegister(\"%s\", \"%s\", \"%s\", %d) failed: %s (%ld)",
-		client, name, regtype, domain, notAnIntPort, errormsg, err);
-	return(err);
+		   client, name, regtype, domain, notAnIntPort, errormsg, err);
+	return NULL;
+	}
+
+mDNSexport kern_return_t provide_DNSServiceRegistrationCreate_rpc(mach_port_t unusedserver, mach_port_t client,
+	DNSCString name, DNSCString regtype, DNSCString domain, int notAnIntPort, DNSCString txtRecord)
+	{
+	// Check client parameter
+	(void)unusedserver;		// Unused
+	mStatus err = mStatus_NoError;
+	const char *errormsg = "Unknown";
+	DNSServiceRegistration *x = NULL;
+	if (client == (mach_port_t)-1)      { err = mStatus_Invalid; errormsg = "Client id -1 invalid";     goto fail; }
+	if (CheckForExistingClient(client)) { err = mStatus_Invalid; errormsg = "Client id already in use"; goto fail; }
+
+	x = RegisterService(client, name, regtype, *domain ? domain : "local.", notAnIntPort, txtRecord, NULL);
+	if (!x) { err = mStatus_UnknownErr;  goto fail; } 
+
+    //!!!KRS if we got a dynamic reg domain from the config file, use it for default (except for iChat)
+	if (!*domain && mDNSStorage.uDNS_info.ServiceRegDomain[0] && strcmp(regtype, "_presence._tcp.") && strcmp(regtype, "_ichat._tcp."))
+		x = RegisterService(client, name, regtype,  mDNSStorage.uDNS_info.ServiceRegDomain, notAnIntPort, txtRecord, x);		
+	
+	// Succeeded: Wrap up and return
+	EnableDeathNotificationForClient(client, x);
+	return(mStatus_NoError);
+
+fail:
+	LogMsg("%5d: DNSServiceRegister(\"%s\", \"%s\", \"%s\", %d) failed: %s (%ld)",
+		   client, name, regtype, domain, notAnIntPort, errormsg, err);
+	return mStatus_UnknownErr;
 	}
 	
 mDNSlocal void mDNS_StatusCallback(mDNS *const m, mStatus result)
@@ -1084,8 +1371,9 @@ mDNSlocal void mDNS_StatusCallback(mDNS *const m, mStatus result)
 			if (r->autoname && !SameDomainLabel(r->name.c, mDNSStorage.nicelabel.c))
 				{
 				debugf("NetworkChanged renaming %#s to %#s", r->name.c, mDNSStorage.nicelabel.c);
-				r->autorename = mDNStrue;
-				mDNS_DeregisterService(&mDNSStorage, &r->s);
+				r->autorenameLS = mDNStrue;
+				mDNS_DeregisterService(&mDNSStorage, &r->ls);
+				if (r->gs) { mDNS_DeregisterService(&mDNSStorage, r->gs); r->autorenameGS = mDNStrue; }
 				}
 		udsserver_handle_configchange();
 		}
@@ -1101,22 +1389,17 @@ mDNSlocal void mDNS_StatusCallback(mDNS *const m, mStatus result)
 //*************************************************************************************************************
 // Add / Update / Remove records from existing Registration
 
-mDNSexport kern_return_t provide_DNSServiceRegistrationAddRecord_rpc(mach_port_t unusedserver, mach_port_t client,
-	int type, const char *data, mach_msg_type_number_t data_len, uint32_t ttl, natural_t *reference)
+
+mDNSlocal ExtraResourceRecord *AddExtraRecord(DNSServiceRegistration *x, ServiceRecordSet *srs, mach_port_t client,
+											  int type, const char *data, mach_msg_type_number_t data_len, uint32_t ttl)
 	{
-	// Check client parameter
-	(void)unusedserver;		// Unused
 	mStatus err = mStatus_NoError;
 	const char *errormsg = "Unknown";
 	domainname *name = (domainname *)"";
-	if (client == (mach_port_t)-1) { err = mStatus_Invalid;         errormsg = "Client id -1 invalid"; goto fail; }
-	DNSServiceRegistration *x = DNSServiceRegistrationList;
-	while (x && x->ClientMachPort != client) x = x->next;
-	if (!x)                        { err = mStatus_BadReferenceErr; errormsg = "No such client";       goto fail; }
-	name = &x->s.RR_SRV.resrec.name;
+	name = &srs->RR_SRV.resrec.name;
 
-	// Check other parameters
-	if (data_len > 8192) { err = mStatus_BadParamErr; errormsg = "data_len > 8K"; goto fail; }
+	(void)x;  // unused
+	
 	unsigned int size = sizeof(RDataBody);
 	if (size < data_len)
 		size = data_len;
@@ -1133,17 +1416,57 @@ mDNSexport kern_return_t provide_DNSServiceRegistrationAddRecord_rpc(mach_port_t
 	
 	// Do the operation
 	LogOperation("%5d: DNSServiceRegistrationAddRecord(%##s, type %d, length %d) REF %p",
-		client, x->s.RR_SRV.resrec.name.c, type, data_len, extra);
-	err = mDNS_AddRecordToService(&mDNSStorage, &x->s, extra, &extra->r.rdatastorage, ttl);
-	*reference = (natural_t)extra;
-	if (err) { errormsg = "mDNS_AddRecordToService"; goto fail; }
+		client, srs->RR_SRV.resrec.name.c, type, data_len, extra);
+	err = mDNS_AddRecordToService(&mDNSStorage, srs, extra, &extra->r.rdatastorage, ttl);
+
+	if (err)
+		{
+		freeL("Extra Resource Record", extra);
+		errormsg = "mDNS_AddRecordToService";
+		goto fail;
+		}
 	
-	// Succeeded: Wrap up and return
-	return(mStatus_NoError);
+	return extra;
 	
 fail:
 	LogMsg("%5d: DNSServiceRegistrationAddRecord(%##s, type %d, length %d) failed: %s (%ld)", client, name->c, type, data_len, errormsg, err);
-	return(err);
+	return NULL;
+	}
+
+
+mDNSexport kern_return_t provide_DNSServiceRegistrationAddRecord_rpc(mach_port_t unusedserver, mach_port_t client,
+	int type, const char *data, mach_msg_type_number_t data_len, uint32_t ttl, natural_t *reference)
+	{
+	// Check client parameter
+	(void)unusedserver;		// Unused
+	mStatus err = mStatus_NoError;
+	const char *errormsg = "Unknown";
+	if (client == (mach_port_t)-1) { err = mStatus_Invalid;         errormsg = "Client id -1 invalid"; goto fail; }
+	DNSServiceRegistration *x = DNSServiceRegistrationList;
+	while (x && x->ClientMachPort != client) x = x->next;
+	if (!x)                        { err = mStatus_BadReferenceErr; errormsg = "No such client";       goto fail; }
+
+	// Check other parameters
+	if (data_len > 8192) { err = mStatus_BadParamErr; errormsg = "data_len > 8K"; goto fail; }
+
+	ExtraRecordRef *ref = mallocL("ExtraRecordRef", sizeof(ExtraRecordRef));
+	if (!ref) { LogMsg("ERROR: malloc"); return mStatus_NoMemoryErr; }
+
+	ref->localRef = AddExtraRecord(x, &x->ls, client, type, data, data_len, ttl);
+	if (!ref->localRef) { freeL("ExtraRecordRef", ref); *reference = (natural_t)NULL; return mStatus_UnknownErr; }
+
+	if (x->gs) ref->globalRef = AddExtraRecord(x, x->gs, client, type, data, data_len, ttl);  // return success even if global case fails
+	else ref->globalRef = NULL;
+	
+	// Succeeded: Wrap up and return
+	ref->next = x->ExtraRefList;
+	x->ExtraRefList = ref;
+	*reference = (natural_t)ref;
+	return mStatus_NoError;
+
+fail:
+	LogMsg("%5d: DNSServiceRegistrationAddRecord(%##s, type %d, length %d) failed: %s (%ld)", client, x->name.c, type, data_len, errormsg, err);
+	return mStatus_UnknownErr;
 	}
 
 mDNSlocal void UpdateCallback(mDNS *const m, AuthRecord *const rr, RData *OldRData)
@@ -1153,35 +1476,18 @@ mDNSlocal void UpdateCallback(mDNS *const m, AuthRecord *const rr, RData *OldRDa
 		freeL("Old RData", OldRData);
 	}
 
-mDNSexport kern_return_t provide_DNSServiceRegistrationUpdateRecord_rpc(mach_port_t unusedserver, mach_port_t client,
-	natural_t reference, const char *data, mach_msg_type_number_t data_len, uint32_t ttl)
+mDNSlocal mStatus UpdateRecord(ServiceRecordSet *srs, mach_port_t client, AuthRecord *rr, const char *data, mach_msg_type_number_t data_len, uint32_t ttl)
 	{
-	// Check client parameter
-	(void)unusedserver;		// Unused
+    // Check client parameter
 	mStatus err = mStatus_NoError;
 	const char *errormsg = "Unknown";
 	domainname *name = (domainname *)"";
-	if (client == (mach_port_t)-1) { err = mStatus_Invalid;         errormsg = "Client id -1 invalid"; goto fail; }
-	DNSServiceRegistration *x = DNSServiceRegistrationList;
-	while (x && x->ClientMachPort != client) x = x->next;
-	if (!x)                        { err = mStatus_BadReferenceErr; errormsg = "No such client";       goto fail; }
-	name = &x->s.RR_SRV.resrec.name;
 
-	// Check other parameters
-	if (data_len > 8192) { err = mStatus_BadParamErr; errormsg = "data_len > 8K"; goto fail; }
+	name = &srs->RR_SRV.resrec.name;
+
 	unsigned int size = sizeof(RDataBody);
-	if (size < data_len)
+    if (size < data_len)
 		size = data_len;
-
-	// Find the record we're updating. NULL reference means update the primary TXT record
-	AuthRecord *rr = &x->s.RR_TXT;
-	if (reference)	// Scan our list to make sure we're updating a valid record that was previously added
-		{
-		ExtraResourceRecord *e = x->s.Extras;
-		while (e && e != (ExtraResourceRecord*)reference) e = e->next;
-		if (!e) { err = mStatus_BadReferenceErr; errormsg = "No such record"; goto fail; }
-		rr = &e->r;
-		}
 
 	// Allocate memory, and handle failure
 	RData *newrdata = mallocL("RData", sizeof(*newrdata) - sizeof(RDataBody) + size);
@@ -1192,16 +1498,89 @@ mDNSexport kern_return_t provide_DNSServiceRegistrationUpdateRecord_rpc(mach_por
 	memcpy(&newrdata->u, data, data_len);
 	
 	// Do the operation
-	LogOperation("%5d: DNSServiceRegistrationUpdateRecord(%##s, %X, new length %d)",
-		client, x->s.RR_SRV.resrec.name.c, reference, data_len);
+	LogOperation("%5d: DNSServiceRegistrationUpdateRecord(%##s, new length %d)",
+		client, srs->RR_SRV.resrec.name.c, data_len);
+
 	err = mDNS_Update(&mDNSStorage, rr, ttl, data_len, newrdata, UpdateCallback);
-	if (err) { errormsg = "mDNS_Update"; goto fail; }
-	
-	// Succeeded: Wrap up and return
+	if (err)
+		{
+		errormsg = "mDNS_Update";
+		freeL("RData", newrdata);
+		return err;
+		}   
 	return(mStatus_NoError);
 
 fail:
+	LogMsg("%5d: DNSServiceRegistrationUpdateRecord(%##s, %d) failed: %s (%ld)", client, name->c, data_len, errormsg, err);
+	return(err);
+	}	
+
+
+mDNSexport kern_return_t provide_DNSServiceRegistrationUpdateRecord_rpc(mach_port_t unusedserver, mach_port_t client,
+		natural_t reference, const char *data, mach_msg_type_number_t data_len, uint32_t ttl)
+   	{
+    // Check client parameter
+	mStatus err = mStatus_NoError;
+	const char *errormsg = "Unknown";
+	domainname *name = (domainname *)"";
+	AuthRecord *gRR, *lRR;
+
+	(void)unusedserver;  // unused
+    if (client == (mach_port_t)-1) { err = mStatus_Invalid;         errormsg = "Client id -1 invalid"; goto fail; }
+	DNSServiceRegistration *x = DNSServiceRegistrationList;
+	while (x && x->ClientMachPort != client) x = x->next;
+	if (!x)                        { err = mStatus_BadReferenceErr; errormsg = "No such client";       goto fail; }
+
+	// Check other parameters
+	if (data_len > 8192) { err = mStatus_BadParamErr; errormsg = "data_len > 8K"; goto fail; }
+
+	// Find the record we're updating. NULL reference means update the primary TXT record
+	if (!reference)
+		{
+		lRR = &x->ls.RR_TXT;
+		gRR = x->gs ? &x->gs->RR_TXT : NULL;
+		}
+	else
+		{
+		ExtraRecordRef *ref;
+		for (ref = x->ExtraRefList; ref; ref= ref->next)			
+			if (ref == (ExtraRecordRef *)reference) break;
+		if (!ref) { err = mStatus_BadReferenceErr; errormsg = "No such record"; goto fail; }
+		lRR = &ref->localRef->r;
+		gRR = ref->globalRef ? &ref->globalRef->r : NULL;
+		}
+
+	err = UpdateRecord(&x->ls, client, lRR, data, data_len, ttl);
+	if (err) goto fail;
+
+	if (gRR) UpdateRecord(x->gs, client, gRR, data, data_len, ttl); // don't return error if global fails
+	return mStatus_NoError;
+	
+fail:
 	LogMsg("%5d: DNSServiceRegistrationUpdateRecord(%##s, %X, %d) failed: %s (%ld)", client, name->c, reference, data_len, errormsg, err);
+	return(err);
+	}
+
+mDNSlocal mStatus RemoveRecord(ServiceRecordSet *srs, ExtraResourceRecord *extra, mach_port_t client)
+	{
+	domainname *name = &srs->RR_SRV.resrec.name;
+	mStatus err = mStatus_NoError;
+	const char *errormsg = "Unknown";
+	
+	// Do the operation
+	LogOperation("%5d: DNSServiceRegistrationRemoveRecord(%##s)", client, srs->RR_SRV.resrec.name.c);
+
+	err = mDNS_RemoveRecordFromService(&mDNSStorage, srs, extra);
+	if (err) { errormsg = "mDNS_RemoveRecordFromService (No such record)"; goto fail; }
+
+	// Succeeded: Wrap up and return
+	if (extra->r.resrec.rdata != &extra->r.rdatastorage)
+		freeL("Extra RData", extra->r.resrec.rdata);
+	freeL("ExtraResourceRecord", extra);
+	return(mStatus_NoError);
+
+fail:
+	LogMsg("%5d: DNSServiceRegistrationRemoveRecord(%##s, %X) failed: %s", client, name->c, errormsg, err);
 	return(err);
 	}
 
@@ -1212,27 +1591,33 @@ mDNSexport kern_return_t provide_DNSServiceRegistrationRemoveRecord_rpc(mach_por
 	(void)unusedserver;		// Unused
 	mStatus err = mStatus_NoError;
 	const char *errormsg = "Unknown";
-	domainname *name = (domainname *)"";
+	ExtraRecordRef *ref, *prev = NULL;
 	if (client == (mach_port_t)-1) { err = mStatus_Invalid;         errormsg = "Client id -1 invalid"; goto fail; }
 	DNSServiceRegistration *x = DNSServiceRegistrationList;
 	while (x && x->ClientMachPort != client) x = x->next;
 	if (!x)                        { err = mStatus_BadReferenceErr; errormsg = "No such client";       goto fail; }
-	name = &x->s.RR_SRV.resrec.name;
 
-	// Do the operation
-	LogOperation("%5d: DNSServiceRegistrationRemoveRecord(%##s, %X)", client, x->s.RR_SRV.resrec.name.c, reference);
-	ExtraResourceRecord *extra = (ExtraResourceRecord*)reference;
-	err = mDNS_RemoveRecordFromService(&mDNSStorage, &x->s, extra);
-	if (err) { errormsg = "mDNS_RemoveRecordFromService (No such record)"; goto fail; }
+	ref = x->ExtraRefList;
+	while (ref)
+		{
+		if (ref == (ExtraRecordRef *)ref) break;
+		prev = ref;
+	   ref = ref->next;
+		}
+	
+	if (!ref) { err = mStatus_BadReferenceErr; errormsg = "No such reference"; goto fail; }
+	err = RemoveRecord(&x->ls, ref->localRef, client);
+	if (x->gs && ref->globalRef) RemoveRecord(x->gs, ref->globalRef, client);  // don't return error if this fails
 
-	// Succeeded: Wrap up and return
-	if (extra->r.resrec.rdata != &extra->r.rdatastorage)
-		freeL("Extra RData", extra->r.resrec.rdata);
-	freeL("ExtraResourceRecord", extra);
-	return(mStatus_NoError);
+	// delete the ref struct
+	if (prev) prev->next = ref->next;
+	else x->ExtraRefList = ref->next;
+	ref->next = NULL;
+	freeL("ExtraRecordRef", ref);
+	return err;
 
 fail:
-	LogMsg("%5d: DNSServiceRegistrationRemoveRecord(%##s, %X) failed: %s (%ld)", client, name->c, reference, errormsg, err);
+	LogMsg("%5d: DNSServiceRegistrationRemoveRecord(%X) failed: %s (%ld)", client, reference, errormsg, err);
 	return(err);
 	}
 
@@ -1400,10 +1785,10 @@ mDNSlocal void ExitCallback(CFMachPortRef port, void *msg, CFIndex size, void *i
 	debugf("ExitCallback: RR Cache now using %d records, %d active", mDNSStorage.rrcache_used, rrcache_active);
 */
 
-	LogMsg("%s stopping", mDNSResponderVersionString);
+	LogMsgIdent(mDNSResponderVersionString, "stopping");
 
 	debugf("ExitCallback: destroyBootstrapService");
-	if (!debug_mode)
+	if (!mDNS_DebugMode)
 		destroyBootstrapService();
 
 	debugf("ExitCallback: Aborting MIG clients");
@@ -1418,9 +1803,7 @@ mDNSlocal void ExitCallback(CFMachPortRef port, void *msg, CFIndex size, void *i
 
 	debugf("ExitCallback: mDNS_Close");
 	mDNS_Close(&mDNSStorage);
-#if ENABLE_UDS
 	if (udsserver_exit() < 0) LogMsg("ExitCallback: udsserver_exit failed");
-#endif
 	exit(0);
 	}
 
@@ -1450,42 +1833,74 @@ mDNSlocal void INFOCallback(CFMachPortRef port, void *msg, CFIndex size, void *i
 	DNSServiceBrowser           *b;
 	DNSServiceResolver          *l;
 	DNSServiceRegistration      *r;
-	mDNSs32 slot;
+	NetworkInterfaceInfoOSX     *i;
+	mDNSu32 slot;
 	CacheRecord *rr;
 	mDNSu32 CacheUsed = 0, CacheActive = 0;
+	mDNSs32 now = mDNSPlatformTimeNow();
 
-	LogMsg("%s ---- BEGIN STATE LOG ----", mDNSResponderVersionString);
+	LogMsgIdent(mDNSResponderVersionString, "---- BEGIN STATE LOG ----");
 
 	for (slot = 0; slot < CACHE_HASH_SLOTS; slot++)
+		{
+		mDNSu32 SlotUsed = 0;
 		for (rr = mDNSStorage.rrcache_hash[slot]; rr; rr=rr->next)
 			{
+			mDNSs32 remain = rr->resrec.rroriginalttl - (now - rr->TimeRcvd) / mDNSPlatformOneSecond;
 			CacheUsed++;
+			SlotUsed++;
 			if (rr->CRActiveQuestion) CacheActive++;
-			LogMsg("%s %-5s%-6s%s", rr->CRActiveQuestion ? "Active:  " : "Inactive:", DNSTypeName(rr->resrec.rrtype),
+			LogMsgNoIdent("%s%6ld %-6s%-6s%s", rr->CRActiveQuestion ? "*" : " ", remain, DNSTypeName(rr->resrec.rrtype),
 				((NetworkInterfaceInfoOSX *)rr->resrec.InterfaceID)->ifa_name, GetRRDisplayString(&mDNSStorage, rr));
 			usleep(1000);	// Limit rate a little so we don't flood syslog too fast
 			}
+		if (mDNSStorage.rrcache_used[slot] != SlotUsed)
+			LogMsgNoIdent("Cache use mismatch: rrcache_used[slot] is %lu, true count %lu", mDNSStorage.rrcache_used[slot], SlotUsed);
+		}
 	if (mDNSStorage.rrcache_totalused != CacheUsed)
-		LogMsg("Cache use mismatch: rrcache_totalused is %lu, true count %lu", mDNSStorage.rrcache_totalused, CacheUsed);
+		LogMsgNoIdent("Cache use mismatch: rrcache_totalused is %lu, true count %lu", mDNSStorage.rrcache_totalused, CacheUsed);
 	if (mDNSStorage.rrcache_active != CacheActive)
-		LogMsg("Cache use mismatch: rrcache_active is %lu, true count %lu", mDNSStorage.rrcache_active, CacheActive);
-	LogMsg("Cache currently contains %lu records; %lu referenced by active questions", CacheUsed, CacheActive);
+		LogMsgNoIdent("Cache use mismatch: rrcache_active is %lu, true count %lu", mDNSStorage.rrcache_active, CacheActive);
+	LogMsgNoIdent("Cache currently contains %lu records; %lu referenced by active questions", CacheUsed, CacheActive);
 
 	for (e = DNSServiceDomainEnumerationList; e; e=e->next)
-		LogMsg("%5d: DomainEnumeration   %##s", e->ClientMachPort, e->dom.qname.c);
+		LogMsgNoIdent("%5d: DomainEnumeration   %##s", e->ClientMachPort, e->dom.qname.c);
 
 	for (b = DNSServiceBrowserList; b; b=b->next)
-		LogMsg("%5d: ServiceBrowse       %##s", b->ClientMachPort, b->q.qname.c);
-
+		{
+		DNSServiceBrowserQuestion *qptr;
+		for (qptr = b->qlist; qptr; qptr = qptr->next)
+			LogMsgNoIdent("%5d: ServiceBrowse       %##s", b->ClientMachPort, qptr->q.qname.c);
+		}
 	for (l = DNSServiceResolverList; l; l=l->next)
-		LogMsg("%5d: ServiceResolve      %##s", l->ClientMachPort, l->i.name.c);
+		LogMsgNoIdent("%5d: ServiceResolve      %##s", l->ClientMachPort, l->i.name.c);
 
 	for (r = DNSServiceRegistrationList; r; r=r->next)
-		LogMsg("%5d: ServiceRegistration %##s", r->ClientMachPort, r->s.RR_SRV.resrec.name.c);
+		{
+		LogMsgNoIdent("%5d: ServiceRegistration %##s %u", r->ClientMachPort, r->ls.RR_SRV.resrec.name.c, mDNSVal16(r->ls.RR_SRV.resrec.rdata->u.srv.port));
+		if (r->gs) LogMsgNoIdent("%5d: ServiceRegistration %##s %u", r->ClientMachPort, r->gs->RR_SRV.resrec.name.c, mDNSVal16(r->gs->RR_SRV.resrec.rdata->u.srv.port));
+		}
 
 	udsserver_info();
 
-	LogMsg("%s ----  END STATE LOG  ----", mDNSResponderVersionString);
+	for (i = mDNSStorage.p->InterfaceList; i; i = i->next)
+		{
+		if (!i->Exists)
+			LogMsgNoIdent("Interface: %s %5s(%lu) DORMANT",
+				i->sa_family == AF_INET ? "v4" : i->sa_family == AF_INET6 ? "v6" : "??", i->ifa_name, i->scope_id);
+		else
+			LogMsgNoIdent("Interface: %s %5s(%lu) %s %s %2d %s %2d InterfaceID %p %s %s %#a",
+				i->sa_family == AF_INET ? "v4" : i->sa_family == AF_INET6 ? "v6" : "??", i->ifa_name, i->scope_id,
+				i->ifinfo.InterfaceActive ? "Active" : "      ",
+				i->ifinfo.IPv4Available ? "v4" : "  ", i->ss.sktv4,
+				i->ifinfo.IPv6Available ? "v6" : "  ", i->ss.sktv6,
+				i->ifinfo.InterfaceID,
+				i->ifinfo.Advertise ? "Adv"  : "   ",
+				i->ifinfo.McastTxRx ? "TxRx" : "    ",
+				&i->ifinfo.ip);
+		}
+
+	LogMsgIdent(mDNSResponderVersionString, "----  END STATE LOG  ----");
 	}
 
 mDNSlocal void HandleSIGINFO(int signal)
@@ -1529,6 +1944,7 @@ mDNSlocal kern_return_t mDNSDaemonInitialize(void)
 		rrcachestorage, RR_CACHE_SIZE,
 		mDNS_Init_AdvertiseLocalAddresses,
 		mDNS_StatusCallback, mDNS_Init_NoInitCallbackContext);
+	
 	if (err) { LogMsg("Daemon start: mDNS_Init failed %ld", err); return(err); }
 
 	client_death_port = CFMachPortGetPort(d_port);
@@ -1543,13 +1959,9 @@ mDNSlocal kern_return_t mDNSDaemonInitialize(void)
 	CFRelease(s_rls);
 	CFRelease(e_rls);
 	CFRelease(i_rls);
-	if (debug_mode) printf("Service registered with Mach Port %d\n", m_port);
-#if ENABLE_UDS
-	err = udsserver_init();
+	if (mDNS_DebugMode) printf("Service registered with Mach Port %d\n", m_port);
+	err = udsserver_init(&mDNSStorage);
 	if (err) { LogMsg("Daemon start: udsserver_init failed"); return err; }
-	err = udsserver_add_rl_source();
-	if (err) { LogMsg("Daemon start: udsserver_add_rl_source failed"); return err; }
-#endif
 	return(err);
 	}
 
@@ -1558,11 +1970,11 @@ mDNSlocal mDNSs32 mDNSDaemonIdle(void)
 	// 1. Call mDNS_Execute() to let mDNSCore do what it needs to do
 	mDNSs32 nextevent = mDNS_Execute(&mDNSStorage);
 
-	mDNSs32 now = mDNSPlatformTimeNow();
-
+	mDNSs32 now = mDNSPlatformTimeNow();	
+	
 	// 2. Deliver any waiting browse messages to clients
 	DNSServiceBrowser *b = DNSServiceBrowserList;
-
+		    
 	while (b)
 		{
 		// NOTE: Need to advance b to the next element BEFORE we call DeliverInstance(), because in the
@@ -1611,7 +2023,7 @@ mDNSlocal mDNSs32 mDNSDaemonIdle(void)
 		if (l->ReportTime && now - l->ReportTime >= 0)
 			{
 			l->ReportTime = 0;
-			LogMsg("%5d: DNSServiceResolver(%##s) has remained active for over two minutes. "
+			LogMsg("%5d: DNSServiceResolver(%##s) active for over two minutes. "
 				"This places considerable burden on the network.", l->ClientMachPort, l->i.name.c);
 			}
 
@@ -1622,11 +2034,10 @@ mDNSexport int main(int argc, char **argv)
 	{
 	int i;
 	kern_return_t status;
-	FILE *fp;
-
+	
 	for (i=1; i<argc; i++)
 		{
-		if (!strcmp(argv[i], "-d")) debug_mode = 1;
+		if (!strcmp(argv[i], "-d")) mDNS_DebugMode = mDNStrue;
 		}
 
 	signal(SIGINT,  HandleSIGTERM);		// SIGINT is what you get for a Ctrl-C
@@ -1634,14 +2045,12 @@ mDNSexport int main(int argc, char **argv)
 	signal(SIGINFO, HandleSIGINFO);
 
 	// Register the server with mach_init for automatic restart only during normal (non-debug) mode
-    if (!debug_mode)
-		registerBootstrapService();
+    if (!mDNS_DebugMode) registerBootstrapService();
 
-	if (!debug_mode && !restarting_via_mach_init)
+	if (!mDNS_DebugMode && !restarting_via_mach_init)
 		exit(0); /* mach_init will restart us immediately as a daemon */
 
-	// Unlike deamon(), mach_init does redirect standard file descriptors to /dev/null
-	if (!debug_mode)
+	if (!mDNS_DebugMode)
 		{
 		int fd = open(_PATH_DEVNULL, O_RDWR, 0);
 		if (fd != -1)
@@ -1655,20 +2064,14 @@ mDNSexport int main(int argc, char **argv)
 			}
 		}
 
-	fp = fopen(PID_FILE, "w");
-	if (fp != NULL)
-		{
-		fprintf(fp, "%d\n", getpid());
-		fclose(fp);
-		}
-	
-	LogMsg("%s starting", mDNSResponderVersionString);
+	// First do the all the initialization we need root privilege for, before we change to user "nobody"
+	LogMsgIdent(mDNSResponderVersionString, "starting");
 	status = mDNSDaemonInitialize();
 
 	// Now that we're finished with anything privileged, switch over to running as "nobody"
-	const struct passwd *pw = getpwnam( "nobody");
-	if ( pw != NULL)
-		setuid( pw->pw_uid);
+	const struct passwd *pw = getpwnam("nobody");
+	if (pw != NULL)
+		setuid(pw->pw_uid);
 	else
 		setuid(-2);		// User "nobody" is -2; use that value if "nobody" does not appear in the password database
 
@@ -1688,13 +2091,19 @@ mDNSexport int main(int argc, char **argv)
 			// 1. Before going into a blocking wait call and letting our process to go sleep,
 			// call mDNSDaemonIdle to allow any deferred work to be completed.
 			mDNSs32 nextevent = mDNSDaemonIdle();
-#if ENABLE_UDS
 			nextevent = udsserver_idle(nextevent);
-#endif
 
 			// 2. Work out how long we expect to sleep before the next scheduled task
 			mDNSs32 ticks = nextevent - mDNSPlatformTimeNow();
-			if (ticks < 1) ticks = 1;
+			static mDNSs32 RepeatedBusy = 0;	// Debugging sanity check, to guard against CPU spins
+			if (ticks > 1)
+				RepeatedBusy = 0;
+			else
+				{
+				ticks = 1;
+				if (++RepeatedBusy >= mDNSPlatformOneSecond * 10)
+					{ LogMsg("Task Scheduling Error: Continuously busy for the last ten seconds"); RepeatedBusy = 0; }
+				}
 			CFAbsoluteTime interval = (CFAbsoluteTime)ticks / (CFAbsoluteTime)mDNSPlatformOneSecond;
 					
 			// 3. Now do a blocking "CFRunLoopRunInMode" call so we sleep until
@@ -1717,9 +2126,97 @@ mDNSexport int main(int argc, char **argv)
 		mDNS_Close(&mDNSStorage);
 		}
 
-	destroyBootstrapService();
+	if (!mDNS_DebugMode) destroyBootstrapService();
 
 	return(status);
+	}
+
+//		uds_daemon.c support routines		/////////////////////////////////////////////
+
+// We keep a list of client-supplied event sources in PosixEventSource records 
+struct CFSocketEventSource
+	{
+	udsEventCallback			Callback;
+	void						*Context;
+	int							fd;
+	struct  CFSocketEventSource	*Next;
+	CFSocketRef					SocketRef;
+	CFRunLoopSourceRef			RLS;
+	};
+typedef struct CFSocketEventSource	CFSocketEventSource;
+
+static GenLinkedList	gEventSources;			// linked list of CFSocketEventSource's
+
+static void cf_callback(CFSocketRef s _UNUSED, CFSocketCallBackType t _UNUSED, CFDataRef dr _UNUSED, const void *c _UNUSED, void *i)
+	// Called by CFSocket when data appears on socket
+	{
+	CFSocketEventSource	*source = (CFSocketEventSource*) i;
+	source->Callback(source->Context);
+	}
+
+mStatus udsSupportAddFDToEventLoop(int fd, udsEventCallback callback, void *context)
+	// Arrange things so that callback is called with context when data appears on fd
+	{
+	CFSocketEventSource	*newSource;
+	CFSocketContext cfContext = 	{ 0, NULL, NULL, NULL, NULL 	};
+	
+	if (gEventSources.LinkOffset == 0)
+		InitLinkedList(&gEventSources, offsetof(CFSocketEventSource, Next));
+
+	if (fd >= FD_SETSIZE || fd < 0)
+		return mStatus_UnsupportedErr;
+	if (callback == NULL)
+		return mStatus_BadParamErr;
+
+	newSource = (CFSocketEventSource*) calloc(1, sizeof *newSource);
+	if (NULL == newSource)
+		return mStatus_NoMemoryErr;
+
+	newSource->Callback = callback;
+	newSource->Context = context;
+	newSource->fd = fd;
+
+	cfContext.info = newSource;
+	if ( NULL != (newSource->SocketRef = CFSocketCreateWithNative(kCFAllocatorDefault, fd, kCFSocketReadCallBack, 
+																	cf_callback, &cfContext)) &&
+		 NULL != (newSource->RLS = CFSocketCreateRunLoopSource(kCFAllocatorDefault, newSource->SocketRef, 0)))
+		{
+		CFRunLoopAddSource(CFRunLoopGetCurrent(), newSource->RLS, kCFRunLoopDefaultMode);
+		AddToTail(&gEventSources, newSource);
+		}
+	else
+		{
+		if (newSource->SocketRef)
+			{
+			CFSocketInvalidate(newSource->SocketRef);  // automatically closes socket
+			CFRelease(newSource->SocketRef);
+			}
+		return mStatus_NoMemoryErr;
+		}
+
+	return mStatus_NoError;
+	}
+
+mStatus udsSupportRemoveFDFromEventLoop(int fd)
+	// Reverse what was done in udsSupportAddFDToEventLoop().
+	{
+	CFSocketEventSource	*iSource;
+
+	for (iSource=(CFSocketEventSource*)gEventSources.Head; iSource; iSource = iSource->Next)
+		{
+		if (fd == iSource->fd)
+			{
+			RemoveFromList(&gEventSources, iSource);
+			CFRunLoopRemoveSource(CFRunLoopGetCurrent(), iSource->RLS, kCFRunLoopDefaultMode);
+			CFRunLoopSourceInvalidate(iSource->RLS);
+			CFRelease(iSource->RLS);
+			CFSocketInvalidate(iSource->SocketRef);
+			CFRelease(iSource->SocketRef);
+			free(iSource);
+			return mStatus_NoError;
+			}
+		}
+	return mStatus_NoSuchNameErr;
 	}
 
 // For convenience when using the "strings" command, this is the last thing in the file

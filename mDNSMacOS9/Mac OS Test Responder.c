@@ -3,6 +3,8 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -23,6 +25,20 @@
     Change History (most recent first):
 
 $Log: Mac\040OS\040Test\040Responder.c,v $
+Revision 1.21  2004/03/12 21:30:25  cheshire
+Build a System-Context Shared Library from mDNSCore, for the benefit of developers
+like Muse Research who want to be able to use mDNS/DNS-SD from GPL-licensed code.
+
+Revision 1.20  2004/02/09 23:23:32  cheshire
+Advertise "IL 2\4th Floor.apple.com." as another test "browse domain"
+
+Revision 1.19  2004/01/24 23:55:15  cheshire
+Change to use mDNSOpaque16fromIntVal/mDNSVal16 instead of shifting and masking
+
+Revision 1.18  2003/11/14 21:27:08  cheshire
+<rdar://problem/3484766>: Security: Crashing bug in mDNSResponder
+Fix code that should use buffer size MAX_ESCAPED_DOMAIN_NAME (1005) instead of 256-byte buffers.
+
 Revision 1.17  2003/08/14 02:19:54  cheshire
 <rdar://problem/3375491> Split generic ResourceRecord type into two separate types: AuthRecord and CacheRecord
 
@@ -46,7 +62,7 @@ Update to APSL 2.0
 static mDNS m;
 static mDNS_PlatformSupport p;
 static ServiceRecordSet p1, p2, afp, http, njp;
-static AuthRecord browsedomain;
+static AuthRecord browsedomain1, browsedomain2;
 
 // This sample code just calls mDNS_RenameAndReregisterService to automatically pick a new
 // unique name for the service. For a device such as a printer, this may be appropriate.
@@ -71,14 +87,11 @@ mDNSlocal void RegisterService(mDNS *m, ServiceRecordSet *recordset,
 	UInt16 PortAsNumber, const char txtinfo[],
 	const domainlabel *const n, const char type[], const char domain[])
 	{
-	mDNSIPPort port;
 	domainname t;
 	domainname d;
-	char buffer[512];
+	char buffer[MAX_ESCAPED_DOMAIN_NAME];
 	UInt8 txtbuffer[512];
 
-	port.b[0] = (UInt8)(PortAsNumber >> 8);
-	port.b[1] = (UInt8)(PortAsNumber     );
 	MakeDomainNameFromDNSNameString(&t, type);
 	MakeDomainNameFromDNSNameString(&d, domain);
 	
@@ -92,10 +105,10 @@ mDNSlocal void RegisterService(mDNS *m, ServiceRecordSet *recordset,
 
 	mDNS_RegisterService(m, recordset,
 		n, &t, &d,									// Name, type, domain
-		mDNSNULL, port,								// Host and port
+		mDNSNULL, mDNSOpaque16fromIntVal(PortAsNumber),
 		txtbuffer, (mDNSu16)(1+txtbuffer[0]),		// TXT data, length
 		mDNSNULL, 0,								// Subtypes (none)
-		mDNSInterface_Any,							// Interace ID
+		mDNSInterface_Any,							// Interface ID
 		Callback, mDNSNULL);						// Callback and context
 
 	ConvertDomainNameToCString(&recordset->RR_SRV.resrec.name, buffer);
@@ -120,7 +133,6 @@ mDNSlocal void RegisterFakeServiceForTesting(mDNS *m, ServiceRecordSet *recordse
 mDNSlocal OSStatus CreateProxyRegistrationForRealService(mDNS *m, UInt16 PortAsNumber, const char txtinfo[],
 	const char *servicetype, ServiceRecordSet *recordset)
 	{
-	mDNSIPPort port;
 	InetAddress ia;
 	TBind bindReq;
 	OSStatus err;
@@ -128,10 +140,8 @@ mDNSlocal OSStatus CreateProxyRegistrationForRealService(mDNS *m, UInt16 PortAsN
 	EndpointRef ep = OTOpenEndpoint(OTCreateConfiguration(kTCPName), 0, &endpointinfo, &err);
 	if (!ep || err) { printf("OTOpenEndpoint (CreateProxyRegistrationForRealService) failed %d", err); return(err); }
 
-	port.b[0] = (UInt8)(PortAsNumber >> 8);
-	port.b[1] = (UInt8)(PortAsNumber     );
 	ia.fAddressType = AF_INET;
-	ia.fPort        = port.NotAnInteger;
+	ia.fPort        = mDNSOpaque16fromIntVal(PortAsNumber).NotAnInteger;
 	ia.fHost        = 0;
 	bindReq.addr.maxlen = sizeof(ia);
 	bindReq.addr.len    = sizeof(ia);
@@ -151,7 +161,7 @@ mDNSlocal OSStatus CreateProxyRegistrationForRealService(mDNS *m, UInt16 PortAsN
 // Done once on startup, and then again every time our address changes
 mDNSlocal OSStatus mDNSResponderTestSetup(mDNS *m)
 	{
-	char buffer[256];
+	char buffer[MAX_ESCAPED_DOMAIN_NAME];
 	mDNSv4Addr ip = m->HostInterfaces->ip.ip.v4;
 	
 	ConvertDomainNameToCString(&m->hostname, buffer);
@@ -185,7 +195,8 @@ mDNSlocal OSStatus mDNSResponderTestSetup(mDNS *m)
 	//RegisterService(m, &njp, 80, "NJP/", &m->nicelabel, "_njp._tcp.", "local.");
 
 	// Advertise that apple.com. is available for browsing
-	mDNS_AdvertiseDomains(m, &browsedomain, mDNS_DomainTypeBrowse, mDNSInterface_Any, "IL 2\\4th Floor.apple.com.");
+	mDNS_AdvertiseDomains(m, &browsedomain1, mDNS_DomainTypeBrowse, mDNSInterface_Any, "apple.com.");
+	mDNS_AdvertiseDomains(m, &browsedomain2, mDNS_DomainTypeBrowse, mDNSInterface_Any, "IL 2\\4th Floor.apple.com.");
 
 	return(kOTNoError);
 	}
@@ -202,16 +213,13 @@ mDNSlocal Boolean YieldSomeTime(UInt32 milliseconds)
 
 int main()
 	{
-	extern void mDNSPlatformIdle(mDNS *const m);	// Only needed for debugging version
 	mStatus err;
 	Boolean DoneSetup = false;
 
 	SIOUXSettings.asktosaveonclose = false;
 	SIOUXSettings.userwindowtitle = "\pMulticast DNS Responder";
 
-	printf("Prototype Multicast DNS Responder\n\n");
-	printf("WARNING! This is experimental software.\n\n");
-	printf("Multicast DNS is currently an experimental protocol.\n\n");
+	printf("Multicast DNS Responder\n\n");
 	printf("This software reports errors using MacsBug breaks,\n");
 	printf("so if you don't have MacsBug installed your Mac may crash.\n\n");
 	printf("******************************************************************************\n");
@@ -225,9 +233,12 @@ int main()
 
 	while (!YieldSomeTime(35))
 		{
-		// For debugging, use "#define __ONLYSYSTEMTASK__ 1" and call mDNSPlatformIdle() periodically.
-		// For shipping code, don't define __ONLYSYSTEMTASK__, and you don't need to call mDNSPlatformIdle()
+#if MDNS_ONLYSYSTEMTASK
+		// For debugging, use "#define MDNS_ONLYSYSTEMTASK 1" and call mDNSPlatformIdle() periodically.
+		// For shipping code, don't define MDNS_ONLYSYSTEMTASK, and you don't need to call mDNSPlatformIdle()
+		extern void mDNSPlatformIdle(mDNS *const m);
 		mDNSPlatformIdle(&m);	// Only needed for debugging version
+#endif
 		if (m.mDNSPlatformStatus == mStatus_NoError && !DoneSetup)
 			{
 			DoneSetup = true;

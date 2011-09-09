@@ -1,7 +1,9 @@
 /*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
+ * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -23,6 +25,36 @@
     Change History (most recent first):
     
 $Log: ChooserDialog.cpp,v $
+Revision 1.10  2004/04/23 01:19:41  bradley
+Changed TXT record new line delimiter from \n to \r\n so it works now that it is an edit text.
+
+Revision 1.9  2004/03/07 05:51:04  bradley
+Updated service type list table to include all service types from dns-sd.org as of 2004-03-06.
+Added separate Service Type and Service Description columns so both are show in the window.
+
+Revision 1.8  2004/01/30 02:56:32  bradley
+Updated to support full Unicode display. Added support for all services on www.dns-sd.org.
+
+Revision 1.7  2003/12/25 03:42:04  bradley
+Added login dialog to get username/password when going to FTP sites. Added more services.
+
+Revision 1.6  2003/10/31 12:18:30  bradley
+Added display of the resolved host name. Show separate TXT record entries on separate lines.
+
+Revision 1.5  2003/10/16 09:21:56  bradley
+Ignore non-IPv4 resolves until mDNS on Windows supports IPv6.
+
+Revision 1.4  2003/10/10 03:41:29  bradley
+Changed HTTP double-click handling to work with or without the path= prefix in the TXT record.
+
+Revision 1.3  2003/10/09 19:50:40  bradley
+Sort service type list by description.
+
+Revision 1.2  2003/10/09 19:41:29  bradley
+Changed quit handling to go through normal close path so dialog is freed on quit. Integrated changes
+from Andrew van der Stock for the addition of an _rfb._tcp service type for a VNC Remote Framebuffer
+Server for KDE support. Widened service type list to handle larger service type descriptions.
+
 Revision 1.1  2003/08/21 02:06:47  bradley
 Moved Rendezvous Browser for non-Windows CE into Windows sub-folder.
 
@@ -65,6 +97,7 @@ Rendezvous Browser for Windows
 
 #include	"Application.h"
 #include	"AboutDialog.h"
+#include	"LoginDialog.h"
 #include	"Resource.h"
 
 #include	"ChooserDialog.h"
@@ -93,29 +126,25 @@ enum
 
 // Domain List
 	
-#define kDomainListDefaultDomainColumnIndex			0
-#define kDomainListDefaultDomainColumnWidth		 	140 
+#define kDomainListDefaultDomainColumnWidth		 		164 
 	
 // Service List
-	
-#define kServiceListDefaultServiceColumnIndex		0
-#define kServiceListDefaultServiceColumnWidth		140
+
+#define kServiceListDefaultServiceColumnTypeWidth		146
+#define kServiceListDefaultServiceColumnDescWidth		230
 	
 // Chooser List
 	
-#define kChooserListDefaultNameColumnIndex			0
-#define kChooserListDefaultNameColumnWidth			162
-	
-#define kChooserListDefaultIPColumnIndex			1
-#define kChooserListDefaultIPColumnWidth			126
+#define kChooserListDefaultNameColumnWidth				190
+#define kChooserListDefaultIPColumnWidth				120
 
 // Windows User Messages
 
-#define	WM_USER_DOMAIN_ADD							( WM_USER + 0x100 )
-#define	WM_USER_DOMAIN_REMOVE						( WM_USER + 0x101 )
-#define	WM_USER_SERVICE_ADD							( WM_USER + 0x102 )
-#define	WM_USER_SERVICE_REMOVE						( WM_USER + 0x103 )
-#define	WM_USER_RESOLVE								( WM_USER + 0x104 )
+#define	WM_USER_DOMAIN_ADD								( WM_USER + 0x100 )
+#define	WM_USER_DOMAIN_REMOVE							( WM_USER + 0x101 )
+#define	WM_USER_SERVICE_ADD								( WM_USER + 0x102 )
+#define	WM_USER_SERVICE_REMOVE							( WM_USER + 0x103 )
+#define	WM_USER_RESOLVE									( WM_USER + 0x104 )
 
 #if 0
 #pragma mark == Constants - Service Table ==
@@ -135,18 +164,138 @@ struct	KnownServiceEntry
 
 static const KnownServiceEntry		kKnownServiceTable[] =
 {
-	{ "_airport._tcp.", 	"AirPort Base Station",				"acp://", 	false }, 
-	{ "_afpovertcp._tcp.", 	"AppleShare Server", 				"afp://", 	false },
-	{ "_ftp._tcp.", 		"File Transfer (FTP)", 				"ftp://", 	false }, 
-	{ "_ichat._tcp.", 		"iChat",				 			"ichat://", false }, 
-	{ "_printer._tcp.", 	"Printer (LPD)", 					"ldp://", 	false }, 
-	{ "_eppc._tcp.", 		"Remote AppleEvents", 				"eppc://", 	false }, 
-	{ "_ssh._tcp.", 		"Secure Shell (SSH)", 				"ssh://", 	false }, 
-	{ "_tftp._tcp.", 		"Trivial File Transfer (TFTP)", 	"tftp://", 	false }, 
-	{ "_http._tcp.", 		"Web Server (HTTP)", 				"http://", 	true  }, 
-	{ "_smb._tcp.", 		"Windows File Sharing", 			"smb://", 	false }, 
-	{ "_xserveraid._tcp.", 	"Xserve RAID",						"xsr://", 	false }, 
-	{ NULL,					NULL,								NULL,		false }, 
+	{ "_accountedge._tcp.",	 		"MYOB AccountEdge", 										"", 			false },
+	{ "_aecoretech._tcp.", 			"Apple Application Engineering Services",					"", 			false },
+	{ "_afpovertcp._tcp.", 			"Apple File Sharing (AFP)", 								"afp://", 		false },
+	{ "_airport._tcp.", 			"AirPort Base Station",										"", 			false }, 
+	{ "_apple-sasl._tcp.", 			"Apple Password Server", 									"", 			false },
+	{ "_aquamon._tcp.", 			"AquaMon", 													"", 			false },
+	{ "_async._tcp", 				"address-o-sync", 											"", 			false },
+	{ "_auth._tcp.", 				"Authentication Service",									"", 			false },
+	{ "_bootps._tcp.", 				"Bootstrap Protocol Server",								"", 			false },
+	{ "_bousg._tcp.", 				"Bag Of Unusual Strategy Games",							"", 			false },
+	{ "_browse._udp.", 				"DNS Service Discovery",									"", 			false },
+	{ "_cheat._tcp.", 				"The Cheat",												"", 			false },
+	{ "_chess._tcp", 				"Project Gridlock", 										"", 			false },
+	{ "_chfts._tcp", 				"Fluid Theme Server", 										"", 			false },
+	{ "_clipboard._tcp", 			"Clipboard Sharing", 										"", 			false },
+	{ "_contactserver._tcp.", 		"Now Up-to-Date & Contact",									"", 			false },
+	{ "_cvspserver._tcp", 			"CVS PServer", 												"", 			false },
+	{ "_cytv._tcp.", 				"CyTV Network streaming for Elgato EyeTV",					"", 			false },
+	{ "_daap._tcp.", 				"Digital Audio Access Protocol (iTunes)",					"daap://",		false }, 
+	{ "_distcc._tcp", 				"Distributed Compiler", 									"", 			false },
+	{ "_dns-sd._udp", 				"DNS Service Discovery", 									"", 			false },
+	{ "_dpap._tcp.", 				"Digital Picture Access Protocol (iPhoto)",					"", 			false },
+	{ "_earphoria._tcp.", 			"Earphoria",												"", 			false },
+	{ "_ecbyesfsgksc._tcp.", 		"Net Monitor Anti-Piracy Service",							"",				false },
+	{ "_eheap._tcp.", 				"Interactive Room Software",								"",				false },
+	{ "_embrace._tcp.", 			"DataEnvoy",												"",				false },
+	{ "_eppc._tcp.", 				"Remote AppleEvents", 										"eppc://", 		false }, 
+	{ "_exec._tcp.", 				"Remote Process Execution",									"",				false },
+	{ "_facespan._tcp.", 			"FaceSpan",													"",				false },
+	{ "_fjork._tcp.", 				"Fjork",													"",				false },
+	{ "_ftp._tcp.", 				"File Transfer (FTP)", 										"ftp://", 		false }, 
+	{ "_ftpcroco._tcp.", 			"Crocodile FTP Server",										"",				false },
+	{ "_gbs-smp._tcp.", 			"SnapMail",													"",				false },
+	{ "_gbs-stp._tcp.", 			"SnapTalk",													"",				false },
+	{ "_grillezvous._tcp.", 		"Roxio ToastAnywhere(tm) Recorder Sharing",					"",				false },
+	{ "_h323._tcp.", 				"H.323",													"",				false },
+	{ "_hotwayd._tcp", 				"Hotwayd", 													"", 			false },
+	{ "_http._tcp.", 				"Web Server (HTTP)", 										"http://", 		true  }, 
+	{ "_hydra._tcp", 				"SubEthaEdit", 												"", 			false },
+	{ "_ica-networking._tcp.", 		"Image Capture Networking",									"", 			false }, 
+	{ "_ichalkboard._tcp.", 		"iChalk",													"", 			false }, 
+	{ "_ichat._tcp.", 				"iChat",				 									"ichat://",		false }, 
+	{ "_iconquer._tcp.",	 		"iConquer",													"", 			false }, 
+	{ "_imap._tcp.", 				"Internet Message Access Protocol",							"",				false },
+	{ "_imidi._tcp.", 				"iMidi",													"",				false },
+	{ "_ipp._tcp.", 				"Printer (IPP)", 											"ipp://", 		false },
+	{ "_ishare._tcp.", 				"iShare",													"",				false },
+	{ "_isparx._tcp.", 				"iSparx",													"",				false },
+	{ "_istorm._tcp", 				"iStorm", 													"", 			false },
+	{ "_iwork._tcp.", 				"iWork Server",												"",				false },
+	{ "_liaison._tcp.", 			"Liaison",													"",				false },
+	{ "_login._tcp.", 				"Remote Login a la Telnet",									"",				false },
+	{ "_lontalk._tcp.", 			"LonTalk over IP (ANSI 852)",								"",				false },
+	{ "_lonworks._tcp.", 			"Echelon LNS Remote Client",								"",				false },
+	{ "_macfoh-remote._tcp.", 		"MacFOH Remote",											"",				false },
+	{ "_moneyworks._tcp.", 			"MoneyWorks",												"",				false },
+	{ "_mp3sushi._tcp", 			"MP3 Sushi", 												"", 			false },
+	{ "_mttp._tcp.", 				"MenuTunes Sharing",										"",				false },
+	{ "_ncbroadcast._tcp.", 		"Network Clipboard Broadcasts",								"",				false },
+	{ "_ncdirect._tcp.", 			"Network Clipboard Direct Transfers",						"",				false },
+	{ "_ncsyncserver._tcp.", 		"Network Clipboard Sync Server",							"",				false },
+	{ "_newton-dock._tcp.", 		"Escale",													"",				false },
+	{ "_nfs._tcp", 					"NFS", 														"", 			false },
+	{ "_nssocketport._tcp.", 		"DO over NSSocketPort",										"",				false },
+	{ "_omni-bookmark._tcp.", 		"OmniWeb",													"",				false },
+	{ "_openbase._tcp.", 			"OpenBase SQL",												"",				false },
+	{ "_p2pchat._tcp.", 			"Peer-to-Peer Chat",										"",				false },
+	{ "_pdl-datastream._tcp.", 		"Printer (PDL)", 											"pdl://", 		false }, 
+	{ "_poch._tcp.", 				"Parallel OperatiOn and Control Heuristic",					"",				false },
+	{ "_pop_2_ambrosia._tcp.",		"Pop-Pop",													"",				false },
+	{ "_pop3._tcp", 				"POP3 Server", 												"", 			false },
+	{ "_postgresql._tcp", 			"PostgreSQL Server", 										"", 			false },
+	{ "_presence._tcp", 			"iChat AV", 												"", 			false },
+	{ "_printer._tcp.", 			"Printer (LPR)", 											"lpr://", 		false }, 
+	{ "_ptp._tcp.", 				"Picture Transfer (PTP)", 									"ptp://", 		false },
+	{ "_register._tcp", 			"DNS Service Discovery", 									"", 			false },
+	{ "_rendezvouspong._tcp",	 	"RendezvousPong", 											"", 			false },
+	{ "_rfb._tcp.", 				"Remote Frame Buffer",										"",				false },
+	{ "_riousbprint._tcp.", 		"Remote I/O USB Printer Protocol",							"",				false },
+	{ "_rtsp._tcp.", 				"Real Time Stream Control Protocol",						"",				false },
+	{ "_safarimenu._tcp", 			"Safari Menu", 												"", 			false },
+	{ "_scone._tcp", 				"Scone", 													"", 			false },
+	{ "_sdsharing._tcp.", 			"Speed Download",											"",				false },
+	{ "_seeCard._tcp.", 			"seeCard",													"",				false },
+	{ "_services._udp.", 			"DNS Service Discovery",									"",				false },
+	{ "_shell._tcp.", 				"like exec, but automatic authentication",					"",				false },
+	{ "_shout._tcp.", 				"Shout",													"",				false },
+	{ "_shoutcast._tcp", 			"Nicecast", 												"", 			false },
+	{ "_smb._tcp.", 				"Windows File Sharing (SMB)", 								"smb://", 		false }, 
+	{ "_soap._tcp.", 				"Simple Object Access Protocol", 							"", 			false }, 
+	{ "_spincrisis._tcp.", 			"Spin Crisis",												"",				false },
+	{ "_spl-itunes._tcp.", 			"launchTunes",												"",				false },
+	{ "_spr-itunes._tcp.", 			"netTunes",													"",				false },
+	{ "_ssh._tcp.", 				"Secure Shell (SSH)", 										"ssh://", 		false }, 
+	{ "_ssscreenshare._tcp", 		"Screen Sharing", 											"", 			false },
+	{ "_sge-exec._tcp", 			"Sun Grid Engine (Execution Host)", 						"", 			false },
+	{ "_sge-qmaster._tcp", 			"Sun Grid Engine (Master)", 								"", 			false },
+	{ "_stickynotes._tcp", 			"Sticky Notes", 											"", 			false },
+	{ "_strateges._tcp", 			"Strateges", 												"", 			false },
+	{ "_sxqdea._tcp", 				"Synchronize! Pro X", 										"", 			false },
+	{ "_sybase-tds._tcp", 			"Sybase Server", 											"", 			false },
+	{ "_tce._tcp", 					"Power Card", 												"", 			false },
+	{ "_teamlist._tcp", 			"ARTIS Team Task",											"", 			false },
+	{ "_teleport._tcp", 			"teleport",													"", 			false },
+	{ "_telnet._tcp.", 				"Telnet", 													"telnet://", 	false }, 
+	{ "_tftp._tcp.", 				"Trivial File Transfer (TFTP)", 							"tftp://", 		false }, 
+	{ "_tinavigator._tcp.", 		"TI Navigator", 											"", 			false }, 
+	{ "_tivo_servemedia._tcp", 		"TiVo",														"", 			false },
+	{ "_upnp._tcp.", 				"Universal Plug and Play", 									"", 			false }, 
+	{ "_utest._tcp.", 				"uTest", 													"", 			false }, 
+	{ "_vue4rendercow._tcp",		"VueProRenderCow",											"", 			false },
+	{ "_webdav._tcp.", 				"WebDAV", 													"webdav://",	false }, 
+	{ "_whamb._tcp.", 				"Whamb", 													"",				false }, 
+	{ "_workstation._tcp", 			"Macintosh Manager",										"", 			false },
+	{ "_ws._tcp", 					"Web Services",												"", 			false },
+	{ "_xserveraid._tcp.", 			"Xserve RAID",												"xsr://", 		false }, 
+	{ "_xsync._tcp.",	 			"Xserve RAID Synchronization",								"",		 		false }, 
+	
+	{ "",	 						"",															"",		 		false }, 
+	
+	// Unofficial and invalid service types that will be phased out:
+	
+	{ "_clipboardsharing._tcp.",			"ClipboardSharing",									"",		 		false }, 
+	{ "_MacOSXDupSuppress._tcp.",			"Mac OS X Duplicate Suppression",					"",		 		false }, 
+	{ "_netmonitorserver._tcp.",			"Net Monitor Server",								"",		 		false }, 
+	{ "_networkclipboard._tcp.",			"Network Clipboard",								"",		 		false }, 
+	{ "_slimdevices_slimp3_cli._tcp.",		"SliMP3 Server Command-Line Interface",				"",		 		false }, 
+	{ "_slimdevices_slimp3_http._tcp.",		"SliMP3 Server Web Interface",						"",		 		false }, 
+	{ "_tieducationalhandhelddevice._tcp.",	"TI Connect Manager",								"",		 		false }, 
+	{ "_tivo_servemedia._tcp.",				"TiVo",												"",		 		false }, 
+	
+	{ NULL,							NULL,														NULL,			false }, 
 };
 
 #if 0
@@ -191,6 +340,7 @@ static void
 static char *	DNSNetworkAddressToString( const DNSNetworkAddress *inAddr, char *outString );
 
 static DWORD	UTF8StringToStringObject( const char *inUTF8, CString &inObject );
+static DWORD	StringObjectToUTF8String( CString &inObject, std::string &outUTF8 );
 
 #if 0
 #pragma mark == Message Map ==
@@ -282,6 +432,7 @@ void ChooserDialog::DoDataExchange( CDataExchange *pDX )
 
 BOOL	ChooserDialog::OnInitDialog( void )
 {
+	HICON			icon;
 	BOOL			result;
 	CString			tempString;
 	DNSStatus		err;
@@ -289,7 +440,17 @@ BOOL	ChooserDialog::OnInitDialog( void )
 	// Initialize our parent.
 
 	CDialog::OnInitDialog();
-
+	
+	// Set up the window icon.
+	
+	icon = AfxGetApp()->LoadIcon( IDR_MAIN_ICON );
+	assert( icon );
+	if( icon )
+	{
+		SetIcon( icon, TRUE );		// Set big icon
+		SetIcon( icon, FALSE );		// Set small icon
+	}
+	
 	// Set up the Domain List.
 	
 	result = tempString.LoadString( IDS_CHOOSER_DOMAIN_COLUMN_NAME );
@@ -298,9 +459,13 @@ BOOL	ChooserDialog::OnInitDialog( void )
 	
 	// Set up the Service List.
 	
-	result = tempString.LoadString( IDS_CHOOSER_SERVICE_COLUMN_NAME );
+	result = tempString.LoadString( IDS_CHOOSER_SERVICE_COLUMN_TYPE );
 	assert( result );
-	mServiceList.InsertColumn( 0, tempString, LVCFMT_LEFT, kServiceListDefaultServiceColumnWidth );
+	mServiceList.InsertColumn( 0, tempString, LVCFMT_LEFT, kServiceListDefaultServiceColumnTypeWidth );
+	
+	result = tempString.LoadString( IDS_CHOOSER_SERVICE_COLUMN_DESC );
+	assert( result );
+	mServiceList.InsertColumn( 1, tempString, LVCFMT_LEFT, kServiceListDefaultServiceColumnDescWidth );
 	
 	PopulateServicesList();
 	
@@ -411,7 +576,7 @@ void	ChooserDialog::OnInitMenuPopup( CMenu *pPopupMenu, UINT nIndex, BOOL bSysMe
 
 void ChooserDialog::OnExit() 
 {
-	AfxPostQuitMessage( 0 );
+	OnClose();
 }
 
 //===========================================================================================================================
@@ -494,13 +659,17 @@ void	ChooserDialog::OnServiceListChanged( NMHDR *pNMHDR, LRESULT *pResult )
 	
 	if( ( selectedType >= 0 ) && ( selectedDomain >= 0 ) )
 	{
-		CString		type;
-		CString		domain;
+		CString				s;
+		std::string			utf8;
+		const char *		type;
 		
-		type 	= mServiceTypes[ selectedType ].serviceType.c_str();
-		domain 	= mDomainList.GetItemText( selectedDomain, 0 );
-		
-		StartBrowsing( type, domain );
+		s = mDomainList.GetItemText( selectedDomain, 0 );
+		StringObjectToUTF8String( s, utf8 );
+		type = mServiceTypes[ selectedType ].serviceType.c_str();
+		if( *type != '\0' )
+		{
+			StartBrowsing( type, utf8.c_str() );
+		}
 	}
 	
 	if( pResult )
@@ -554,25 +723,81 @@ void	ChooserDialog::OnChooserListDoubleClick( NMHDR *pNMHDR, LRESULT *pResult )
 		}
 		if( service->serviceType )
 		{
-			// Create a URL representing the service instance. Special case for SMB (no port number).
+			const char *		text;
 			
-			if( strcmp( service->serviceType, "_smb._tcp" ) == 0 )
+			// Create a URL representing the service instance.
+			
+			if( strcmp( service->serviceType, "_smb._tcp." ) == 0 )
 			{
-				url.Format( "%s%s/", service->urlScheme, (const char *) p->ip.c_str() ); 
+				// Special case for SMB (no port number).
+				
+				url.Format( TEXT( "%s%s/" ), service->urlScheme, (const char *) p->ip.c_str() ); 
+			}
+			else if( strcmp( service->serviceType, "_ftp._tcp." ) == 0 )
+			{
+				// Special case for FTP to get login info.
+
+				LoginDialog		dialog;
+				CString			username;
+				CString			password;
+				
+				if( !dialog.GetLogin( username, password ) )
+				{
+					goto exit;
+				}
+				
+				// Build URL in the following format:
+				//
+				// ftp://[username[:password]@]<ip>
+				
+				url += service->urlScheme;
+				if( username.GetLength() > 0 )
+				{
+					url += username;
+					if( password.GetLength() > 0 )
+					{
+						url += ':';
+						url += password;
+					}
+					url += '@';
+				}
+				url += p->ip.c_str();
+			}
+			else if( strcmp( service->serviceType, "_http._tcp." ) == 0 )
+			{
+				// Special case for HTTP to exclude "path=" if present.
+				
+				text = service->useText ? p->text.c_str() : "";
+				if( strncmp( text, "path=", 5 ) == 0 )
+				{
+					text += 5;
+				}
+				if( *text != '/' )
+				{
+					url.Format( TEXT( "%s%s/%s" ), service->urlScheme, (const char *) p->ip.c_str(), text );
+				}
+				else
+				{
+					url.Format( TEXT( "%s%s%s" ), service->urlScheme, (const char *) p->ip.c_str(), text );
+				}
 			}
 			else
 			{
-				const char *		text;
-				
 				text = service->useText ? p->text.c_str() : "";
-				url.Format( "%s%s/%s", service->urlScheme, (const char *) p->ip.c_str(), text ); 
+				url.Format( TEXT( "%s%s/%s" ), service->urlScheme, (const char *) p->ip.c_str(), text ); 
 			}
 			
 			// Let the system open the URL in the correct app.
 			
-			ShellExecute( NULL, "open", url, "", "c:\\", SW_SHOWNORMAL );
+			{
+				CWaitCursor		waitCursor;
+				
+				ShellExecute( NULL, TEXT( "open" ), url, TEXT( "" ), TEXT( "c:\\" ), SW_SHOWNORMAL );
+			}
 		}
 	}
+
+exit:
 	*pResult = 0;
 }
 
@@ -592,7 +817,9 @@ void ChooserDialog::OnCancel()
 void	ChooserDialog::PopulateServicesList( void )
 {
 	ServiceTypeVector::iterator		i;
-	CString							name;
+	CString							type;
+	CString							desc;
+	std::string						tmp;
 	
 	// Add a fixed list of known services.
 	
@@ -615,8 +842,22 @@ void	ChooserDialog::PopulateServicesList( void )
 	
 	for( i = mServiceTypes.begin(); i != mServiceTypes.end(); ++i )
 	{
-		UTF8StringToStringObject( ( *i ).description.c_str(), name );
-		mServiceList.InsertItem( mServiceList.GetItemCount(), name );
+		const char *		p;
+		const char *		q;
+		
+		p  = ( *i ).serviceType.c_str();
+		if( *p == '_' ) ++p;							// Skip leading '_'.
+		q  = strchr( p, '.' );							// Find first '.'.
+		if( q )	tmp.assign( p, (size_t)( q - p ) );		// Use only up to the first '.'.
+		else	tmp.assign( p );						// No '.' so use the entire string.
+		UTF8StringToStringObject( tmp.c_str(), type );
+		UTF8StringToStringObject( ( *i ).description.c_str(), desc );
+		
+		int		n;
+		
+		n = mServiceList.GetItemCount();
+		mServiceList.InsertItem( n, type );
+		mServiceList.SetItemText( n, 1, desc );
 	}
 	
 	// Select the first service type by default.
@@ -633,13 +874,16 @@ void	ChooserDialog::PopulateServicesList( void )
 
 void	ChooserDialog::UpdateInfoDisplay( void )
 {
-	int				selectedItem;
-	std::string		name;
-	CString			s;
-	std::string		ip;
-	std::string		ifIP;
-	std::string		text;
-	CWnd *			item;
+	int							selectedItem;
+	std::string					name;
+	CString						s;
+	std::string					ip;
+	std::string					ifIP;
+	std::string					text;
+	std::string					textNewLines;
+	std::string					hostName;
+	CWnd *						item;
+	std::string::iterator		i;
 	
 	// Display the service instance if it is selected. Otherwise, clear all the info.
 	
@@ -651,14 +895,16 @@ void	ChooserDialog::UpdateInfoDisplay( void )
 		assert( selectedItem < (int) mServiceInstances.size() );
 		p = &mServiceInstances[ selectedItem ];
 		
-		name 	= p->name;
-		ip 		= p->ip;
-		ifIP 	= p->ifIP;
-		text 	= p->text;
-		
+		name 		= p->name;
+		ip 			= p->ip;
+		ifIP 		= p->ifIP;
+		text 		= p->text;
+		hostName	= p->hostName;
+
 		// Sync up the list items with the actual data (IP address may change).
 		
-		mChooserList.SetItemText( selectedItem, 1, ip.c_str() );
+		UTF8StringToStringObject( ip.c_str(), s );
+		mChooserList.SetItemText( selectedItem, 1, s );
 	}
 	
 	// Name
@@ -672,23 +918,39 @@ void	ChooserDialog::UpdateInfoDisplay( void )
 	
 	item = (CWnd *) this->GetDlgItem( IDC_INFO_IP_TEXT );
 	assert( item );
-	item->SetWindowText( ip.c_str() );
+	UTF8StringToStringObject( ip.c_str(), s );
+	item->SetWindowText( s );
 	
 	// Interface
 	
 	item = (CWnd *) this->GetDlgItem( IDC_INFO_INTERFACE_TEXT );
 	assert( item );
-	item->SetWindowText( ifIP.c_str() );
+	UTF8StringToStringObject( ifIP.c_str(), s );
+	item->SetWindowText( s );
 	
+
+	item = (CWnd *) this->GetDlgItem( IDC_INFO_HOST_NAME_TEXT );
+	assert( item );
+	UTF8StringToStringObject( hostName.c_str(), s );
+	item->SetWindowText( s );
+
 	// Text
 	
-	if( text.size() > 255 )
-	{
-		text.resize( 255 );
-	}
 	item = (CWnd *) this->GetDlgItem( IDC_INFO_TEXT_TEXT );
 	assert( item );
-	item->SetWindowText( text.c_str() );
+	for( i = text.begin(); i != text.end(); ++i )
+	{
+		if( *i == '\1' )
+		{
+			textNewLines += "\r\n";
+		}
+		else
+		{
+			textNewLines += *i;
+		}
+	}
+	UTF8StringToStringObject( textNewLines.c_str(), s );
+	item->SetWindowText( s );
 }
 
 #if 0
@@ -914,7 +1176,9 @@ LONG	ChooserDialog::OnResolve( WPARAM inWParam, LPARAM inLParam )
 		mServiceInstances.push_back( *p );
 		UTF8StringToStringObject( p->name.c_str(), s );
 		mChooserList.InsertItem( n, s );
-		mChooserList.SetItemText( n, 1, p->ip.c_str() );
+		
+		UTF8StringToStringObject( p->ip.c_str(), s );
+		mChooserList.SetItemText( n, 1, s );
 		
 		// If this is the only item, select it.
 		
@@ -1065,29 +1329,31 @@ static void
 			// Resolves
 			
 			case kDNSBrowserEventTypeResolved:
-			{
-				ServiceInstanceInfo *						serviceInstance;
-				std::auto_ptr < ServiceInstanceInfo >		serviceInstanceAutoPtr;
-				char										s[ 32 ];
-				
-				serviceInstance = new ServiceInstanceInfo;
-				serviceInstanceAutoPtr.reset( serviceInstance );
-				
-				serviceInstance->name 	= inEvent->data.resolved->name;
-				serviceInstance->type 	= inEvent->data.resolved->type;
-				serviceInstance->domain = inEvent->data.resolved->domain;
-				serviceInstance->ip		= DNSNetworkAddressToString( &inEvent->data.resolved->address, s );
-				serviceInstance->ifIP	= DNSNetworkAddressToString( &inEvent->data.resolved->interfaceIP, s );
-				serviceInstance->text 	= inEvent->data.resolved->textRecord;
-				
-				posted = ::PostMessage( dialog->GetSafeHwnd(), WM_USER_RESOLVE, 0, (LPARAM) serviceInstance );
-				assert( posted );
-				if( posted )
+				if( inEvent->data.resolved->address.addressType == kDNSNetworkAddressTypeIPv4  )
 				{
-					serviceInstanceAutoPtr.release();
+					ServiceInstanceInfo *						serviceInstance;
+					std::auto_ptr < ServiceInstanceInfo >		serviceInstanceAutoPtr;
+					char										s[ 32 ];
+					
+					serviceInstance = new ServiceInstanceInfo;
+					serviceInstanceAutoPtr.reset( serviceInstance );
+					
+					serviceInstance->name 		= inEvent->data.resolved->name;
+					serviceInstance->type 		= inEvent->data.resolved->type;
+					serviceInstance->domain		= inEvent->data.resolved->domain;
+					serviceInstance->ip			= DNSNetworkAddressToString( &inEvent->data.resolved->address, s );
+					serviceInstance->ifIP		= DNSNetworkAddressToString( &inEvent->data.resolved->interfaceIP, s );
+					serviceInstance->text 		= inEvent->data.resolved->textRecord;
+					serviceInstance->hostName	= inEvent->data.resolved->hostName;
+
+					posted = ::PostMessage( dialog->GetSafeHwnd(), WM_USER_RESOLVE, 0, (LPARAM) serviceInstance );
+					assert( posted );
+					if( posted )
+					{
+						serviceInstanceAutoPtr.release();
+					}
 				}
 				break;
-			}
 			
 			default:
 				break;
@@ -1166,6 +1432,63 @@ exit:
 	if( unicode )
 	{
 		free( unicode );
+	}
+	return( err );
+}
+
+//===========================================================================================================================
+//	StringObjectToUTF8String
+//===========================================================================================================================
+
+static DWORD	StringObjectToUTF8String( CString &inObject, std::string &outUTF8 )
+{
+	DWORD		err;
+	BSTR		unicode;
+	int			nUnicode;
+	int			n;
+	char *		utf8;
+	
+	unicode = NULL;
+	utf8	= NULL;
+	
+	nUnicode = inObject.GetLength();
+	if( nUnicode > 0 )
+	{
+		unicode = inObject.AllocSysString();
+		n = WideCharToMultiByte( CP_UTF8, 0, unicode, nUnicode, NULL, 0, NULL, NULL );
+		assert( n > 0 );
+		
+		utf8 = (char *) malloc( (size_t) n );
+		assert( utf8 );
+		if( !utf8 ) { err = ERROR_INSUFFICIENT_BUFFER; goto exit; }
+		
+		n = WideCharToMultiByte( CP_UTF8, 0, unicode, nUnicode, utf8, n, NULL, NULL );
+		assert( n > 0 );
+		
+		try
+		{
+			outUTF8.assign( utf8, n );
+		}
+		catch( ... )
+		{
+			err = ERROR_NO_UNICODE_TRANSLATION;
+			goto exit;
+		}
+	}
+	else
+	{
+		outUTF8.clear();
+	}
+	err = 0;
+	
+exit:
+	if( unicode )
+	{
+		SysFreeString( unicode );
+	}
+	if( utf8 )
+	{
+		free( utf8 );
 	}
 	return( err );
 }

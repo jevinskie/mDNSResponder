@@ -3,6 +3,8 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
+ * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
+ * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -23,30 +25,8 @@
     Change History (most recent first):
 
 $Log: JNISupport.c,v $
-Revision 1.9  2004/12/11 03:01:00  rpantos
-<rdar://problem/3907498> Java DNSRecord API should be cleaned up
-
-Revision 1.8  2004/11/30 23:51:05  cheshire
-Remove double semicolons
-
-Revision 1.7  2004/11/23 08:12:04  shersche
-Implement if_nametoindex and if_indextoname for Win32 platforms
-
-Revision 1.6  2004/11/23 03:41:14  cheshire
-Change JNISupport.c to call if_indextoname & if_nametoindex directly.
-(May require some additional glue code to work on Windows.)
-
-Revision 1.5  2004/11/17 17:07:44  cheshire
-Updated comment about AUTO_CALLBACKS
-
-Revision 1.4  2004/11/12 03:23:09  rpantos
-rdar://problem/3809541 implement getIfIndexForName, getNameForIfIndex.
-
-Revision 1.3  2004/06/18 04:44:17  rpantos
-Adapt to API unification on Windows
-
 Revision 1.2  2004/05/28 23:34:42  ksekar
-<rdar://problem/3672903>: Java project build errors
+<rdar://problem/3672903>: Java project doesn't build on Tiger8A132
 
 Revision 1.1  2004/04/30 16:29:35  rpantos
 First checked in.
@@ -54,44 +34,45 @@ First checked in.
 
 	This file contains the platform support for DNSSD and related Java classes.
 	It is used to shim through to the underlying <dns_sd.h> API.
+
+	To do:
+	- normalize code to eliminate USE_WIN_API
  */
 
 // AUTO_CALLBACKS should be set to 1 if the underlying mDNS implementation fires response
-// callbacks automatically (as in the early Windows prototypes).
+// callbacks automatically (as it does on Windows).
 // AUTO_CALLBACKS should be set to 0 if the client must call DNSServiceProcessResult() to
-// invoke response callbacks (as is true on Mac OS X, Posix, Windows, etc.).
-// (Invoking callbacks automatically on a different thread sounds attractive, but while
-// the client gains by not needing to add an event source to its main event loop, it loses
-// by being forced to deal with concurrency and locking, which can be a bigger burden.)
+// invoke response callbacks (as is true on Mac OS X).
 #ifndef	AUTO_CALLBACKS
 #define	AUTO_CALLBACKS	0
 #endif
 
-#if !AUTO_CALLBACKS
-#ifdef _WIN32
-#include <winsock2.h>
-#else //_WIN32
-#include <sys/types.h>
-#include <sys/select.h>
-#endif // _WIN32
-#endif // AUTO_CALLBACKS
-
-#include <dns_sd.h>
+// (Temporary, I hope - RNP)
+// USE_WIN_API should be set to 1 to use the DNSSD.h API (on Windows).
+// USE_WIN_API should be set to 0 to use the dns_sd.h API (on everything else).
+#ifndef	USE_WIN_API
+#define	USE_WIN_API	0
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef _WIN32
-#include <winsock2.h>
-#include <iphlpapi.h>
-static char	*	if_indextoname( DWORD ifIndex, char * nameBuff);
-static DWORD	if_nametoindex( const char * nameStr );
-#define IF_NAMESIZE MAX_ADAPTER_NAME_LENGTH
-#else // _WIN32
-#include <sys/socket.h>
-#include <net/if.h>
-#endif // _WIN32
 #include <jni.h>
+
+#if USE_WIN_API
+#include <DNSSD.h>
+#else
+#include <dns_sd.h>
+#endif
+
+#if !USE_WIN_API
+#define CALLBACK_COMPAT	
+#endif
+
+#if !AUTO_CALLBACKS
+#include <sys/types.h>
+#include <sys/select.h>
+#endif
 
 #include "DNSSD.java.h"
 
@@ -130,6 +111,16 @@ JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleDNSSD_InitLibrary( JNIEnv *pEnv
 	/* Ensure that caller & interface versions match. */
 	if ( callerVersion != kInterfaceVersion)
 		return kDNSServiceErr_Incompatible;
+
+#if USE_WIN_API
+	{
+		DNSServiceErrorType		err;
+		
+		err = DNSServiceInitialize( kDNSServiceInitializeFlagsNone, 0);
+		if ( err != kDNSServiceErr_NoError)
+			return err;
+	}
+#endif
 
 #if AUTO_CALLBACKS
 	{
@@ -198,7 +189,7 @@ static OpContext	*NewContext( JNIEnv *pEnv, jobject owner, const char *ownerClas
 								const char *callbackName, const char *callbackSig)
 // Create and initialize a new OpContext.
 {
-	OpContext				*pContext = (OpContext*) malloc( sizeof *pContext);
+	OpContext				*pContext = (OpContext*) malloc( sizeof *pContext);;
 
 	if ( pContext != NULL)
 	{
@@ -312,7 +303,7 @@ JNIEXPORT void JNICALL Java_com_apple_dnssd_AppleService_ProcessResults( JNIEnv 
 }
 
 
-static void DNSSD_API	ServiceBrowseReply( DNSServiceRef sdRef _UNUSED, DNSServiceFlags flags, uint32_t interfaceIndex, 
+static void CALLBACK_COMPAT	ServiceBrowseReply( DNSServiceRef sdRef _UNUSED, DNSServiceFlags flags, uint32_t interfaceIndex, 
 								DNSServiceErrorType errorCode, const char *serviceName, const char *regtype, 
 								const char *replyDomain, void *context)
 {
@@ -377,7 +368,7 @@ JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleBrowser_CreateBrowser( JNIEnv *
 }
 
 
-static void DNSSD_API	ServiceResolveReply( DNSServiceRef sdRef _UNUSED, DNSServiceFlags flags, uint32_t interfaceIndex, 
+static void CALLBACK_COMPAT	ServiceResolveReply( DNSServiceRef sdRef _UNUSED, DNSServiceFlags flags, uint32_t interfaceIndex, 
 								DNSServiceErrorType errorCode, const char *fullname, const char *hosttarget, 
 								uint16_t port, uint16_t txtLen, const char *txtRecord, void *context)
 {
@@ -462,7 +453,7 @@ JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleResolver_CreateResolver( JNIEnv
 }
 
 
-static void DNSSD_API	ServiceRegisterReply( DNSServiceRef sdRef _UNUSED, DNSServiceFlags flags, 
+static void CALLBACK_COMPAT	ServiceRegisterReply( DNSServiceRef sdRef _UNUSED, DNSServiceFlags flags, 
 								DNSServiceErrorType errorCode, const char *fullname, 
 								const char *regType, const char *domain, void *context)
 {
@@ -573,28 +564,23 @@ JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleRegistration_AddRecord( JNIEnv 
 	return err;
 }
 
-JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleDNSRecord_Update( JNIEnv *pEnv, jobject pThis, 
-														jint flags, jbyteArray rData, jint ttl)
+JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleRegistration_UpdateRecord( JNIEnv *pEnv, jobject pThis, 
+							jobject destObj, jint flags, jbyteArray rData, jint ttl)
 {
 	jclass					cls = (*pEnv)->GetObjectClass( pEnv, pThis);
-	jfieldID				ownerField = (*pEnv)->GetFieldID( pEnv, cls, "fOwner", "Lcom/apple/dnssd/AppleService;");
-	jfieldID				recField = (*pEnv)->GetFieldID( pEnv, cls, "fRecord", "I");
+	jfieldID				contextField = (*pEnv)->GetFieldID( pEnv, cls, "fNativeContext", "I");
+	jclass					destCls = (*pEnv)->GetObjectClass( pEnv, destObj);
+	jfieldID				recField = (*pEnv)->GetFieldID( pEnv, destCls, "fRecord", "I");
 	OpContext				*pContext = NULL;
 	DNSServiceErrorType		err = kDNSServiceErr_NoError;
 	jbyte					*pBytes;
 	jsize					numBytes;
 	DNSRecordRef			recRef = NULL;
 
-	if ( ownerField != 0)
-	{
-		jobject		ownerObj = (*pEnv)->GetObjectField( pEnv, pThis, ownerField);
-		jclass		ownerClass = (*pEnv)->GetObjectClass( pEnv, ownerObj);
-		jfieldID	contextField = (*pEnv)->GetFieldID( pEnv, ownerClass, "fNativeContext", "I");
-		if ( contextField != 0)
-			pContext = (OpContext*) (*pEnv)->GetIntField( pEnv, ownerObj, contextField);
-	}
+	if ( contextField != 0)
+		pContext = (OpContext*) (*pEnv)->GetIntField( pEnv, pThis, contextField);
 	if ( recField != 0)
-		recRef = (DNSRecordRef) (*pEnv)->GetIntField( pEnv, pThis, recField);
+		recRef = (DNSRecordRef) (*pEnv)->GetIntField( pEnv, destObj, recField);
 	if ( pContext == NULL || pContext->ServiceRef == NULL)
 		return kDNSServiceErr_BadParam;
 
@@ -609,35 +595,31 @@ JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleDNSRecord_Update( JNIEnv *pEnv,
 	return err;
 }
 
-JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleDNSRecord_Remove( JNIEnv *pEnv, jobject pThis)
+JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleRegistration_RemoveRecord( JNIEnv *pEnv, jobject pThis, 
+							jobject destObj, jint flags)
 {
 	jclass					cls = (*pEnv)->GetObjectClass( pEnv, pThis);
-	jfieldID				ownerField = (*pEnv)->GetFieldID( pEnv, cls, "fOwner", "Lcom/apple/dnssd/AppleService;");
-	jfieldID				recField = (*pEnv)->GetFieldID( pEnv, cls, "fRecord", "I");
+	jfieldID				contextField = (*pEnv)->GetFieldID( pEnv, cls, "fNativeContext", "I");
+	jclass					destCls = (*pEnv)->GetObjectClass( pEnv, destObj);
+	jfieldID				recField = (*pEnv)->GetFieldID( pEnv, destCls, "fRecord", "I");
 	OpContext				*pContext = NULL;
 	DNSServiceErrorType		err = kDNSServiceErr_NoError;
 	DNSRecordRef			recRef = NULL;
 
-	if ( ownerField != 0)
-	{
-		jobject		ownerObj = (*pEnv)->GetObjectField( pEnv, pThis, ownerField);
-		jclass		ownerClass = (*pEnv)->GetObjectClass( pEnv, ownerObj);
-		jfieldID	contextField = (*pEnv)->GetFieldID( pEnv, ownerClass, "fNativeContext", "I");
-		if ( contextField != 0)
-			pContext = (OpContext*) (*pEnv)->GetIntField( pEnv, ownerObj, contextField);
-	}
+	if ( contextField != 0)
+		pContext = (OpContext*) (*pEnv)->GetIntField( pEnv, pThis, contextField);
 	if ( recField != 0)
-		recRef = (DNSRecordRef) (*pEnv)->GetIntField( pEnv, pThis, recField);
+		recRef = (DNSRecordRef) (*pEnv)->GetIntField( pEnv, destObj, recField);
 	if ( pContext == NULL || pContext->ServiceRef == NULL)
 		return kDNSServiceErr_BadParam;
 
-	err = DNSServiceRemoveRecord( pContext->ServiceRef, recRef, 0);
+	err = DNSServiceRemoveRecord( pContext->ServiceRef, recRef, flags);
 
 	return err;
 }
 
 
-static void DNSSD_API	ServiceQueryReply( DNSServiceRef sdRef _UNUSED, DNSServiceFlags flags, uint32_t interfaceIndex, 
+static void CALLBACK_COMPAT	ServiceQueryReply( DNSServiceRef sdRef _UNUSED, DNSServiceFlags flags, uint32_t interfaceIndex, 
 								DNSServiceErrorType errorCode, const char *serviceName,
 								uint16_t rrtype, uint16_t rrclass, uint16_t rdlen,
 								const void *rdata, uint32_t ttl, void *context)
@@ -703,7 +685,7 @@ JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleQuery_CreateQuery( JNIEnv *pEnv
 }
 
 
-static void DNSSD_API	DomainEnumReply( DNSServiceRef sdRef _UNUSED, DNSServiceFlags flags, uint32_t interfaceIndex, 
+static void CALLBACK_COMPAT	DomainEnumReply( DNSServiceRef sdRef _UNUSED, DNSServiceFlags flags, uint32_t interfaceIndex, 
 								DNSServiceErrorType errorCode, const char *replyDomain, void *context)
 {
 	OpContext		*pContext = (OpContext*) context;
@@ -802,141 +784,5 @@ JNIEXPORT void JNICALL Java_com_apple_dnssd_AppleDNSSD_ReconfirmRecord( JNIEnv *
 	SafeReleaseUTFChars( pEnv, fullName, nameStr);
 }
 
-#define LOCAL_ONLY_NAME "loo"
-
-JNIEXPORT jstring JNICALL Java_com_apple_dnssd_AppleDNSSD_GetNameForIfIndex( JNIEnv *pEnv, jobject pThis _UNUSED, 
-							jint ifIndex)
-{
-	char					*p = LOCAL_ONLY_NAME, nameBuff[IF_NAMESIZE];
-
-	if (ifIndex != kDNSServiceInterfaceIndexLocalOnly)
-		p = if_indextoname( ifIndex, nameBuff );
-
-	return (*pEnv)->NewStringUTF( pEnv, p);
-}
 
 
-JNIEXPORT jint JNICALL Java_com_apple_dnssd_AppleDNSSD_GetIfIndexForName( JNIEnv *pEnv, jobject pThis _UNUSED, 
-							jstring ifName)
-{
-	uint32_t				ifIndex = kDNSServiceInterfaceIndexLocalOnly;
-	const char				*nameStr = SafeGetUTFChars( pEnv, ifName);
-
-	if (strcmp(nameStr, LOCAL_ONLY_NAME))
-		ifIndex = if_nametoindex( nameStr);
-
-	SafeReleaseUTFChars( pEnv, ifName, nameStr);
-
-	return ifIndex;
-}
-
-
-#if defined(_WIN32)
-static char*
-if_indextoname( DWORD ifIndex, char * nameBuff)
-{
-	PIP_ADAPTER_INFO	pAdapterInfo = NULL;
-	PIP_ADAPTER_INFO	pAdapter = NULL;
-	DWORD				dwRetVal = 0;
-	char			*	ifName = NULL;
-	ULONG				ulOutBufLen = 0;
-	
-	if (GetAdaptersInfo( NULL, &ulOutBufLen) != ERROR_BUFFER_OVERFLOW)
-	{
-		goto exit;
-	}
-
-	pAdapterInfo = (IP_ADAPTER_INFO *) malloc(ulOutBufLen); 
-
-	if (pAdapterInfo == NULL)
-	{
-		goto exit;
-	}
-
-	dwRetVal = GetAdaptersInfo( pAdapterInfo, &ulOutBufLen );
-	
-	if (dwRetVal != NO_ERROR)
-	{
-		goto exit;
-	}
-
-	pAdapter = pAdapterInfo;
-	while (pAdapter)
-	{
-		if (pAdapter->Index == ifIndex)
-		{
-			// It would be better if we passed in the length of nameBuff to this
-			// function, so we would have absolute certainty that no buffer
-			// overflows would occur.  Buffer overflows *shouldn't* occur because
-			// nameBuff is of size MAX_ADAPTER_NAME_LENGTH.
-			strcpy( nameBuff, pAdapter->AdapterName );
-			ifName = nameBuff;
-			break;
-		}
-  
-		pAdapter = pAdapter->Next;
-	}
-
-exit:
-
-	if (pAdapterInfo != NULL)
-	{
-		free( pAdapterInfo );
-		pAdapterInfo = NULL;
-	}
-
-	return ifName;
-}
-
-
-static DWORD
-if_nametoindex( const char * nameStr )
-{
-	PIP_ADAPTER_INFO	pAdapterInfo = NULL;
-	PIP_ADAPTER_INFO	pAdapter = NULL;
-	DWORD				dwRetVal = 0;
-	DWORD				ifIndex = 0;
-	ULONG				ulOutBufLen = 0;
-
-	if (GetAdaptersInfo( NULL, &ulOutBufLen) != ERROR_BUFFER_OVERFLOW)
-	{
-		goto exit;
-	}
-
-	pAdapterInfo = (IP_ADAPTER_INFO *) malloc(ulOutBufLen); 
-
-	if (pAdapterInfo == NULL)
-	{
-		goto exit;
-	}
-
-	dwRetVal = GetAdaptersInfo( pAdapterInfo, &ulOutBufLen );
-	
-	if (dwRetVal != NO_ERROR)
-	{
-		goto exit;
-	}
-
-	pAdapter = pAdapterInfo;
-	while (pAdapter)
-	{
-		if (strcmp(pAdapter->AdapterName, nameStr) == 0)
-		{
-			ifIndex = pAdapter->Index;
-			break;
-		}
-  
-		pAdapter = pAdapter->Next;
-	}
-
-exit:
-
-	if (pAdapterInfo != NULL)
-	{
-		free( pAdapterInfo );
-		pAdapterInfo = NULL;
-	}
-
-	return ifIndex;
-}
-#endif
