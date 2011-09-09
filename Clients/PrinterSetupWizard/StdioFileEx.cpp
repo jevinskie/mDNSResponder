@@ -17,6 +17,10 @@
     Change History (most recent first):
     
 $Log: StdioFileEx.cpp,v $
+Revision 1.4  2009/03/30 19:20:31  herscher
+<rdar://problem/5925472> Current Bonjour code does not compile on Windows
+<rdar://problem/6111275> Mismatched new[]/delete in mDNSResponder PrinterSetupWizard
+
 Revision 1.3  2006/08/14 23:24:09  cheshire
 Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
 
@@ -113,12 +117,12 @@ BOOL CStdioFileEx::ReadString(CString& rString)
 
 		if (pszUnicodeString)
 		{
-			delete pszUnicodeString;
+			delete [] pszUnicodeString;
 		}
 
 		if (pszMultiByteString)
 		{
-			delete pszMultiByteString;
+			delete [] pszMultiByteString;
 		}
 	}
 #endif
