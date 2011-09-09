@@ -74,7 +74,9 @@ mDNSexport const char ProgramName[] = "dnsextd";
 #define EXPIRATION_INTERVAL			300					// check for expired records every 5 minutes
 #define SRV_TTL						7200				// TTL For _dns-update SRV records
 #define CONFIG_FILE					"/etc/dnsextd.conf"
-#define TCP_SOCKET_FLAGS   			kTCPSocketFlags_UseTLS
+//#define TCP_SOCKET_FLAGS   			kTCPSocketFlags_UseTLS
+#define	TCP_SOCKET_FLAGS			0 // FUCK TLS
+
 
 // LLQ Lease bounds (seconds)
 #define LLQ_MIN_LEASE (15 * 60)
@@ -767,7 +769,11 @@ mDNSlocal mDNSBool SuccessfulUpdateTransaction(PktMsg *request, PktMsg *reply)
 		{ vlogmsg = "Request opcode not an update"; goto failure; }
 
 	// check result
-	if ((reply->msg.h.flags.b[1] & kDNSFlag1_RC_Mask)) { vlogmsg = "Reply contains non-zero rcode";  goto failure; }
+	if ((reply->msg.h.flags.b[1] & kDNSFlag1_RC_Mask)) { 
+        fprintf(stderr, "Got error %d\n", reply->msg.h.flags.b[1]);
+        vlogmsg = "Reply contains non-zero rcode ";
+        goto failure;
+    }
 	if ((reply->msg.h.flags.b[0] & kDNSFlag0_QROP_Mask) != (kDNSFlag0_OP_Update | kDNSFlag0_QR_Response))
 		{ vlogmsg = "Reply opcode not an update response"; goto failure; }
 
@@ -1176,6 +1182,7 @@ SetupSockets
 	err = bind( self->tcpsd, ( struct sockaddr* ) &self->addr, sizeof( self->addr ) );
 	require_action( !err, exit, LogErr( "SetupSockets", "bind self->tcpsd" ) );
 
+    fprintf(stderr, "Setting listen on socket %d\n", self->tcpsd);
 	err = listen( self->tcpsd, LISTENQ );
 	require_action( !err, exit, LogErr( "SetupSockets", "listen" ) );
 
@@ -1205,6 +1212,7 @@ SetupSockets
 	else
 		{
 		self->llq_tcpsd = socket( AF_INET, SOCK_STREAM, 0 );
+        fprintf(stderr, "Just got %d for llq_tcpsd\n", self->llq_tcpsd);
 		require_action( dnssd_SocketValid(self->llq_tcpsd), exit, err = mStatus_UnknownErr; LogErr( "SetupSockets", "socket" ) );
 	
 #if defined(SO_REUSEADDR)
@@ -1215,7 +1223,8 @@ SetupSockets
 		err = bind( self->llq_tcpsd, ( struct sockaddr* ) &self->llq_addr, sizeof( self->llq_addr ) );
 		require_action( !err, exit, LogErr( "SetupSockets", "bind self->llq_tcpsd" ) );
 	
-		err = listen( self->llq_tcpsd, LISTENQ );
+		fprintf(stderr, "Setting listen on socket %d\n", self->llq_tcpsd);
+        err = listen( self->llq_tcpsd, LISTENQ );
 		require_action( !err, exit, LogErr( "SetupSockets", "listen" ) );
 	
 		self->llq_udpsd = socket( AF_INET, SOCK_DGRAM, 0 );
@@ -1238,6 +1247,14 @@ SetupSockets
 	self->LLQEventListenSock = sockpair[0];
 	self->LLQEventNotifySock = sockpair[1];
 
+    /* The rest of this function is retarded. It makes new sockets, and
+     * throws away the old ones it's listening on. That ends poorly (i.e.,
+     * in an infinte loop later.
+     *
+     * If you have private zones, this probably won't work at all. Sorry.
+     */
+    return  0;
+
 	// set up socket on which we receive private requests
 
 	self->llq_tcpsd = socket( AF_INET, SOCK_STREAM, 0 );
@@ -1258,6 +1275,7 @@ SetupSockets
 	err = bind( self->tlssd, ( struct sockaddr* ) &daddr, sizeof( daddr ) );
 	require_action( !err, exit, LogErr( "SetupSockets", "bind self->tlssd" ) );
 
+    fprintf(stderr, "Setting listen on socket %d\n", self->tlssd);
 	err = listen( self->tlssd, LISTENQ );
 	require_action( !err, exit, LogErr( "SetupSockets", "listen" ) );
 
@@ -2816,7 +2834,13 @@ AcceptTCPConnection
 	require_action( context, exit, err = mStatus_NoMemoryErr; LogErr( "AcceptTCPConnection", "malloc" ) );
 	mDNSPlatformMemZero( context, sizeof( sizeof( TCPContext ) ) );
 	context->d		 = self;
+    fprintf(stderr, "Trying to accept on %d\n", sd);
 	newSock = accept( sd, ( struct sockaddr* ) &context->cliaddr, &clilen );
+    fprintf(stderr, "Just did an accept, got FD %d (passed in FD %d)\n", newSock, sd);
+    if (newSock < 0) {
+        fprintf(stderr, "Died, error=%d (%s)", errno, strerror(errno));
+        exit(1);
+    }
 	require_action( newSock != -1, exit, err = mStatus_UnknownErr; LogErr( "AcceptTCPConnection", "accept" ) );
 
 	context->sock = mDNSPlatformTCPAccept( flags, newSock );

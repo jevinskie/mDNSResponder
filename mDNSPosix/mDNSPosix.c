@@ -195,7 +195,7 @@ mDNSexport mStatus mDNSPlatformSendUDP(const mDNS *const m, const void *const ms
 	else if (err < 0)
 		{
 		static int MessageCount = 0;
-        // Don't report EHOSTDOWN (i.e. ARP failure), ENETDOWN, or no route to host for unicast destinations
+		// Don't report EHOSTDOWN (i.e. ARP failure), ENETDOWN, or no route to host for unicast destinations
 		if (!mDNSAddressIsAllDNSLinkGroup(dst))
 			if (errno == EHOSTDOWN || errno == ENETDOWN || errno == EHOSTUNREACH || errno == ENETUNREACH) return(mStatus_TransientErr);
 
@@ -313,78 +313,159 @@ mDNSlocal void SocketDataReady(mDNS *const m, PosixNetworkInterface *intf, int s
 			&senderAddr, senderPort, &destAddr, MulticastDNSPort, InterfaceID);
 	}
 
+struct TCPSocket_struct {
+    TCPSocketFlags flags; /* Must come first, blah blah blah */
+    int fd;
+    struct sockaddr_in* sin;
+    mDNS const *m;
+};
+
 mDNSexport TCPSocket *mDNSPlatformTCPSocket(mDNS * const m, TCPSocketFlags flags, mDNSIPPort * port)
 	{
-	(void)m;			// Unused
-	(void)flags;		// Unused
-	(void)port;			// Unused
-	return NULL;
-	}
+	/* No way in hell I'm supporting TLS */
+	assert(flags != kTCPSocketFlags_UseTLS);
+
+	int reuse_addr = 1;
+	TCPSocket *t = malloc(sizeof(TCPSocket));
+	mDNSPlatformMemZero(t, sizeof(TCPSocket));
+	t->flags=flags;
+	if ((t->fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+		{
+		LogMsg("Error initializing socket %d (%s)", errno, strerror(errno));
+		freeL("TCPSocket/mDNSPlatformTCPSocket", t);
+		return (mDNSNULL);
+		}
+	t->m = m;
+	struct sockaddr_in addr;
+	mDNSPlatformMemZero(&addr, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	addr.sin_port = port->NotAnInteger;
+	if (bind(t->fd, (struct sockaddr*) &addr, sizeof(addr)) < 0)
+	    { LogMsg("ERROR: bind %s", strerror(errno)); }	
+
+	/* Let us rebind if necessary */
+	setsockopt(t->fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr));
+
+	mDNSPlatformMemZero(&addr, sizeof(addr));
+	socklen_t len = sizeof(addr);
+	if (getsockname(t->fd, (struct sockaddr*) &addr, &len) < 0)
+	    { LogMsg("getsockname - %s", strerror(errno)); }
+
+	port->NotAnInteger = addr.sin_port;
+	return t;
+}
 
 mDNSexport TCPSocket *mDNSPlatformTCPAccept(TCPSocketFlags flags, int sd)
 	{
-	(void)flags;		// Unused
-	(void)sd;			// Unused
-	return NULL;
+	(void)sd;		// Unused
+	LogMsg("Attempted to call unimplemented Accept function");
+	return (mDNSNULL);
 	}
 
 mDNSexport int mDNSPlatformTCPGetFD(TCPSocket *sock)
 	{
-	(void)sock;			// Unused
-	return -1;
+	assert(sock != NULL);
+	return sock->fd;
 	}
 
 mDNSexport mStatus mDNSPlatformTCPConnect(TCPSocket *sock, const mDNSAddr *dst, mDNSOpaque16 dstport, domainname *hostname, mDNSInterfaceID InterfaceID,
 										  TCPConnectionCallback callback, void *context)
 	{
-	(void)sock;			// Unused
-	(void)dst;			// Unused
-	(void)dstport;		// Unused
-	(void)hostname;     // Unused
-	(void)InterfaceID;	// Unused
-	(void)callback;		// Unused
-	(void)context;		// Unused
-	return(mStatus_UnsupportedErr);
+	/* Don't implement callback semantics yet. POSIX >> whatever this is
+	 */
+	(void)InterfaceID;
+	(void)callback;
+	(void)context;
+	fprintf(stderr, "Connecting to socket\n");
+	sock->sin = (struct sockaddr_in*)(mallocL("sockaddr_in/mDNSPlatformTCPConnect", sizeof(struct sockaddr_in)));
+	mDNSPlatformMemZero((char*)sock->sin, sizeof(struct sockaddr_in));
+	sock->sin->sin_family = AF_INET;
+	sock->sin->sin_port = dstport.NotAnInteger;
+	sock->sin->sin_addr.s_addr = dst->ip.v4.NotAnInteger;
+	if (connect(sock->fd, (struct sockaddr*)sock->sin, sizeof(struct sockaddr_in)) < 0)
+	 	{
+	 	LogMsg("ERROR: mDNSPlatformTCPConnect - connect failed: socket %d, error %d (%s)", sock->fd, errno, strerror(errno));;
+	 	return errno;
+		}
+	return mStatus_NoError;
 	}
 
 mDNSexport void mDNSPlatformTCPCloseConnection(TCPSocket *sock)
 	{
-	(void)sock;			// Unused
+	if (sock)
+		{
+		if(sock->fd != -1)
+			{
+			free(sock->sin);
+			/* 2 == SHUT_RDRW */
+			shutdown(sock->fd, 2);
+			close(sock->fd);
+			sock->fd = -1;
+			}
+		freeL("TCPSocket/mDNSPlatformTCPCloseConnection", sock);
+		}
 	}
 
 mDNSexport long mDNSPlatformReadTCP(TCPSocket *sock, void *buf, unsigned long buflen, mDNSBool * closed)
 	{
-	(void)sock;			// Unused
-	(void)buf;			// Unused
-	(void)buflen;		// Unused
-	(void)closed;		// Unused
-	return 0;			
+	/* We don't support TLS. */
+	assert(!(sock->flags & kTCPSocketFlags_UseTLS));
+
+	*closed = mDNSfalse;
+	int nread = recv(sock->fd, buf, buflen, 0);
+	if (nread > 0)
+		{
+		}
+	else if (nread == 0)
+		{
+		*closed = mDNStrue;
+		}
+	else if (errno == EAGAIN)
+		{
+		nread = 0;
+		}
+	else
+		{
+		fprintf(stderr, "ERROR READING %d (%s)\n", errno, strerror(errno));
+		return -errno;
+		}
+	return nread;	
 	}
 
 mDNSexport long mDNSPlatformWriteTCP(TCPSocket *sock, const char *msg, unsigned long len)
 	{
-	(void)sock;			// Unused
-	(void)msg;			// Unused
-	(void)len;			// Unused
-	return 0;
+	/* We don't support TLS. */
+	assert(!(sock->flags & kTCPSocketFlags_UseTLS));
+
+	ssize_t nsent = send(sock->fd, msg, len, 0);
+	if (nsent < 0)
+		{
+		if (errno == EAGAIN) nsent = 0;
+		else { LogMsg("ERROR: mDNSPlatformWriteTCP - send %s", strerror(errno)); nsent = -1; }
+		}
+	return nsent;
 	}
 
 mDNSexport UDPSocket *mDNSPlatformUDPSocket(mDNS * const m, mDNSIPPort port)
 	{
 	(void)m;			// Unused
 	(void)port;			// Unused
+	/* Unimplemented because dnsextd doesn't use it */
 	return NULL;
 	}
 
 mDNSexport void           mDNSPlatformUDPClose(UDPSocket *sock)
 	{
 	(void)sock;			// Unused
+	/* Unimplemented because dnsextd doesn't use it */
 	}
 	
 mDNSexport void mDNSPlatformUpdateProxyList(mDNS *const m, const mDNSInterfaceID InterfaceID)
 	{
 	(void)m;			// Unused
 	(void)InterfaceID;			// Unused
+	/* Unimplemented because dnsextd doesn't use it */
 	}
 
 mDNSexport void mDNSPlatformSendRawPacket(const void *const msg, const mDNSu8 *const end, mDNSInterfaceID InterfaceID)
@@ -392,6 +473,7 @@ mDNSexport void mDNSPlatformSendRawPacket(const void *const msg, const mDNSu8 *c
 	(void)msg;			// Unused
 	(void)end;			// Unused
 	(void)InterfaceID;			// Unused
+	/* Unimplemented because dnsextd doesn't use it */
 	}
 	
 mDNSexport void mDNSPlatformSetLocalAddressCacheEntry(mDNS *const m, const mDNSAddr *const tpa, const mDNSEthAddr *const tha, mDNSInterfaceID InterfaceID)
@@ -400,15 +482,18 @@ mDNSexport void mDNSPlatformSetLocalAddressCacheEntry(mDNS *const m, const mDNSA
 	(void)tpa;			// Unused
 	(void)tha;			// Unused
 	(void)InterfaceID;			// Unused
+	/* Unimplemented because dnsextd doesn't use it */
 	}	
 
 mDNSexport mStatus mDNSPlatformTLSSetupCerts(void)
 	{
+	/* Unimplemented because dnsextd doesn't use it */
 	return(mStatus_UnsupportedErr);
 	}
 	
 mDNSexport void mDNSPlatformTLSTearDownCerts(void)
 	{
+	/* Unimplemented because dnsextd doesn't use it */
 	}
 
 mDNSexport void mDNSPlatformSetAllowSleep(mDNS *const m, mDNSBool allowSleep, const char *reason)
@@ -1614,3 +1699,5 @@ mStatus mDNSPosixRunEventLoopOnce(mDNS *m, const struct timeval *pTimeout,
 
 	return mStatus_NoError;
 	}
+
+/* vim: set noexpandtab sw=8 ts=8: */
