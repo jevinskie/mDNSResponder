@@ -44,6 +44,9 @@
     Change History (most recent first):
 
 $Log: mDNS.c,v $
+Revision 1.307.2.3  2004/01/28 23:08:45  cheshire
+<rdar://problem/3488559>: Hard code domain enumeration functions to return ".local" only
+
 Revision 1.307.2.2  2003/12/20 01:51:40  cheshire
 <rdar://problem/3515876>: Error putting additional records into packets
 Another fix from Rampi: responseptr needs to be updated inside the "for" loop,
@@ -6079,7 +6082,11 @@ mDNSexport mStatus mDNS_GetDomains(mDNS *const m, DNSQuestion *const question, m
 	question->qclass           = kDNSClass_IN;
 	question->QuestionCallback = Callback;
 	question->QuestionContext  = Context;
-	return(mDNS_StartQuery(m, question));
+
+	// No sense doing this until we actually support unicast query/update
+	//return(mDNS_StartQuery(m, question));
+	(void)m; // Unused
+	return(mStatus_NoError);
 	}
 
 // ***************************************************************************
