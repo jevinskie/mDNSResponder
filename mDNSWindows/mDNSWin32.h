@@ -23,6 +23,12 @@
     Change History (most recent first):
     
 $Log: mDNSWin32.h,v $
+Revision 1.22  2005/03/04 22:44:53  shersche
+<rdar://problem/4022802> mDNSResponder did not notice changes to DNS server config
+
+Revision 1.21  2005/03/03 02:29:00  shersche
+Use the RegNames.h header file for registry key names
+
 Revision 1.20  2005/01/25 08:12:52  shersche
 <rdar://problem/3947417> Enable Unicast and add Dynamic DNS support.
 Bug #: 3947417
@@ -185,10 +191,12 @@ struct	mDNS_PlatformSupport_struct
 	HANDLE						quitEvent;
 	HANDLE						interfaceListChangedEvent;
 	HANDLE						descChangedEvent;	// Computer description changed event
+	HANDLE						tcpipChangedEvent;	// TCP/IP config changed
 	HANDLE						ddnsChangedEvent;	// DynDNS config changed
 	HANDLE						wakeupEvent;
 	HANDLE						initEvent;
 	HKEY						descKey;
+	HKEY						tcpipKey;
 	HKEY						ddnsKey;
 	mStatus						initStatus;
 	SocketRef					interfaceListChangedSocket;
@@ -262,19 +270,6 @@ int	getifaddrs( struct ifaddrs **outAddrs );
 */
 
 void	freeifaddrs( struct ifaddrs *inAddrs );
-
-
-//---------------------------------------------------------------------------------------------------------------------------
-//	Registry Constants
-//---------------------------------------------------------------------------------------------------------------------------
-
-#define	kServiceName							"Apple mDNSResponder"
-#define kServiceDynDNSBrowseDomains				"BrowseDomains"
-#define kServiceDynDNSHostNames					"HostNames"
-#define kServiceDynDNSRegistrationDomains		"RegistrationDomains"
-#define kServiceDynDNSDomains					"Domains"	// value is comma separated list of domains
-#define kServiceDynDNSEnabled					"Enabled"
-#define kServiceDynDNSStatus					"Status"
 
 
 #ifdef	__cplusplus

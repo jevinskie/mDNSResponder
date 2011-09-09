@@ -121,11 +121,11 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "Apple Computer, Inc."
-            VALUE "FileDescription", "Rendezvous Printer Wizard Resource Module"
+            VALUE "FileDescription", "Bonjour Resource Module"
             VALUE "FileVersion", MASTER_PROD_VERS_STR
-            VALUE "InternalName", "RendezvousPrinterWizardLocalized.dll"
+            VALUE "InternalName", "PrinterWizardLocalized.dll"
             VALUE "LegalCopyright", MASTER_LEGAL_COPYRIGHT
-            VALUE "OriginalFilename", "RendezvousPrinterWizardLocalized.dll"
+            VALUE "OriginalFilename", "PrinterWizardLocalized.dll"
             VALUE "ProductName", MASTER_PROD_NAME
             VALUE "ProductVersion", MASTER_PROD_VERS_STR
         END

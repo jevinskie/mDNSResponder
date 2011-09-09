@@ -85,7 +85,7 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release\Root\Program Files\bin"
+			OutputDirectory=".\Release\Root\Program Files\Bonjour"
 			IntermediateDirectory=".\Release"
 			ConfigurationType="2"
 			UseOfMFC="1"
@@ -116,12 +116,6 @@
 				SuppressStartupBanner="TRUE"
 				Detect64BitPortabilityProblems="TRUE"
 				CompileAs="0"/>
-			<Tool
-				Name="VCCustomBuildTool"
-				Description="Registering"
-				CommandLine="regsvr32.exe /s /c $(OutDir)/$(ProjectName).dll
-"
-				Outputs="$(OUTDIR)\Register.out"/>
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/MACHINE:I386 /IGNORE:4089 "

@@ -24,6 +24,57 @@
     Change History (most recent first):
 
 $Log: uds_daemon.c,v $
+Revision 1.180  2005/03/10 00:13:12  cheshire
+<rdar://problem/4043098> DNSServiceBrowse no longer returning error codes for invalid types
+In handle_browse_request(), mStatus err was being set correctly if an error occurred,
+but the end of the function returned mStatus_NoError intead of err.
+
+Revision 1.179  2005/03/04 02:47:26  ksekar
+<rdar://problem/4026393> SCPreference domains disappear from enumeration when moving out from firewall
+
+Revision 1.178  2005/02/25 19:35:38  ksekar
+<rdar://problem/4023750> Non-local empty string registration failures should not return errors to caller
+
+Revision 1.177  2005/02/25 03:05:41  cheshire
+Change "broken pipe" message to debugf()
+
+Revision 1.176  2005/02/24 18:44:45  ksekar
+<rdar://problem/4018516> Printer Sharing does not get re-registered with wide-area
+
+Revision 1.175  2005/02/21 21:31:25  ksekar
+<rdar://problem/4015162> changed LogMsg to debugf
+
+Revision 1.174  2005/02/20 01:41:17  cheshire
+Fix compiler signed/unsigned warning
+
+Revision 1.173  2005/02/18 01:26:42  cheshire
+<rdar://problem/4012162> "Could not write data to client after 60 seconds" message could be more helpful
+Log additional information about failed client
+
+Revision 1.172  2005/02/18 00:58:35  cheshire
+<rdar://problem/4012162> "Could not write data to client after 60 seconds" message could be more helpful
+
+Revision 1.171  2005/02/18 00:43:12  cheshire
+<rdar://problem/4010245> mDNSResponder should auto-truncate service names that are too long
+
+Revision 1.170  2005/02/16 01:15:02  cheshire
+Improve LogOperation() debugging messages for DNSServiceBrowse and DNSServiceRegister
+
+Revision 1.169  2005/02/08 01:57:14  cheshire
+More detailed error reporting in udsserver_init()
+
+Revision 1.168  2005/02/03 00:44:37  cheshire
+<rdar://problem/3986663> DNSServiceUpdateRecord returns kDNSServiceErr_Invalid when rdlen=0, rdata=NULL
+
+Revision 1.167  2005/02/02 02:19:32  cheshire
+Add comment explaining why unlink(MDNS_UDS_SERVERPATH); fails
+
+Revision 1.166  2005/02/01 19:58:52  ksekar
+Shortened cryptic "broken pipe" syslog message
+
+Revision 1.165  2005/02/01 19:56:47  ksekar
+Moved LogMsg from daemon.c to uds_daemon.c, cleaned up wording
+
 Revision 1.164  2005/01/28 06:07:55  cheshire
 Don't use deliver_error() from within handle_regrecord_request()
 
@@ -288,7 +339,7 @@ Revision 1.82  2004/09/16 23:14:25  cheshire
 Changes for Windows compatibility
 
 Revision 1.81  2004/09/16 21:46:38  ksekar
-<rdar://problem/3665304> Need SPI for LoginWindow to associate a UID with a Wide Area Rendezvous domain
+<rdar://problem/3665304> Need SPI for LoginWindow to associate a UID with a Wide Area domain
 
 Revision 1.80  2004/09/16 01:58:23  cheshire
 Fix compiler warnings
@@ -770,7 +821,7 @@ static void browse_termination_callback(void *context);
 static void browse_result_callback(mDNS *const m, DNSQuestion *question, const ResourceRecord *const answer, mDNSBool AddRecord);
 static void handle_regservice_request(request_state *request);
 static void regservice_termination_callback(void *context);
-static void process_service_registration(ServiceRecordSet *const srs);
+static void process_service_registration(ServiceRecordSet *const srs, mDNSBool SuppressError);
 static void regservice_callback(mDNS *const m, ServiceRecordSet *const srs, mStatus result);
 static mStatus handle_add_request(request_state *rstate);
 static mStatus handle_update_request(request_state *rstate);
@@ -812,6 +863,32 @@ static void handle_setdomain_request(request_state *rstate);
 #define PID_FILE "/var/run/mDNSResponder.pid"
 #endif
 
+mDNSlocal void LogClientInfo(request_state *req)
+	{
+	void *t = req->termination_context;
+	if (t)
+		{
+		if (req->terminate == regservice_termination_callback)
+			{
+			service_instance *ptr;
+			for (ptr = ((service_info *)t)->instances; ptr; ptr = ptr->next)
+				LogMsgNoIdent("%3d: DNSServiceRegister         %##s %u", req->sd, ptr->srs.RR_SRV.resrec.name->c, SRS_PORT(&ptr->srs));
+			}
+		else if (req->terminate == browse_termination_callback)
+			{
+			browser_t *blist;
+			for (blist = req->browser_info->browsers; blist; blist = blist->next)
+				LogMsgNoIdent("%3d: DNSServiceBrowse           %##s", req->sd, blist->q.qname.c);
+			}
+		else if (req->terminate == resolve_termination_callback)
+			LogMsgNoIdent("%3d: DNSServiceResolve          %##s", req->sd, ((resolve_termination_t *)t)->qsrv.qname.c);
+		else if (req->terminate == question_termination_callback)
+			LogMsgNoIdent("%3d: DNSServiceQueryRecord      %##s", req->sd, ((DNSQuestion *)          t)->qname.c);
+		else if (req->terminate == enum_termination_callback)
+			LogMsgNoIdent("%3d: DNSServiceEnumerateDomains %##s", req->sd, ((enum_termination_t *)   t)->all->question.qname.c);
+		}
+	}
+
 static void FatalError(char *errmsg)
 	{
 	LogMsg("%s: %s", errmsg, dnssd_strerror(dnssd_errno()));
@@ -839,7 +916,10 @@ int udsserver_init(void)
 		}
 
 	if ((listenfd = socket(AF_DNSSD, SOCK_STREAM, 0)) == dnssd_InvalidSocket)
+		{
+		my_perror("ERROR: socket(AF_DNSSD, SOCK_STREAM, 0); failed");
 		goto error;
+		}
 
     bzero(&laddr, sizeof(laddr));
 
@@ -850,7 +930,10 @@ int udsserver_init(void)
 		laddr.sin_addr.s_addr	=	inet_addr(MDNS_TCP_SERVERADDR);
     	ret = bind(listenfd, (struct sockaddr *) &laddr, sizeof(laddr));
 		if (ret < 0)
+			{
+			my_perror("ERROR: bind(listenfd, (struct sockaddr *) &laddr, sizeof(laddr)); failed");
 			goto error;
+			}
 		}
 	#else
 		{
@@ -866,7 +949,10 @@ int udsserver_init(void)
 		ret = bind(listenfd, (struct sockaddr *) &laddr, sizeof(laddr));
 		umask(mask);
 		if (ret < 0)
+			{
+			my_perror("ERROR: bind(listenfd, (struct sockaddr *) &laddr, sizeof(laddr)); failed");
 			goto error;
+			}
 		}
 	#endif
 
@@ -880,10 +966,10 @@ int udsserver_init(void)
 	#else
     if (fcntl(listenfd, F_SETFL, O_NONBLOCK) != 0)
 	#endif
-	{
+		{
 		my_perror("ERROR: could not set listen socket to non-blocking mode");
 		goto error;
-	}
+		}
 
 	if (listen(listenfd, LISTENQ) != 0)
 		{
@@ -933,7 +1019,11 @@ int udsserver_exit(void)
 	dnssd_close(listenfd);
 
 #if !defined(USE_TCP_LOOPBACK)
-	unlink(MDNS_UDS_SERVERPATH);
+	// Currently, we're unable to remove /var/run/mdnsd because we've changed to userid "nobody"
+	// to give up unnecessary privilege, but we need to be root to remove this Unix Domain Socket.
+	// It would be nice if we could find a solution to this problem
+	if (unlink(MDNS_UDS_SERVERPATH))
+		debugf("Unable to remove %s", MDNS_UDS_SERVERPATH);
 #endif
 
     return 0;
@@ -974,17 +1064,18 @@ mDNSs32 udsserver_idle(mDNSs32 nextevent)
                 }
             }
         if (result == t_morecoming)
-        {
-	    if (!req->time_blocked) req->time_blocked = now;
-	    debugf("udsserver_idle: client has been blocked for %ld seconds", (now - req->time_blocked) / mDNSPlatformOneSecond);
-	    if (now - req->time_blocked >= MAX_TIME_BLOCKED)
-		{
-		LogMsg("Could not write data to client after %ld seconds - aborting connection", MAX_TIME_BLOCKED / mDNSPlatformOneSecond);
-		abort_request(req);
-		result = t_terminated;
-		}
-	    else if (nextevent - now > mDNSPlatformOneSecond) nextevent = now + mDNSPlatformOneSecond;  // try again in a second
-	}
+			{
+			if (!req->time_blocked) req->time_blocked = now;
+			debugf("udsserver_idle: client has been blocked for %ld seconds", (now - req->time_blocked) / mDNSPlatformOneSecond);
+			if (now - req->time_blocked >= MAX_TIME_BLOCKED)
+				{
+				LogMsg("Could not write data to client %d after %ld seconds - aborting connection", req->sd, MAX_TIME_BLOCKED / mDNSPlatformOneSecond);
+				LogClientInfo(req);
+				abort_request(req);
+				result = t_terminated;
+				}
+			else if (nextevent - now > mDNSPlatformOneSecond) nextevent = now + mDNSPlatformOneSecond;  // try again in a second
+			}
         if (result == t_terminated || result == t_error)
         //since we're already doing a list traversal, we unlink the request manunally instead of calling unlink_request()
             {
@@ -1038,28 +1129,7 @@ void udsserver_info(mDNS *const m)
 	LogMsgNoIdent("Cache currently contains %lu records; %lu referenced by active questions", CacheUsed, CacheActive);
 
     for (req = all_requests; req; req=req->next)
-        {
-        void *t = req->termination_context;
-        if (!t) continue;
-        if (req->terminate == regservice_termination_callback)
-			{
-			service_instance *ptr;
-			for (ptr = ((service_info *)t)->instances; ptr; ptr = ptr->next)
-				LogMsgNoIdent("%3d: DNSServiceRegister         %##s %u", req->sd, ptr->srs.RR_SRV.resrec.name->c, SRS_PORT(&ptr->srs));
-			}
-		else if (req->terminate == browse_termination_callback)
-			{
-			browser_t *blist;
-			for (blist = req->browser_info->browsers; blist; blist = blist->next)
-				LogMsgNoIdent("%3d: DNSServiceBrowse           %##s", req->sd, blist->q.qname.c);
-			}
-        else if (req->terminate == resolve_termination_callback)
-            LogMsgNoIdent("%3d: DNSServiceResolve          %##s", req->sd, ((resolve_termination_t *)t)->qsrv.qname.c);
-        else if (req->terminate == question_termination_callback)
-            LogMsgNoIdent("%3d: DNSServiceQueryRecord      %##s", req->sd, ((DNSQuestion *)          t)->qname.c);
-        else if (req->terminate == enum_termination_callback)
-            LogMsgNoIdent("%3d: DNSServiceEnumerateDomains %##s", req->sd, ((enum_termination_t *)   t)->all->question.qname.c);
-        }
+		LogClientInfo(req);
 
     now = mDNS_TimeNow(m);
     LogMsgNoIdent("Timenow 0x%08lX (%ld)", (mDNSu32)now, now);
@@ -1822,7 +1892,7 @@ static void handle_browse_request(request_state *request)
     domainname typedn, d, temp;
     mDNSs32 NumSubTypes;
     char *ptr;
-    mStatus err;
+    mStatus err = mStatus_NoError;
 	DNameListElem *search_domain_list, *sdom;
 	browser_info_t *info = NULL;
 	
@@ -1874,7 +1944,7 @@ static void handle_browse_request(request_state *request)
 	request->termination_context = info;
     request->terminate = browse_termination_callback;
 	
-	LogOperation("%3d: DNSServiceBrowse(%##s%s) START", request->sd, info->regtype.c, domain);
+	LogOperation("%3d: DNSServiceBrowse(\"%##s\", \"%s\") START", request->sd, info->regtype.c, domain);
 	if (domain[0])
 		{
 		if (!MakeDomainNameFromDNSNameString(&d, domain)) { err = mStatus_BadParamErr;  goto error; }
@@ -1897,7 +1967,7 @@ static void handle_browse_request(request_state *request)
 		mDNS_FreeDNameList(search_domain_list);
 		}
 		
-	deliver_error(request, mStatus_NoError);
+	deliver_error(request, err);
 	return;
     
 error:
@@ -2073,7 +2143,8 @@ mDNSexport void udsserver_default_reg_domain_changed(const domainname *d, mDNSBo
 	{
 	request_state *rstate;
 	service_info *info;
-	
+
+	LogMsg("%s registration domain %##s", add ? "Adding" : "Removing", d->c);
 	for (rstate = all_requests; rstate; rstate = rstate->next)
 		{
 		if (rstate->terminate != regservice_termination_callback) continue;
@@ -2105,7 +2176,7 @@ mDNSexport void udsserver_default_reg_domain_changed(const domainname *d, mDNSBo
 				prev = si;
 				si = si->next;
 				}
-			if (!si)  LogMsg("udsserver_default_reg_domain_changed - domain %##s not registered", d->c);
+			if (!si) debugf("udsserver_default_reg_domain_changed - domain %##s not registered", d->c); // normal if registration failed
 			}
 		}
 	}
@@ -2115,7 +2186,8 @@ static void handle_regservice_request(request_state *request)
     {
     DNSServiceFlags flags;
     uint32_t ifi;
-    char name[256], domain[MAX_ESCAPED_DOMAIN_NAME], host[MAX_ESCAPED_DOMAIN_NAME];
+    char name[1024];	// Lots of spare space for extra-long names that we'll auto-truncate down to 63 bytes
+    char domain[MAX_ESCAPED_DOMAIN_NAME], host[MAX_ESCAPED_DOMAIN_NAME];
     char *ptr;
     domainname d, srv;
     mStatus result;
@@ -2145,7 +2217,7 @@ static void handle_regservice_request(request_state *request)
     service->InterfaceID = mDNSPlatformInterfaceIDfromInterfaceIndex(gmDNS, ifi);
     if (ifi && !service->InterfaceID)
     	{ LogMsg("ERROR: handle_regservice_request - Couldn't find InterfaceID for interfaceIndex %d", ifi); goto bad_param; }
-    if (get_string(&ptr, name, 256) < 0 ||
+    if (get_string(&ptr, name, sizeof(name)) < 0 ||
         get_string(&ptr, service->type_as_string, MAX_ESCAPED_DOMAIN_NAME) < 0 ||
         get_string(&ptr, domain, MAX_ESCAPED_DOMAIN_NAME) < 0 ||
         get_string(&ptr, host, MAX_ESCAPED_DOMAIN_NAME) < 0)
@@ -2155,7 +2227,13 @@ static void handle_regservice_request(request_state *request)
 	service->port.b[1] = *ptr++;
 
     service->txtlen  = get_short(&ptr);
-    service->txtdata = get_rdata(&ptr, service->txtlen);
+	if (service->txtlen)
+		{
+		service->txtdata = mallocL("txtdata", service->txtlen);
+		if (!service->txtdata) { my_perror("ERROR: malloc"); result = mStatus_NoMemoryErr; goto finish; }
+		memcpy(service->txtdata, get_rdata(&ptr, service->txtlen), service->txtlen);
+		}
+	else service->txtdata = NULL;		   
 
 	// Check for sub-types after the service type
 	service->num_subtypes = ChopSubTypes(service->type_as_string);	// Note: Modifies regtype string to remove trailing subtypes
@@ -2173,6 +2251,12 @@ static void handle_regservice_request(request_state *request)
 		}
     else
 		{
+		// If the client is allowing AutoRename, then truncate name to legal length before converting it to a DomainLabel
+		if ((flags & kDNSServiceFlagsNoAutoRename) == 0)
+			{
+			int newlen = TruncateUTF8ToLength((mDNSu8*)name, mDNSPlatformStrLen(name), MAX_DOMAIN_LABEL);
+			name[newlen] = 0;
+			}
 		if (!MakeDomainLabelFromLiteralString(&service->name, name))
 			{ LogMsg("ERROR: handle_regservice_request - name bad %s", name); goto bad_param; }
 		service->autoname = mDNSfalse;
@@ -2209,7 +2293,8 @@ static void handle_regservice_request(request_state *request)
 				count+1, srv.c, mDNSVal16(service->port));
 		}
 
-	LogOperation("%3d: DNSServiceRegister(%##s, %u) START", request->sd, srv.c, mDNSVal16(service->port));
+	LogOperation("%3d: DNSServiceRegister(\"%s\", \"%s\", \"%s\", \"%s\", %u) START",
+		request->sd, name, service->type_as_string, domain, host, mDNSVal16(service->port));
 	result = register_service_instance(request, &d);
 	
 	if (!result && !*domain)
@@ -2247,11 +2332,19 @@ bad_param:
 static void regservice_callback(mDNS *const m, ServiceRecordSet *const srs, mStatus result)
     {
     mStatus err;
+	mDNSBool SuppressError = mDNSfalse;
     service_instance *instance = srs->ServiceContext;
     (void)m; // Unused
     if (!srs)      { LogMsg("regservice_callback: srs is NULL %d",                 result); return; }
     if (!instance) { LogMsg("regservice_callback: srs->ServiceContext is NULL %d", result); return; }
 
+	if (instance->request && instance->request->service_registration)
+		{
+		service_info *info = instance->request->service_registration;
+		if (info->default_domain && !instance->default_local) SuppressError = mDNStrue;
+        // don't send errors up to client for wide-area, empty-string registrations
+		}			
+	
     if (result == mStatus_NoError)
 		LogOperation("%3d: DNSServiceRegister(%##s, %u) REGISTERED  ",  instance->sd, srs->RR_SRV.resrec.name->c, mDNSVal16(srs->RR_SRV.resrec.rdata->u.srv.port));
 	else if (result == mStatus_MemFree)
@@ -2272,7 +2365,7 @@ static void regservice_callback(mDNS *const m, ServiceRecordSet *const srs, mSta
 			srs->RR_TXT.AllowRemoteQuery = mDNStrue;
 			for (e = instance->srs.Extras; e; e = e->next) e->r.AllowRemoteQuery = mDNStrue;
 			}
-        process_service_registration(srs);
+        process_service_registration(srs, SuppressError);
         if (instance->autoname && CountPeerRegistrations(m, srs) == 0)
         	RecordUpdatedNiceLabel(m, 0);	// Successfully got new name, tell user immediately
 		return;
@@ -2311,7 +2404,7 @@ static void regservice_callback(mDNS *const m, ServiceRecordSet *const srs, mSta
 		    request_state *rs = instance->request;
 			if (!rs) { LogMsg("ERROR: regservice_callback: received result %ld with a NULL request pointer", result); return; }
 			free_service_instance(instance);
-			if (deliver_async_error(rs, reg_service_reply, result) < 0)
+			if (!SuppressError && deliver_async_error(rs, reg_service_reply, result) < 0)
                 {
                 abort_request(rs);
                 unlink_request(rs);
@@ -2325,7 +2418,7 @@ static void regservice_callback(mDNS *const m, ServiceRecordSet *const srs, mSta
 		if (!rs) { LogMsg("ERROR: regservice_callback: received result %ld with a NULL request pointer", result); return; }
         if (result != mStatus_NATTraversal) LogMsg("ERROR: unknown result in regservice_callback: %ld", result);
 		free_service_instance(instance);
-        if (deliver_async_error(rs, reg_service_reply, result) < 0)
+        if (!SuppressError && deliver_async_error(rs, reg_service_reply, result) < 0)
             {
             abort_request(rs);
             unlink_request(rs);
@@ -2423,6 +2516,12 @@ static mStatus update_record(AuthRecord *rr, uint16_t rdlen, char *rdata, uint32
     if (!newrd) FatalError("ERROR: malloc");
     newrd->MaxRDLength = (mDNSu16) rdsize;
     memcpy(&newrd->u, rdata, rdlen);
+
+	// BIND named (name daemon) doesn't allow TXT records with zero-length rdata. This is strictly speaking correct,
+	// since RFC 1035 specifies a TXT record as "One or more <character-string>s", not "Zero or more <character-string>s".
+	// Since some legacy apps try to create zero-length TXT records, we'll silently correct it here.
+	if (rr->resrec.rrtype == kDNSType_TXT && rdlen == 0) { rdlen = 1; newrd->u.txt.c[0] = 0; }
+
     result = mDNS_Update(gmDNS, rr, ttl, rdlen, newrd, update_callback);
 	if (result) { LogMsg("ERROR: mDNS_Update - %ld", result); freeL("handle_update_request", newrd); }
 	return result;
@@ -2493,7 +2592,7 @@ static void update_callback(mDNS *const m, AuthRecord *const rr, RData *oldrd)
     if (oldrd != &rr->rdatastorage) freeL("update_callback", oldrd);
     }
     
-static void process_service_registration(ServiceRecordSet *const srs)
+static void process_service_registration(ServiceRecordSet *const srs, mDNSBool SuppressError)
     {
     reply_state *rep;
     transfer_state send_result;
@@ -2505,7 +2604,7 @@ static void process_service_registration(ServiceRecordSet *const srs)
     err = gen_rr_response(srs->RR_SRV.resrec.name, srs->RR_SRV.resrec.InterfaceID, req, &rep);
     if (err)
         {
-        if (deliver_async_error(req, reg_service_reply, err) < 0)
+        if (SuppressError && deliver_async_error(req, reg_service_reply, err) < 0)
             {
             abort_request(req);
             unlink_request(req);
@@ -2574,6 +2673,7 @@ static void regservice_termination_callback(void *context)
 		if (mDNS_DeregisterService(gmDNS, &p->srs)) free_service_instance(p);
 		}
 	info->request->service_registration = NULL; // clear pointer from request back to info
+	if (info->txtdata) { freeL("txtdata", info->txtdata); info->txtdata = NULL; }
 	freeL("service_info", info);
 	}
 
@@ -2833,12 +2933,14 @@ static void enum_result_callback(mDNS *const m, DNSQuestion *question, const Res
     (void)m; // Unused
 
     if (answer->rrtype != kDNSType_PTR) return;
+	if (!AddRecord && de->type != mDNS_DomainTypeBrowse) return;
+	
     if (AddRecord)
     	{
         flags |= kDNSServiceFlagsAdd;
         if (de->type == mDNS_DomainTypeRegistrationDefault || de->type == mDNS_DomainTypeBrowseDefault)
             flags |= kDNSServiceFlagsDefault;
-    	}
+    	}	
     ConvertDomainNameToCString(&answer->rdata->u.name, domain);
 	// note that we do NOT propagate specific interface indexes to the client - for example, a domain we learn from
 	// a machine's system preferences may be discovered on the LocalOnly interface, but should be browsed on the
@@ -3178,7 +3280,7 @@ static int send_msg(reply_state *rs)
 #if !defined(PLATFORM_NO_EPIPE)
             if (dnssd_errno() == EPIPE)
             	{
-                LogMsg("%3d: broken pipe - cleanup will be handled by run-loop read wakeup", rs->sd);
+                debugf("%3d: broken pipe", rs->sd);
                 rs->ts = t_terminated;
                 rs->request->ts = t_terminated;
                 return t_terminated;

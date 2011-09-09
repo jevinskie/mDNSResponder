@@ -24,6 +24,9 @@
     Change History (most recent first):
 
 $Log: Client.c,v $
+Revision 1.16  2005/02/04 01:00:53  cheshire
+Add '-d' command-line option to specify domain to browse
+
 Revision 1.15  2004/12/16 20:17:11  cheshire
 <rdar://problem/3324626> Cache memory management improvements
 
@@ -158,21 +161,24 @@ static mDNSBool CheckThatServiceTypeIsUsable(const char *serviceType, mDNSBool p
     return result;
 }
 
-static const char kDefaultServiceType[] = "_afpovertcp._tcp.";
+static const char kDefaultServiceType[] = "_afpovertcp._tcp";
+static const char kDefaultDomain[]      = "local.";
 
 static void PrintUsage()
 {
     fprintf(stderr, 
-            "Usage: %s [-v level] [-t type]\n", 
+            "Usage: %s [-v level] [-t type] [-d domain]\n",
             gProgramName);
     fprintf(stderr, "          -v verbose mode, level is a number from 0 to 2\n");
     fprintf(stderr, "             0 = no debugging info (default)\n");
     fprintf(stderr, "             1 = standard debugging info\n");
     fprintf(stderr, "             2 = intense debugging info\n");
     fprintf(stderr, "          -t uses 'type' as the service type (default is '%s')\n", kDefaultServiceType);
+    fprintf(stderr, "          -d uses 'domain' as the domain to browse (default is '%s')\n", kDefaultDomain);
 }
 
 static const char *gServiceType      = kDefaultServiceType;
+static const char *gServiceDomain    = kDefaultDomain;
 
 static void ParseArguments(int argc, char **argv)
     // Parses our command line arguments into the global variables 
@@ -192,7 +198,7 @@ static void ParseArguments(int argc, char **argv)
     // Parse command line options using getopt.
     
     do {
-        ch = getopt(argc, argv, "v:t:");
+        ch = getopt(argc, argv, "v:t:d:");
         if (ch != -1) {
             switch (ch) {
                 case 'v':
@@ -209,6 +215,9 @@ static void ParseArguments(int argc, char **argv)
                     if ( ! CheckThatServiceTypeIsUsable(gServiceType, mDNStrue) ) {
                         exit(1);
                     }
+                    break;
+                case 'd':
+                    gServiceDomain = optarg;
                     break;
                 case '?':
                 default:
@@ -250,7 +259,7 @@ int main(int argc, char **argv)
         // Construct and start the query.
         
         MakeDomainNameFromDNSNameString(&type, gServiceType);
-        MakeDomainNameFromDNSNameString(&domain, "local.");
+        MakeDomainNameFromDNSNameString(&domain, gServiceDomain);
 
         status = mDNS_StartBrowse(&mDNSStorage, &question, &type, &domain, mDNSInterface_Any, mDNSfalse, BrowseCallback, NULL);
     

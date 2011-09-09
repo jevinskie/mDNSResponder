@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: ChooserDialog.cpp,v $
+Revision 1.3  2005/02/10 22:35:35  cheshire
+<rdar://problem/3727944> Update name
+
 Revision 1.2  2004/07/13 21:24:26  rpantos
 Fix for <rdar://problem/3701120>.
 
@@ -244,7 +247,6 @@ static const KnownServiceEntry		kKnownServiceTable[] =
 	{ "_printer._tcp.", 			"Printer (LPR)", 											"lpr://", 		false }, 
 	{ "_ptp._tcp.", 				"Picture Transfer (PTP)", 									"ptp://", 		false },
 	{ "_register._tcp", 			"DNS Service Discovery", 									"", 			false },
-	{ "_rendezvouspong._tcp",	 	"RendezvousPong", 											"", 			false },
 	{ "_rfb._tcp.", 				"Remote Frame Buffer",										"",				false },
 	{ "_riousbprint._tcp.", 		"Remote I/O USB Printer Protocol",							"",				false },
 	{ "_rtsp._tcp.", 				"Real Time Stream Control Protocol",						"",				false },

@@ -23,6 +23,19 @@
     Change History (most recent first):
     
 $Log: mdnsNSP.c,v $
+Revision 1.10  2005/02/23 22:16:07  shersche
+Unregister the NSP before registering to workaround an installer problem during upgrade installs
+
+Revision 1.9  2005/02/01 01:45:55  shersche
+Change mdnsNSP timeout to 2 seconds
+
+Revision 1.8  2005/01/31 23:27:25  shersche
+<rdar://problem/3936771> Don't try and resolve .local hostnames that are referenced in the hosts file
+
+Revision 1.7  2005/01/28 23:50:13  shersche
+<rdar://problem/3942551> Implement DllRegisterServer,DllUnregisterServer so mdnsNSP.dll can self-register
+Bug #: 3942551
+
 Revision 1.6  2004/12/06 01:56:53  shersche
 <rdar://problem/3789425> Use the DNS types and classes defined in dns_sd.h
 Bug #: 3789425
@@ -93,6 +106,24 @@ struct	Query
 	bool				addrValid;
 };
 
+#define BUFFER_INITIAL_SIZE		4192
+#define ALIASES_INITIAL_SIZE	5
+
+typedef struct HostsFile
+{
+	int			m_bufferSize;
+	char	*	m_buffer;
+	FILE	*	m_fp;
+} HostsFile;
+
+
+typedef struct HostsFileInfo
+{
+	struct hostent		m_host;
+	struct HostsFileInfo	*	m_next;
+} HostsFileInfo;
+
+
 #if 0
 #pragma mark == Prototypes ==
 #endif
@@ -104,7 +135,10 @@ struct	Query
 // DLL Exports
 
 BOOL WINAPI		DllMain( HINSTANCE inInstance, DWORD inReason, LPVOID inReserved );
+STDAPI			DllRegisterServer( void );
+STDAPI			DllRegisterServer( void );
 
+	
 // NSP SPIs
 
 int	WSPAPI	NSPCleanup( LPGUID inProviderID );
@@ -186,6 +220,15 @@ DEBUG_LOCAL size_t	QueryCopyQuerySetSize( QueryRef inRef, const WSAQUERYSETW *in
 	#define	dlog_query_set( LEVEL, SET )
 #endif
 
+DEBUG_LOCAL BOOL		InHostsTable( const char * name );
+DEBUG_LOCAL BOOL		IsLocalName( HostsFileInfo * node );
+DEBUG_LOCAL BOOL		IsSameName( HostsFileInfo * node, const char * name );
+DEBUG_LOCAL OSStatus	HostsFileOpen( HostsFile ** self, const char * fname );
+DEBUG_LOCAL OSStatus	HostsFileClose( HostsFile * self );
+DEBUG_LOCAL void		HostsFileInfoFree( HostsFileInfo * info );
+DEBUG_LOCAL OSStatus	HostsFileNext( HostsFile * self, HostsFileInfo ** hInfo );
+
+
 #if 0
 #pragma mark == Globals ==
 #endif
@@ -195,13 +238,15 @@ DEBUG_LOCAL size_t	QueryCopyQuerySetSize( QueryRef inRef, const WSAQUERYSETW *in
 //===========================================================================================================================
 
 // {B600E6E9-553B-4a19-8696-335E5C896153}
-// GUID		kmdnsNSPGUID = { 0xb600e6e9, 0x553b, 0x4a19, { 0x86, 0x96, 0x33, 0x5e, 0x5c, 0x89, 0x61, 0x53 } };
-
+DEBUG_LOCAL HINSTANCE				gInstance			= NULL;
+DEBUG_LOCAL wchar_t				*	gNSPName			= L"mdnsNSP";
+DEBUG_LOCAL GUID					gNSPGUID			= { 0xb600e6e9, 0x553b, 0x4a19, { 0x86, 0x96, 0x33, 0x5e, 0x5c, 0x89, 0x61, 0x53 } };
 DEBUG_LOCAL LONG					gRefCount			= 0;
 DEBUG_LOCAL CRITICAL_SECTION		gLock;
 DEBUG_LOCAL bool					gLockInitialized 	= false;
 DEBUG_LOCAL bool					gDNSSDInitialized	= false;
 DEBUG_LOCAL QueryRef				gQueryList	 		= NULL;
+DEBUG_LOCAL HostsFileInfo		*	gHostsFileInfo		= NULL;
 
 #if 0
 #pragma mark -
@@ -219,6 +264,8 @@ BOOL APIENTRY	DllMain( HINSTANCE inInstance, DWORD inReason, LPVOID inReserved )
 	switch( inReason )
 	{
 		case DLL_PROCESS_ATTACH:			
+			gInstance = inInstance;		
+			gHostsFileInfo	= NULL;
 			debug_initialize( kDebugOutputTypeWindowsEventLog, "mDNS NSP", inInstance );
 			debug_set_property( kDebugPropertyTagPrintLevel, kDebugLevelInfo );
 			dlog( kDebugLevelTrace, "\n" );
@@ -226,6 +273,8 @@ BOOL APIENTRY	DllMain( HINSTANCE inInstance, DWORD inReason, LPVOID inReserved )
 			break;
 		
 		case DLL_PROCESS_DETACH:
+			HostsFileInfoFree( gHostsFileInfo );
+			gHostsFileInfo = NULL;
 			dlog( kDebugLevelVerbose, "%s: process detach\n", __ROUTINE__ );
 			break;
 		
@@ -243,6 +292,68 @@ BOOL APIENTRY	DllMain( HINSTANCE inInstance, DWORD inReason, LPVOID inReserved )
 	}
 	return( TRUE );
 }
+
+
+//===========================================================================================================================
+//	DllRegisterServer
+//===========================================================================================================================
+
+STDAPI	DllRegisterServer( void )
+{
+	WSADATA		wsd;
+	WCHAR		path[ MAX_PATH ];
+	HRESULT		err;
+	
+	dlog( kDebugLevelTrace, "DllRegisterServer\n" );
+
+	err = WSAStartup( MAKEWORD( 2, 2 ), &wsd );
+	err = translate_errno( err == 0, errno_compat(), WSAEINVAL );
+	require_noerr( err, exit );
+
+	// Unregister before registering to workaround an installer
+	// problem during upgrade installs.
+
+	WSCUnInstallNameSpace( &gNSPGUID );
+
+	err = GetModuleFileNameW( gInstance, path, sizeof( path ) );
+	err = translate_errno( err != 0, errno_compat(), kUnknownErr );
+	require_noerr( err, exit );
+
+	err = WSCInstallNameSpace( gNSPName, path, NS_DNS, 1, &gNSPGUID );
+	err = translate_errno( err == 0, errno_compat(), WSAEINVAL );
+	require_noerr( err, exit );
+	
+exit:
+
+	WSACleanup();
+	return( err );
+}
+
+//===========================================================================================================================
+//	DllUnregisterServer
+//===========================================================================================================================
+
+STDAPI	DllUnregisterServer( void )
+{
+	WSADATA		wsd;
+	HRESULT err;
+	
+	dlog( kDebugLevelTrace, "DllUnregisterServer\n" );
+	
+	err = WSAStartup( MAKEWORD( 2, 2 ), &wsd );
+	err = translate_errno( err == 0, errno_compat(), WSAEINVAL );
+	require_noerr( err, exit );
+	
+	err = WSCUnInstallNameSpace( &gNSPGUID );
+	err = translate_errno( err == 0, errno_compat(), WSAEINVAL );
+	require_noerr( err, exit );
+		
+exit:
+
+	WSACleanup();
+	return err;
+}
+
 
 //===========================================================================================================================
 //	NSPStartup
@@ -486,8 +597,22 @@ DEBUG_LOCAL int WSPAPI
 									exit, err = WSASERVICE_NOT_FOUND );
 		}
 	}
+	else
+	{
+		// <rdar://problem/3936771>
+		//
+		// Check to see if the name of this host is in the hosts table. If so,
+		// don't try and resolve it
+		
+		char	translated[ kDNSServiceMaxDomainName ];
+		int		n;
 
-	// The name ends in .local, .0.8.e.f.ip6.arpa, or .254.169.in-addr.arpa so start the resolve operation. Lazy initialize DNS-SD if needed.
+		n = WideCharToMultiByte( CP_UTF8, 0, name, -1, translated, sizeof( translated ), NULL, NULL );
+		require_action( n > 0, exit, err = WSASERVICE_NOT_FOUND );
+		require_action( InHostsTable( translated ) == FALSE, exit, err = WSASERVICE_NOT_FOUND );
+	}
+
+	// The name ends in .local ( and isn't in the hosts table ), .0.8.e.f.ip6.arpa, or .254.169.in-addr.arpa so start the resolve operation. Lazy initialize DNS-SD if needed.
 		
 	NSPLock();
 	if( !gDNSSDInitialized )
@@ -548,7 +673,7 @@ DEBUG_LOCAL int WSPAPI
 	// Wait for data or a cancel. Release the lock while waiting. This is safe because we've retained the query.
 
 	NSPUnlock();
-	waitResult = WaitForMultipleObjects( obj->waitCount, obj->waitHandles, FALSE, 5 * 1000 );
+	waitResult = WaitForMultipleObjects( obj->waitCount, obj->waitHandles, FALSE, 2 * 1000 );
 	NSPLock();
 	require_action_quiet( waitResult != ( WAIT_OBJECT_0 + 1 ), exit, err = WSA_E_CANCELLED );
 	err = translate_errno( waitResult == WAIT_OBJECT_0, (OSStatus) GetLastError(), WSASERVICE_NOT_FOUND );
@@ -1438,3 +1563,424 @@ void	DebugDumpQuerySet( DebugLevel inLevel, const WSAQUERYSETW *inQuerySet )
 	}
 }
 #endif
+
+
+//===========================================================================================================================
+//	InHostsTable
+//===========================================================================================================================
+
+DEBUG_LOCAL BOOL
+InHostsTable( const char * name )
+{
+	HostsFileInfo	*	node;
+	BOOL				ret = FALSE;
+	OSStatus			err;
+	
+	check( name );
+
+	if ( gHostsFileInfo == NULL )
+	{
+		TCHAR				systemDirectory[MAX_PATH];
+		TCHAR				hFileName[MAX_PATH];
+		HostsFile		*	hFile;
+
+		GetSystemDirectory( systemDirectory, sizeof( systemDirectory ) );
+		sprintf( hFileName, "%s\\drivers\\etc\\hosts", systemDirectory );
+		err = HostsFileOpen( &hFile, hFileName );
+		require_noerr( err, exit );
+
+		while ( HostsFileNext( hFile, &node ) == 0 )
+		{
+			if ( IsLocalName( node ) )
+			{
+				node->m_next = gHostsFileInfo;
+				gHostsFileInfo = node;
+			}
+			else
+			{
+				HostsFileInfoFree( node );
+			}
+		}
+
+		HostsFileClose( hFile );
+	}
+
+	for ( node = gHostsFileInfo; node; node = node->m_next )
+	{
+		if ( IsSameName( node, name ) )
+		{
+			ret = TRUE;
+			break;
+		}
+	}
+
+exit:
+
+	return ret;
+}
+
+
+//===========================================================================================================================
+//	IsLocalName
+//===========================================================================================================================
+
+DEBUG_LOCAL BOOL
+IsLocalName( HostsFileInfo * node )
+{
+	BOOL ret = TRUE;
+
+	check( node );
+
+	if ( strstr( node->m_host.h_name, ".local" ) == NULL )
+	{
+		int i;
+
+		for ( i = 0; node->m_host.h_aliases[i]; i++ )
+		{
+			if ( strstr( node->m_host.h_aliases[i], ".local" ) )
+			{
+				goto exit;
+			}
+		}
+
+		ret = FALSE;
+	}
+
+exit:
+
+	return ret;
+}
+
+
+//===========================================================================================================================
+//	IsSameName
+//===========================================================================================================================
+
+DEBUG_LOCAL BOOL
+IsSameName( HostsFileInfo * node, const char * name )
+{
+	BOOL ret = TRUE;
+
+	check( node );
+	check( name );
+
+	if ( strcmp( node->m_host.h_name, name ) != 0 )
+	{
+		int i;
+
+		for ( i = 0; node->m_host.h_aliases[i]; i++ )
+		{
+			if ( strcmp( node->m_host.h_aliases[i], name ) == 0 )
+			{
+				goto exit;
+			}
+		}
+
+		ret = FALSE;
+	}
+
+exit:
+
+	return ret;
+}
+
+
+//===========================================================================================================================
+//	HostsFileOpen
+//===========================================================================================================================
+
+DEBUG_LOCAL OSStatus
+HostsFileOpen( HostsFile ** self, const char * fname )
+{
+	OSStatus err = kNoErr;
+
+	*self = (HostsFile*) malloc( sizeof( HostsFile ) );
+	require_action( *self, exit, err = kNoMemoryErr );
+	memset( *self, 0, sizeof( HostsFile ) );
+
+	(*self)->m_bufferSize = BUFFER_INITIAL_SIZE;
+	(*self)->m_buffer = (char*) malloc( (*self)->m_bufferSize );
+	require_action( (*self)->m_buffer, exit, err = kNoMemoryErr );
+
+	// check malloc
+
+	(*self)->m_fp = fopen( fname, "r" );
+	require_action( (*self)->m_fp, exit, err = kUnknownErr );
+
+exit:
+
+	if ( err && *self )
+	{
+		HostsFileClose( *self );
+		*self = NULL;
+	}
+		
+	return err;
+}
+
+
+//===========================================================================================================================
+//	HostsFileClose
+//===========================================================================================================================
+
+DEBUG_LOCAL OSStatus
+HostsFileClose( HostsFile * self )
+{
+	check( self );
+
+	if ( self->m_buffer )
+	{
+		free( self->m_buffer );
+		self->m_buffer = NULL;
+	}
+
+	if ( self->m_fp )
+	{
+		fclose( self->m_fp );
+		self->m_fp = NULL;
+	}
+
+	free( self );
+
+	return kNoErr;
+} 
+
+
+//===========================================================================================================================
+//	HostsFileInfoFree
+//===========================================================================================================================
+
+DEBUG_LOCAL void
+HostsFileInfoFree( HostsFileInfo * info )
+{
+	while ( info )
+	{
+		HostsFileInfo * next = info->m_next;
+
+		if ( info->m_host.h_addr_list )
+		{
+			if ( info->m_host.h_addr_list[0] )
+			{
+				free( info->m_host.h_addr_list[0] );
+				info->m_host.h_addr_list[0] = NULL;
+			}
+
+			free( info->m_host.h_addr_list );
+			info->m_host.h_addr_list = NULL;
+		}
+
+		if ( info->m_host.h_aliases )
+		{
+			int i;
+
+			for ( i = 0; info->m_host.h_aliases[i]; i++ )
+			{
+				free( info->m_host.h_aliases[i] );
+			}
+
+			free( info->m_host.h_aliases );
+		}
+
+		if ( info->m_host.h_name )
+		{
+			free( info->m_host.h_name );
+			info->m_host.h_name = NULL;
+		}
+			
+		free( info );
+
+		info = next;
+	}
+}
+
+
+//===========================================================================================================================
+//	HostsFileNext
+//===========================================================================================================================
+
+DEBUG_LOCAL OSStatus
+HostsFileNext( HostsFile * self, HostsFileInfo ** hInfo )
+{
+	struct sockaddr_in6	addr_6;
+	struct sockaddr_in	addr_4;
+	int					numAliases = ALIASES_INITIAL_SIZE;
+	char			*	line;
+	char			*	tok;
+	int					dwSize;
+	int					idx;
+	int					i;
+	short				family;
+	OSStatus			err = kNoErr;
+
+	check( self );
+	check( self->m_fp );
+	check( hInfo );
+
+	idx	= 0;
+
+	*hInfo = (HostsFileInfo*) malloc( sizeof( HostsFileInfo ) );
+	require_action( *hInfo, exit, err = kNoMemoryErr );
+	memset( *hInfo, 0, sizeof( HostsFileInfo ) );
+
+	for ( ; ; )
+	{
+		line = fgets( self->m_buffer + idx, self->m_bufferSize - idx, self->m_fp );
+		
+		if ( line == NULL )
+		{
+			err = 1;
+			goto exit;
+		}
+
+		// If there's no eol and no eof, then we didn't get the whole line
+
+		if ( !strchr( line, '\n' ) && !feof( self->m_fp ) )
+		{
+			int			bufferSize;
+			char	*	buffer;
+
+			/* Try and allocate space for longer line */
+
+			bufferSize	= self->m_bufferSize * 2;
+			buffer		= (char*) realloc( self->m_buffer, bufferSize );
+			require_action( buffer, exit, err = kNoMemoryErr );
+			self->m_bufferSize	= bufferSize;
+			self->m_buffer		= buffer;
+			idx					= (int) strlen( self->m_buffer );
+
+			continue;
+		}
+
+		line	= self->m_buffer;
+		idx		= 0;
+
+		if (*line == '#')
+		{
+			continue;
+		}
+
+		// Get rid of either comments or eol characters
+
+		if (( tok = strpbrk(line, "#\n")) != NULL )
+		{
+			*tok = '\0';
+		}
+
+		// Make sure there is some whitespace on this line
+
+		if (( tok = strpbrk(line, " \t")) == NULL )
+		{
+			continue;
+		}
+
+		// Create two strings, where p == the IP Address and tok is the name list
+
+		*tok++ = '\0';
+
+		while ( *tok == ' ' || *tok == '\t')
+		{
+			tok++;
+		}
+
+		// Now we have the name
+
+		(*hInfo)->m_host.h_name = (char*) malloc( strlen( tok ) + 1 );
+		require_action( (*hInfo)->m_host.h_name, exit, err = kNoMemoryErr );
+		strcpy( (*hInfo)->m_host.h_name, tok );
+
+		// Now create the address (IPv6/IPv4)
+
+		addr_6.sin6_family	= family = AF_INET6;
+		dwSize				= sizeof( addr_6 );
+
+		if ( WSAStringToAddress( line, AF_INET6, NULL, ( struct sockaddr*) &addr_6, &dwSize ) != 0 )
+		{
+			addr_4.sin_family = family = AF_INET;
+			dwSize = sizeof( addr_4 );
+
+			if (WSAStringToAddress( line, AF_INET, NULL, ( struct sockaddr*) &addr_4, &dwSize ) != 0 )
+			{
+				continue;
+			}
+		}
+
+		(*hInfo)->m_host.h_addr_list = (char**) malloc( sizeof( char**) * 2 );
+		require_action( (*hInfo)->m_host.h_addr_list, exit, err = kNoMemoryErr );
+
+		if ( family == AF_INET6 )
+		{
+			(*hInfo)->m_host.h_length		= (short) sizeof( addr_6.sin6_addr );
+			(*hInfo)->m_host.h_addr_list[0] = (char*) malloc( (*hInfo)->m_host.h_length );
+			require_action( (*hInfo)->m_host.h_addr_list[0], exit, err = kNoMemoryErr );
+			memmove( (*hInfo)->m_host.h_addr_list[0], &addr_6.sin6_addr, sizeof( addr_6.sin6_addr ) );
+			
+		}
+		else
+		{
+			(*hInfo)->m_host.h_length		= (short) sizeof( addr_4.sin_addr );
+			(*hInfo)->m_host.h_addr_list[0] = (char*) malloc( (*hInfo)->m_host.h_length );
+			require_action( (*hInfo)->m_host.h_addr_list[0], exit, err = kNoMemoryErr );
+			memmove( (*hInfo)->m_host.h_addr_list[0], &addr_4.sin_addr, sizeof( addr_4.sin_addr ) );
+		}
+
+		(*hInfo)->m_host.h_addr_list[1] = NULL;
+		(*hInfo)->m_host.h_addrtype		= family;
+
+		// Now get the aliases
+
+		if ((tok = strpbrk(tok, " \t")) != NULL)
+		{
+			*tok++ = '\0';
+		}
+
+		i = 0;
+
+		(*hInfo)->m_host.h_aliases		= (char**) malloc( sizeof(char**) * numAliases );
+		require_action( (*hInfo)->m_host.h_aliases, exit, err = kNoMemoryErr );
+		(*hInfo)->m_host.h_aliases[0]	= NULL;
+
+		while ( tok && *tok )
+		{
+			// Skip over the whitespace, waiting for the start of the next alias name
+
+			if (*tok == ' ' || *tok == '\t')
+			{
+				tok++;
+				continue;
+			}
+
+			// Check to make sure we don't exhaust the alias buffer
+
+			if ( i >= ( numAliases - 1 ) )
+			{
+				numAliases = numAliases * 2;
+				(*hInfo)->m_host.h_aliases = (char**) realloc( (*hInfo)->m_host.h_aliases, numAliases * sizeof( char** ) );
+				require_action( (*hInfo)->m_host.h_aliases, exit, err = kNoMemoryErr );
+			}
+
+			(*hInfo)->m_host.h_aliases[i] = (char*) malloc( strlen( tok ) + 1 );
+			require_action( (*hInfo)->m_host.h_aliases[i], exit, err = kNoMemoryErr );
+
+			strcpy( (*hInfo)->m_host.h_aliases[i], tok );
+
+			if (( tok = strpbrk( tok, " \t")) != NULL )
+			{
+				*tok++ = '\0';
+			}
+
+			(*hInfo)->m_host.h_aliases[++i] = NULL;
+		}
+
+		break;
+	}
+
+exit:
+
+	if ( err && ( *hInfo ) )
+	{
+		HostsFileInfoFree( *hInfo );
+		*hInfo = NULL;
+	}
+
+	return err;
+}

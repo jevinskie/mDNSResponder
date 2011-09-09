@@ -23,6 +23,15 @@
     Change History (most recent first):
     
 $Log: UtilTypes.h,v $
+Revision 1.11  2005/03/05 02:27:46  shersche
+<rdar://problem/4030388> Generic drivers don't do color
+
+Revision 1.10  2005/02/08 21:45:06  shersche
+<rdar://problem/3947490> Default to Generic PostScript or PCL if unable to match driver
+
+Revision 1.9  2005/02/01 01:16:12  shersche
+Change window owner from CSecondPage to CPrinterSetupWizardSheet
+
 Revision 1.8  2005/01/06 08:18:26  shersche
 Add protocol field to service, add EmptyQueues() function to service
 
@@ -62,7 +71,7 @@ First checked in
 #include <list>
 #include <DebugServices.h>
 
-class CSecondPage;
+class CPrinterSetupWizardSheet;
 
 #define	kDefaultPriority	50
 #define kDefaultQTotal		1
@@ -76,6 +85,7 @@ namespace PrinterSetupWizard
 	struct Model;
 
 	typedef std::list<Queue*>	Queues;
+	typedef std::list<Printer*>	Printers;
 	typedef std::list<Service*>	Services;
 	typedef std::list<Model*>	Models;
 
@@ -91,7 +101,7 @@ namespace PrinterSetupWizard
 			const std::string	&	type
 			);
 
-		CSecondPage	*	window;
+		CPrinterSetupWizardSheet	*	window;
 		HTREEITEM		item;
 
 		//
@@ -120,7 +130,8 @@ namespace PrinterSetupWizard
 		bool			driverInstalled;
 		CString			infFileName;
 		CString			manufacturer;
-		CString			model;
+		CString			displayModelName;
+		CString			modelName;
 		CString			portName;
 		bool			deflt;
 
@@ -152,6 +163,7 @@ namespace PrinterSetupWizard
 		DNSServiceRef	serviceRef;
 		CString			hostname;
 		unsigned short	portNumber;
+		CString			pdl;
 		CString			usb_MFG;
 		CString			usb_MDL;
 		CString			description;
@@ -190,6 +202,9 @@ namespace PrinterSetupWizard
 		CString		name;
 		CString		tag;
 		Models		models;
+
+		Model*
+		find( const CString & name );
 	};
 
 
@@ -197,6 +212,7 @@ namespace PrinterSetupWizard
 	{
 		bool		driverInstalled;
 		CString		infFileName;
+		CString		displayName;
 		CString		name;
 	};
 
@@ -274,6 +290,24 @@ namespace PrinterSetupWizard
 	inline
 	Queue::~Queue()
 	{
+	}
+
+	inline Model*
+	Manufacturer::find( const CString & name )
+	{
+		Models::iterator it;
+
+		for ( it = models.begin(); it != models.end(); it++ )
+		{
+			Model * model = *it;
+
+			if ( model->name = name )
+			{
+				return model;
+			}
+		}
+
+		return NULL;
 	}
 }
 

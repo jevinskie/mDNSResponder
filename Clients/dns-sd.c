@@ -90,7 +90,7 @@ typedef	int	pid_t;
 typedef union { unsigned char b[2]; unsigned short NotAnInteger; } Opaque16;
 
 static int operation;
-static uint32_t interface = kDNSServiceInterfaceIndexAny;
+static uint32_t opinterface = kDNSServiceInterfaceIndexAny;
 static DNSServiceRef client  = NULL;
 static DNSServiceRef client2 = NULL;
 static int num_printed;
@@ -269,6 +269,8 @@ static void DNSSD_API enum_reply(DNSServiceRef client, DNSServiceFlags flags, ui
 		GetNextLabel(label[labels-1-depth], text);
 		printf("> %s\n", text);
 		}
+
+	fflush( stdout );
 	}
 
 static void DNSSD_API browse_reply(DNSServiceRef client, DNSServiceFlags flags, uint32_t ifIndex, DNSServiceErrorType errorCode,
@@ -281,6 +283,7 @@ static void DNSSD_API browse_reply(DNSServiceRef client, DNSServiceFlags flags, 
 	if (num_printed++ == 0) printf("Timestamp     A/R Flags if %-24s %-24s %s\n", "Domain", "Service Type", "Instance Name");
 	printtimestamp();
 	printf("%s%6X%3d %-24s %-24s %s\n", op, flags, ifIndex, replyDomain, replyType, replyName);
+	fflush( stdout );
 	}
 
 static void DNSSD_API resolve_reply(DNSServiceRef client, DNSServiceFlags flags, uint32_t ifIndex, DNSServiceErrorType errorCode,
@@ -328,6 +331,7 @@ static void DNSSD_API resolve_reply(DNSServiceRef client, DNSServiceFlags flags,
 		printf(" TXT %s", txtInfo);
 		}
 	printf("\n");
+	fflush( stdout );
 	}
 
 static void myTimerCallBack(void)
@@ -399,6 +403,7 @@ static void DNSSD_API reg_reply(DNSServiceRef client, DNSServiceFlags flags, DNS
 		}
 
 	if (operation == 'A' || operation == 'U' || operation == 'N') timeOut = 5;
+	fflush( stdout );
 	}
 
 static void DNSSD_API qr_reply(DNSServiceRef sdRef, DNSServiceFlags flags, uint32_t ifIndex, DNSServiceErrorType errorCode,
@@ -428,6 +433,7 @@ static void DNSSD_API qr_reply(DNSServiceRef sdRef, DNSServiceFlags flags, uint3
 	if (num_printed++ == 0) printf("Timestamp     A/R Flags if %-30s%4s%4s Rdata\n", "Name", "T", "C");
 	printtimestamp();
 	printf("%s%6X%3d %-30s%4d%4d %s\n", op, flags, ifIndex, fullname, rrtype, rrclass, rdb);
+	fflush( stdout );
 	}
 
 //*************************************************************************************************************
@@ -517,6 +523,7 @@ static void DNSSD_API MyRegisterRecordCallback(DNSServiceRef service, DNSRecordR
 		case kDNSServiceErr_NameConflict: printf("Name in use, please choose another\n"); exit(-1);
 		default:                          printf("Error %d\n", errorCode); return;
 		}
+	fflush( stdout );
 	}
 
 static DNSServiceErrorType RegisterProxyAddressRecord(DNSServiceRef *sdRef, const char *host, const char *ip)
@@ -533,8 +540,8 @@ static DNSServiceErrorType RegisterService(DNSServiceRef *sdRef,
 	{
 	uint16_t PortAsNumber = atoi(port);
 	Opaque16 registerPort = { { PortAsNumber >> 8, PortAsNumber & 0xFF } };
-	char txt[2048] = "";
-	char *ptr = txt;
+	unsigned char txt[2048] = "";
+	unsigned char *ptr = txt;
 	int i;
 	
 	if (nam[0] == '.' && nam[1] == 0) nam = "";   // We allow '.' on the command line as a synonym for empty string
@@ -542,16 +549,16 @@ static DNSServiceErrorType RegisterService(DNSServiceRef *sdRef,
 	
 	for (i = 0; i < argc; i++)
 		{
-		char *len = ptr++;
+		unsigned char *len = ptr++;
 		*len = strlen(argv[i]);
-		strcpy(ptr, argv[i]);
+		strcpy((char*)ptr, argv[i]);
 		ptr += *len;
 		}
 	
 	printf("Registering Service %s.%s%s", nam, typ, dom);
 	if (host && *host) printf(" host %s", host);
 	printf(" port %s %s\n", port, txt);
-	return(DNSServiceRegister(sdRef, /* kDNSServiceFlagsAllowRemoteQuery */ 0, interface, nam, typ, dom, host, registerPort.NotAnInteger, ptr-txt, txt, reg_reply, NULL));
+	return(DNSServiceRegister(sdRef, /* kDNSServiceFlagsAllowRemoteQuery */ 0, opinterface, nam, typ, dom, host, registerPort.NotAnInteger, ptr-txt, txt, reg_reply, NULL));
 	}
 
 int main(int argc, char **argv)
@@ -573,7 +580,7 @@ int main(int argc, char **argv)
 		{
 		argc--;
 		argv++;
-		interface = kDNSServiceInterfaceIndexLocalOnly;
+		opinterface = kDNSServiceInterfaceIndexLocalOnly;
 		printf("Using LocalOnly\n");
 		}
 
@@ -584,13 +591,13 @@ int main(int argc, char **argv)
 	switch (operation)
 		{
 		case 'E':	printf("Looking for recommended registration domains:\n");
-					err = DNSServiceEnumerateDomains(&client, kDNSServiceFlagsRegistrationDomains, interface, enum_reply, NULL);
+					err = DNSServiceEnumerateDomains(&client, kDNSServiceFlagsRegistrationDomains, opinterface, enum_reply, NULL);
 					break;
 
 		case 'F':	printf("Looking for recommended browsing domains:\n");
-					err = DNSServiceEnumerateDomains(&client, kDNSServiceFlagsBrowseDomains, interface, enum_reply, NULL);
+					err = DNSServiceEnumerateDomains(&client, kDNSServiceFlagsBrowseDomains, opinterface, enum_reply, NULL);
 					//enum_reply(client, kDNSServiceFlagsAdd, 0, 0, "nicta.com.au.", NULL);
-					//enum_reply(client, kDNSServiceFlagsAdd, 0, 0, "rendezvous.nicta.com.au.", NULL);
+					//enum_reply(client, kDNSServiceFlagsAdd, 0, 0, "bonjour.nicta.com.au.", NULL);
 					//enum_reply(client, kDNSServiceFlagsAdd, 0, 0, "ibm.com.", NULL);
 					//enum_reply(client, kDNSServiceFlagsAdd, 0, 0, "dns-sd.ibm.com.", NULL);
 					break;
@@ -599,14 +606,14 @@ int main(int argc, char **argv)
 					dom = (argc < optind+2) ? "" : argv[optind+1];
 					if (dom[0] == '.' && dom[1] == 0) dom[0] = 0;   // We allow '.' on the command line as a synonym for empty string
 					printf("Browsing for %s%s\n", argv[optind+0], dom);
-					err = DNSServiceBrowse(&client, 0, interface, argv[optind+0], dom, browse_reply, NULL);
+					err = DNSServiceBrowse(&client, 0, opinterface, argv[optind+0], dom, browse_reply, NULL);
 					break;
 
 		case 'L':	if (argc < optind+2) goto Fail;
 					dom = (argc < optind+3) ? "local" : argv[optind+2];
 					if (dom[0] == '.' && dom[1] == 0) dom = "local";   // We allow '.' on the command line as a synonym for "local"
 					printf("Lookup %s.%s.%s\n", argv[optind+0], argv[optind+1], dom);
-					err = DNSServiceResolve(&client, 0, interface, argv[optind+0], argv[optind+1], dom, resolve_reply, NULL);
+					err = DNSServiceResolve(&client, 0, opinterface, argv[optind+0], argv[optind+1], dom, resolve_reply, NULL);
 					break;
 
 		case 'R':	if (argc < optind+4) goto Fail;
@@ -626,7 +633,7 @@ int main(int argc, char **argv)
 					rrtype = (argc <= optind+1) ? kDNSServiceType_A  : GetRRType(argv[optind+1]);
 					rrclass = (argc <= optind+2) ? kDNSServiceClass_IN : atoi(argv[optind+2]);
 					if (rrtype == kDNSServiceType_TXT || rrtype == kDNSServiceType_PTR) flags |= kDNSServiceFlagsLongLivedQuery;
-					err = DNSServiceQueryRecord(&client, flags, interface, argv[optind+0], rrtype, rrclass, qr_reply, NULL);
+					err = DNSServiceQueryRecord(&client, flags, opinterface, argv[optind+0], rrtype, rrclass, qr_reply, NULL);
 					break;
 					}
 
@@ -636,7 +643,7 @@ int main(int argc, char **argv)
 					Opaque16 registerPort = { { 0x12, 0x34 } };
 					static const char TXT[] = "\xC" "First String" "\xD" "Second String" "\xC" "Third String";
 					printf("Registering Service Test._testupdate._tcp.local.\n");
-					err = DNSServiceRegister(&client, 0, interface, "Test", "_testupdate._tcp.", "", NULL, registerPort.NotAnInteger, sizeof(TXT)-1, TXT, reg_reply, NULL);
+					err = DNSServiceRegister(&client, 0, opinterface, "Test", "_testupdate._tcp.", "", NULL, registerPort.NotAnInteger, sizeof(TXT)-1, TXT, reg_reply, NULL);
 					break;
 					}
 
@@ -647,7 +654,7 @@ int main(int argc, char **argv)
 					for (i=0; i<sizeof(TXT); i++)
 						if ((i & 0x1F) == 0) TXT[i] = 0x1F; else TXT[i] = 'A' + (i >> 5);
 					printf("Registering Service Test._testlargetxt._tcp.local.\n");
-					err = DNSServiceRegister(&client, 0, interface, "Test", "_testlargetxt._tcp.", "", NULL, registerPort.NotAnInteger, sizeof(TXT), TXT, reg_reply, NULL);
+					err = DNSServiceRegister(&client, 0, opinterface, "Test", "_testlargetxt._tcp.", "", NULL, registerPort.NotAnInteger, sizeof(TXT), TXT, reg_reply, NULL);
 					break;
 					}
 
@@ -657,7 +664,7 @@ int main(int argc, char **argv)
 					static const char TXT1[] = "\xC" "First String"  "\xD" "Second String" "\xC" "Third String";
 					static const char TXT2[] = "\xD" "Fourth String" "\xC" "Fifth String"  "\xC" "Sixth String";
 					printf("Registering Service Test._testdualtxt._tcp.local.\n");
-					err = DNSServiceRegister(&client, 0, interface, "Test", "_testdualtxt._tcp.", "", NULL, registerPort.NotAnInteger, sizeof(TXT1)-1, TXT1, reg_reply, NULL);
+					err = DNSServiceRegister(&client, 0, opinterface, "Test", "_testdualtxt._tcp.", "", NULL, registerPort.NotAnInteger, sizeof(TXT1)-1, TXT1, reg_reply, NULL);
 					if (!err) err = DNSServiceAddRecord(client, &record, 0, kDNSServiceType_TXT, sizeof(TXT2)-1, TXT2, 0);
 					break;
 					}
@@ -667,7 +674,7 @@ int main(int argc, char **argv)
 					Opaque16 registerPort = { { pid >> 8, pid & 0xFF } };
 					static const char TXT[] = "\x09" "Test Data";
 					printf("Registering Service Test._testtxt._tcp.local.\n");
-					err = DNSServiceRegister(&client, 0, interface, "Test", "_testtxt._tcp.", "", NULL, registerPort.NotAnInteger, 0, NULL, reg_reply, NULL);
+					err = DNSServiceRegister(&client, 0, opinterface, "Test", "_testtxt._tcp.", "", NULL, registerPort.NotAnInteger, 0, NULL, reg_reply, NULL);
 					if (!err) err = DNSServiceUpdateRecord(client, NULL, 0, sizeof(TXT)-1, TXT, 0);
 					break;
 					}

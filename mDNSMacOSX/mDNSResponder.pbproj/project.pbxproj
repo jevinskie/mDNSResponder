@@ -23,7 +23,7 @@
 				FRAMEWORK_SEARCH_PATHS = "";
 				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				GCC_VERSION = 3.3;
-				HEADER_SEARCH_PATHS = "\"$(APPLE_INTERNAL_DEVELOPER_DIR)/Headers\"";
+				HEADER_SEARCH_PATHS = "../mDNSShared \"$(APPLE_INTERNAL_DEVELOPER_DIR)/Headers\" \"$(OBJROOT)\"";
 				LIBRARY_SEARCH_PATHS = "";
 				MACOSX_DEPLOYMENT_TARGET = 10.2;
 				OPTIMIZATION_CFLAGS = "-O0";
@@ -178,6 +178,7 @@
 				FF16238F07023BD2001AB7D7,
 				FFD41DDB0664169900F0C438,
 				FFD41DDC0664169B00F0C438,
+				FF2A870707B4481500B14068,
 			);
 			isa = PBXAggregateTarget;
 			name = "Build All";
@@ -252,6 +253,8 @@
 				DB2CC4530662DD6800335AB3,
 				DB2CC4660662DF5C00335AB3,
 				FF25792906C9A70800376F7B,
+				FFFB0DA907B43C9100B88D48,
+				FF2609E107B440DD00CE10E5,
 			);
 		};
 		08FB7794FE84155DC02AAC07 = {
@@ -260,6 +263,7 @@
 				6575FC1F022EB78C00000109,
 				6575FBFE022EAFA800000109,
 				DB2CC4420662DCE500335AB3,
+				FFFB0DA407B43BED00B88D48,
 				08FB779DFE84155DC02AAC07,
 				19C28FBDFE9D53C911CA2CBB,
 			);
@@ -301,10 +305,13 @@
 		08FB779DFE84155DC02AAC07 = {
 			children = (
 				7F869685066EE02400D2A2DC,
+				FFFB0DB407B43D2700B88D48,
 				09AB6884FE841BABC02AAC07,
 				65713D46025A293200000109,
 				00CA213D02786FC30CCA2C71,
 				DB2CC4680662DFF500335AB3,
+				FF2609FA07B4433800CE10E5,
+				FF260A1F07B4436900CE10E5,
 			);
 			isa = PBXGroup;
 			name = "External Frameworks and Libraries";
@@ -324,7 +331,7 @@
 				FRAMEWORK_SEARCH_PATHS = "";
 				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				GCC_VERSION = 3.3;
-				HEADER_SEARCH_PATHS = "\"$(APPLE_INTERNAL_DEVELOPER_DIR)/Headers\"";
+				HEADER_SEARCH_PATHS = "../mDNSShared \"$(APPLE_INTERNAL_DEVELOPER_DIR)/Headers\" \"$(OBJROOT)\"";
 				INSTALL_PATH = /usr/sbin;
 				LIBRARY_SEARCH_PATHS = "";
 				MACOSX_DEPLOYMENT_TARGET = 10.2;
@@ -434,6 +441,8 @@
 				FFD41DDA0664157900F0C438,
 				FF25794406C9A70800376F7B,
 				FF1C919B07021C84001048AB,
+				FFFB0DAA07B43C9100B88D48,
+				FF2609E207B440DD00CE10E5,
 			);
 			isa = PBXGroup;
 			name = Products;
@@ -944,7 +953,7 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				GCC_VERSION = 3.3;
-				INSTALL_PATH = /System/Library/Java/Extensions;
+				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/Java/Extensions";
 				JAVA_ARCHIVE_CLASSES = YES;
 				JAVA_ARCHIVE_COMPRESSION = YES;
 				JAVA_ARCHIVE_TYPE = JAR;
@@ -952,6 +961,7 @@
 				JAVA_COMPILER_TARGET_VM_VERSION = 1.2;
 				JAVA_SOURCE_SUBDIR = .;
 				LIBRARY_STYLE = STATIC;
+				MACOSX_DEPLOYMENT_TARGET = 10.2;
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				OTHER_LIBTOOL_FLAGS = "";
@@ -1101,6 +1111,7 @@
 				HEADER_SEARCH_PATHS = "../mDNSShared \"$(SYSTEM_LIBRARY_DIR)/Frameworks/JavaVM.framework/Versions/A/Headers\" \"$(SYSTEM_LIBRARY_DIR)/Frameworks/JavaVM.framework/Versions/1.3.1/Headers\" \"$(OBJROOT)/mDNSResponder.build/dns_sd.jar.build\"";
 				INSTALL_PATH = /usr/lib/java;
 				LIBRARY_STYLE = DYNAMIC;
+				MACOSX_DEPLOYMENT_TARGET = 10.2;
 				OTHER_CFLAGS = "";
 				OTHER_LIBTOOL_FLAGS = "";
 				OTHER_REZFLAGS = "";
@@ -1275,6 +1286,18 @@
 //FF2
 //FF3
 //FF4
+		FF08480607CEB8E800AE6769 = {
+			isa = PBXFileReference;
+			name = inprogress.tiff;
+			path = PreferencePane/Artwork/inprogress.tiff;
+			refType = 2;
+		};
+		FF08480707CEB8E800AE6769 = {
+			fileRef = FF08480607CEB8E800AE6769;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
 		FF0E0B5D065ADC7600FE4D9C = {
 			fileEncoding = 4;
 			isa = PBXFileReference;
@@ -1585,6 +1608,385 @@
 			isa = PBXTargetDependency;
 			target = FF25792906C9A70800376F7B;
 		};
+		FF2609DC07B440DD00CE10E5 = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXHeadersBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF2609DD07B440DD00CE10E5 = {
+			buildActionMask = 2147483647;
+			files = (
+				FF260A2B07B4464B00CE10E5,
+				FF260A2C07B4464B00CE10E5,
+				FF260A2D07B4464B00CE10E5,
+				FF260A2E07B4464B00CE10E5,
+				FF260A2F07B4464B00CE10E5,
+				FF260A3007B4464B00CE10E5,
+				FF260A3107B4464B00CE10E5,
+				FF260A3407B4466900CE10E5,
+				FF260A3507B4466900CE10E5,
+				FF260A4A07B4475600CE10E5,
+				FF260A4D07B4477F00CE10E5,
+				FF2A870607B447EF00B14068,
+				FF08480707CEB8E800AE6769,
+			);
+			isa = PBXResourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF2609DE07B440DD00CE10E5 = {
+			buildActionMask = 2147483647;
+			files = (
+				FF2609E407B441D400CE10E5,
+				FF2609E507B441D700CE10E5,
+				FF2609E607B441DB00CE10E5,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF2609DF07B440DD00CE10E5 = {
+			buildActionMask = 2147483647;
+			files = (
+				FF2609F607B442BA00CE10E5,
+				FF2609F707B442C000CE10E5,
+				FF2609FB07B4433800CE10E5,
+				FF260A2007B4436900CE10E5,
+				FF260A2107B443B500CE10E5,
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF2609E007B440DD00CE10E5 = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXRezBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF2609E107B440DD00CE10E5 = {
+			buildPhases = (
+				FF2609DC07B440DD00CE10E5,
+				FF2609DD07B440DD00CE10E5,
+				FF2609DE07B440DD00CE10E5,
+				FF2609DF07B440DD00CE10E5,
+				FF2609E007B440DD00CE10E5,
+			);
+			buildSettings = {
+				EXPORTED_SYMBOLS_FILE = "";
+				GCC_VERSION = 3.3;
+				INSTALL_PATH = "$(SYSTEM_LIBRARY_DIR)/PreferencePanes";
+				MACOSX_DEPLOYMENT_TARGET = 10.2;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "-twolevel_namespace";
+				OTHER_REZFLAGS = "";
+				PREBINDING = NO;
+				PRODUCT_NAME = Bonjour;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+				WRAPPER_EXTENSION = prefPane;
+			};
+			dependencies = (
+				FF2609E307B440EC00CE10E5,
+			);
+			isa = PBXBundleTarget;
+			name = PreferencePane;
+			productInstallPath = "$(SYSTEM_LIBRARY_DIR)/PreferencePanes";
+			productName = PreferencePane;
+			productReference = FF2609E207B440DD00CE10E5;
+			productSettingsXML = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE plist PUBLIC \"-//Apple Computer//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+<plist version=\"1.0\">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>Bonjour</string>
+	<key>CFBundleGetInfoString</key>
+	<string></string>
+	<key>CFBundleIconFile</key>
+	<string>DNSServiceDiscoveryPref</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.apple.preference.bonjour</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string></string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleShortVersionString</key>
+	<string></string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>1.0</string>
+	<key>NSMainNibFile</key>
+	<string>DNSServiceDiscoveryPref</string>
+	<key>NSPrefPaneIconFile</key>
+	<string>DNSServiceDiscoveryPref.tiff</string>
+	<key>NSPrefPaneIconLabel</key>
+	<string>Bonjour</string>
+	<key>NSPrincipalClass</key>
+	<string>DNSServiceDiscoveryPref</string>
+</dict>
+</plist>
+";
+		};
+		FF2609E207B440DD00CE10E5 = {
+			isa = PBXBundleReference;
+			path = Bonjour.prefPane;
+			refType = 3;
+		};
+		FF2609E307B440EC00CE10E5 = {
+			isa = PBXTargetDependency;
+			target = FFFB0DA907B43C9100B88D48;
+		};
+		FF2609E407B441D400CE10E5 = {
+			fileRef = FFFB0DAC07B43CBA00B88D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF2609E507B441D700CE10E5 = {
+			fileRef = FFFB0DAD07B43CBA00B88D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF2609E607B441DB00CE10E5 = {
+			fileRef = FFFB0DAE07B43CBA00B88D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF2609F607B442BA00CE10E5 = {
+			fileRef = 65713D46025A293200000109;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF2609F707B442C000CE10E5 = {
+			fileRef = 7F869685066EE02400D2A2DC;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF2609FA07B4433800CE10E5 = {
+			isa = PBXFrameworkReference;
+			name = Cocoa.framework;
+			path = /System/Library/Frameworks/Cocoa.framework;
+			refType = 0;
+		};
+		FF2609FB07B4433800CE10E5 = {
+			fileRef = FF2609FA07B4433800CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A1F07B4436900CE10E5 = {
+			isa = PBXFrameworkReference;
+			name = PreferencePanes.framework;
+			path = /System/Library/Frameworks/PreferencePanes.framework;
+			refType = 0;
+		};
+		FF260A2007B4436900CE10E5 = {
+			fileRef = FF260A1F07B4436900CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A2107B443B500CE10E5 = {
+			fileRef = 09AB6884FE841BABC02AAC07;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A2207B443C500CE10E5 = {
+			fileRef = 09AB6884FE841BABC02AAC07;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A2307B4463400CE10E5 = {
+			children = (
+				FF260A2407B4464B00CE10E5,
+				FF260A2507B4464B00CE10E5,
+				FF260A2607B4464B00CE10E5,
+				FF260A2707B4464B00CE10E5,
+				FF260A2907B4464B00CE10E5,
+				FF260A2807B4464B00CE10E5,
+				FF08480607CEB8E800AE6769,
+				FF260A2A07B4464B00CE10E5,
+				FF260A3207B4466900CE10E5,
+				FF260A3307B4466900CE10E5,
+				FF260A4807B4475600CE10E5,
+				FF260A4B07B4477F00CE10E5,
+			);
+			isa = PBXGroup;
+			name = Resources;
+			refType = 4;
+		};
+		FF260A2407B4464B00CE10E5 = {
+			isa = PBXFileReference;
+			name = remove_idle.tiff;
+			path = PreferencePane/Artwork/remove_idle.tiff;
+			refType = 2;
+		};
+		FF260A2507B4464B00CE10E5 = {
+			isa = PBXFileReference;
+			name = add_pressed.tiff;
+			path = PreferencePane/Artwork/add_pressed.tiff;
+			refType = 2;
+		};
+		FF260A2607B4464B00CE10E5 = {
+			isa = PBXFileReference;
+			name = remove_disabled.tiff;
+			path = PreferencePane/Artwork/remove_disabled.tiff;
+			refType = 2;
+		};
+		FF260A2707B4464B00CE10E5 = {
+			isa = PBXFileReference;
+			name = add_idle.tiff;
+			path = PreferencePane/Artwork/add_idle.tiff;
+			refType = 2;
+		};
+		FF260A2807B4464B00CE10E5 = {
+			isa = PBXFileReference;
+			name = success.tiff;
+			path = PreferencePane/Artwork/success.tiff;
+			refType = 2;
+		};
+		FF260A2907B4464B00CE10E5 = {
+			isa = PBXFileReference;
+			name = remove_pressed.tiff;
+			path = PreferencePane/Artwork/remove_pressed.tiff;
+			refType = 2;
+		};
+		FF260A2A07B4464B00CE10E5 = {
+			isa = PBXFileReference;
+			name = failure.tiff;
+			path = PreferencePane/Artwork/failure.tiff;
+			refType = 2;
+		};
+		FF260A2B07B4464B00CE10E5 = {
+			fileRef = FF260A2407B4464B00CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A2C07B4464B00CE10E5 = {
+			fileRef = FF260A2507B4464B00CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A2D07B4464B00CE10E5 = {
+			fileRef = FF260A2607B4464B00CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A2E07B4464B00CE10E5 = {
+			fileRef = FF260A2707B4464B00CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A2F07B4464B00CE10E5 = {
+			fileRef = FF260A2807B4464B00CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A3007B4464B00CE10E5 = {
+			fileRef = FF260A2907B4464B00CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A3107B4464B00CE10E5 = {
+			fileRef = FF260A2A07B4464B00CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A3207B4466900CE10E5 = {
+			isa = PBXFileReference;
+			name = DNSServiceDiscoveryPref.icns;
+			path = PreferencePane/DNSServiceDiscoveryPref.icns;
+			refType = 2;
+		};
+		FF260A3307B4466900CE10E5 = {
+			isa = PBXFileReference;
+			name = DNSServiceDiscoveryPref.tiff;
+			path = PreferencePane/DNSServiceDiscoveryPref.tiff;
+			refType = 2;
+		};
+		FF260A3407B4466900CE10E5 = {
+			fileRef = FF260A3207B4466900CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A3507B4466900CE10E5 = {
+			fileRef = FF260A3307B4466900CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A4807B4475600CE10E5 = {
+			children = (
+				FF260A4907B4475600CE10E5,
+			);
+			isa = PBXVariantGroup;
+			name = DNSServiceDiscoveryPref.nib;
+			path = PreferencePane;
+			refType = 2;
+		};
+		FF260A4907B4475600CE10E5 = {
+			isa = PBXFileReference;
+			name = English;
+			path = PreferencePane/English.lproj/DNSServiceDiscoveryPref.nib;
+			refType = 2;
+		};
+		FF260A4A07B4475600CE10E5 = {
+			fileRef = FF260A4807B4475600CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF260A4B07B4477F00CE10E5 = {
+			children = (
+				FF260A4C07B4477F00CE10E5,
+			);
+			isa = PBXVariantGroup;
+			name = InfoPlist.strings;
+			path = PreferencePane;
+			refType = 2;
+		};
+		FF260A4C07B4477F00CE10E5 = {
+			fileEncoding = 4;
+			isa = PBXFileReference;
+			name = English;
+			path = PreferencePane/English.lproj/InfoPlist.strings;
+			refType = 2;
+		};
+		FF260A4D07B4477F00CE10E5 = {
+			fileRef = FF260A4B07B4477F00CE10E5;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF2A870607B447EF00B14068 = {
+			fileRef = FFFB0DAA07B43C9100B88D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FF2A870707B4481500B14068 = {
+			isa = PBXTargetDependency;
+			target = FF2609E107B440DD00CE10E5;
+		};
 		FF37BE9207614059003C0420 = {
 			buildActionMask = 2147483647;
 			files = (
@@ -1596,7 +1998,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ -e /usr/local/lib/libdnsinfo.a ]\nthen\nrm -f \"${OBJROOT}/libdnsinfo.a\"\nelse\ntouch ${OBJROOT}/empty.c\ncc ${OBJROOT}/empty.c -c -o \"${OBJROOT}/libdnsinfo.a\"\nrm -f ${OBJROOT}/empty.c\nfi";
+			shellScript = "if [ -e /usr/local/include/dnsinfo.h ]\nthen\nrm -f \"${OBJROOT}/dnsinfo.h\"\nrm -f \"${OBJROOT}/libdnsinfo.a\"\nelse\necho \"#define MDNS_NO_DNSINFO 1\" > ${OBJROOT}/dnsinfo.h\ntouch ${OBJROOT}/empty.c\ncc ${OBJROOT}/empty.c -c -o \"${OBJROOT}/libdnsinfo.a\"\nrm -f ${OBJROOT}/empty.c\nfi";
 		};
 		FF485D5105632E0000130380 = {
 			fileEncoding = 4;
@@ -1615,8 +2017,8 @@
 			neededFileNames = (
 			);
 			runOnlyForDeploymentPostprocessing = 1;
-			shellPath = /bin/sh;
-			shellScript = "mkdir -p ${DSTROOT}/System/Library/LaunchDaemons\ncp ${SRCROOT}/LaunchDaemonInfo.plist ${DSTROOT}/System/Library/LaunchDaemons/com.apple.mDNSResponder.plist";
+			shellPath = /bin/tcsh;
+			shellScript = "# Install plist to tell launchd to start mDNSResponder\nmkdir -p ${DSTROOT}${SYSTEM_LIBRARY_DIR}/LaunchDaemons\ncp ${SRCROOT}/LaunchDaemonInfo.plist ${DSTROOT}${SYSTEM_LIBRARY_DIR}/LaunchDaemons/com.apple.mDNSResponder.plist\n\n# Install mDNSResponder.bundle containing language localizations\nmkdir -p ${DSTROOT}${SYSTEM_LIBRARY_DIR}/CoreServices\ncp -R ${SRCROOT}/mDNSResponder-bundle ${DSTROOT}${SYSTEM_LIBRARY_DIR}/CoreServices/mDNSResponder.bundle\n\n# Remove unwanted CVS directories\nfind ${DSTROOT}${SYSTEM_LIBRARY_DIR}/CoreServices/mDNSResponder.bundle -depth -name CVS -exec rm -rf {} \\;\n\n# Expand UTF-8 files to UTF-16 (not necessary, but required by B&I policy)\nforeach file (`find ${DSTROOT}${SYSTEM_LIBRARY_DIR}/CoreServices/mDNSResponder.bundle -name Localizable.strings`)\niconv -f utf-8 -t utf-16 ${file} > ${file}.new\nmv -f ${file}.new ${file}\nend\n\n# Remove French localization (not wanted for Apple B&I builds)\nrm -rf ${DSTROOT}${SYSTEM_LIBRARY_DIR}/CoreServices/mDNSResponder.bundle/Resources/French.lproj\n";
 		};
 		FF5A0AE705632EA600743C27 = {
 			buildActionMask = 8;
@@ -1684,6 +2086,27 @@
 			isa = PBXTargetDependency;
 			target = DB2CC4530662DD6800335AB3;
 		};
+		FFE6935007C2CA7F00283007 = {
+			fileEncoding = 4;
+			isa = PBXFileReference;
+			name = ConfigurationAuthority.h;
+			path = PreferencePane/ConfigurationAuthority.h;
+			refType = 2;
+		};
+		FFE6935207C2CAA400283007 = {
+			fileEncoding = 4;
+			isa = PBXFileReference;
+			name = DNSServiceDiscoveryPref.h;
+			path = PreferencePane/DNSServiceDiscoveryPref.h;
+			refType = 2;
+		};
+		FFE6935407C2CABD00283007 = {
+			fileEncoding = 4;
+			isa = PBXFileReference;
+			name = PrivilegedOperations.h;
+			path = PreferencePane/PrivilegedOperations.h;
+			refType = 2;
+		};
 		FFF4F63A06CFE4DD00459EFD = {
 			fileEncoding = 4;
 			isa = PBXFileReference;
@@ -1724,7 +2147,139 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ -e /usr/local/lib/libdnsinfo.a ]\nthen\nrm -f \"${OBJROOT}/libdnsinfo.a\"\nelse\ntouch ${OBJROOT}/empty.c\ncc ${OBJROOT}/empty.c -c -o \"${OBJROOT}/libdnsinfo.a\"\nrm -f ${OBJROOT}/empty.c\nfi";
+			shellScript = "if [ -e /usr/local/include/dnsinfo.h ]\nthen\nrm -f \"${OBJROOT}/dnsinfo.h\"\nrm -f \"${OBJROOT}/libdnsinfo.a\"\nelse\necho \"#define MDNS_NO_DNSINFO 1\" > ${OBJROOT}/dnsinfo.h\ntouch ${OBJROOT}/empty.c\ncc ${OBJROOT}/empty.c -c -o \"${OBJROOT}/libdnsinfo.a\"\nrm -f ${OBJROOT}/empty.c\nfi";
+		};
+		FFFB0DA407B43BED00B88D48 = {
+			children = (
+				FFE6935007C2CA7F00283007,
+				FFFB0DAE07B43CBA00B88D48,
+				FFE6935207C2CAA400283007,
+				FFFB0DAC07B43CBA00B88D48,
+				FFE6935407C2CABD00283007,
+				FFFB0DAD07B43CBA00B88D48,
+				FFFB0DAF07B43CBA00B88D48,
+				FF260A2307B4463400CE10E5,
+			);
+			isa = PBXGroup;
+			path = PreferencePane;
+			refType = 2;
+		};
+		FFFB0DA507B43C9100B88D48 = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXHeadersBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FFFB0DA607B43C9100B88D48 = {
+			buildActionMask = 2147483647;
+			files = (
+				FFFB0DB307B43CBA00B88D48,
+			);
+			isa = PBXSourcesBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FFFB0DA707B43C9100B88D48 = {
+			buildActionMask = 2147483647;
+			files = (
+				FFFB0DB507B43D2700B88D48,
+				FFFB0DB907B43D5F00B88D48,
+				FFFB0DBD07B43D7400B88D48,
+				FF260A2207B443C500CE10E5,
+			);
+			isa = PBXFrameworksBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FFFB0DA807B43C9100B88D48 = {
+			buildActionMask = 2147483647;
+			files = (
+			);
+			isa = PBXRezBuildPhase;
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FFFB0DA907B43C9100B88D48 = {
+			buildPhases = (
+				FFFB0DA507B43C9100B88D48,
+				FFFB0DA607B43C9100B88D48,
+				FFFB0DA707B43C9100B88D48,
+				FFFB0DA807B43C9100B88D48,
+			);
+			buildSettings = {
+				MACOSX_DEPLOYMENT_TARGET = 10.2;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				OTHER_REZFLAGS = "";
+				PRODUCT_NAME = ddnswriteconfig;
+				REZ_EXECUTABLE = YES;
+				SECTORDER_FLAGS = "";
+				WARNING_CFLAGS = "-Wmost -Wno-four-char-constants -Wno-unknown-pragmas";
+			};
+			dependencies = (
+			);
+			isa = PBXToolTarget;
+			name = ddnswriteconfig;
+			productInstallPath = /usr/local/bin;
+			productName = ddnswriteconfig;
+			productReference = FFFB0DAA07B43C9100B88D48;
+		};
+		FFFB0DAA07B43C9100B88D48 = {
+			isa = PBXExecutableFileReference;
+			path = ddnswriteconfig;
+			refType = 3;
+		};
+		FFFB0DAC07B43CBA00B88D48 = {
+			fileEncoding = 4;
+			isa = PBXFileReference;
+			path = DNSServiceDiscoveryPref.m;
+			refType = 4;
+		};
+		FFFB0DAD07B43CBA00B88D48 = {
+			fileEncoding = 4;
+			isa = PBXFileReference;
+			path = PrivilegedOperations.c;
+			refType = 4;
+		};
+		FFFB0DAE07B43CBA00B88D48 = {
+			fileEncoding = 4;
+			isa = PBXFileReference;
+			path = ConfigurationAuthority.c;
+			refType = 4;
+		};
+		FFFB0DAF07B43CBA00B88D48 = {
+			fileEncoding = 4;
+			isa = PBXFileReference;
+			path = ddnswriteconfig.m;
+			refType = 4;
+		};
+		FFFB0DB307B43CBA00B88D48 = {
+			fileRef = FFFB0DAF07B43CBA00B88D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FFFB0DB407B43D2700B88D48 = {
+			isa = PBXFrameworkReference;
+			name = Foundation.framework;
+			path = /System/Library/Frameworks/Foundation.framework;
+			refType = 0;
+		};
+		FFFB0DB507B43D2700B88D48 = {
+			fileRef = FFFB0DB407B43D2700B88D48;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FFFB0DB907B43D5F00B88D48 = {
+			fileRef = 7F869685066EE02400D2A2DC;
+			isa = PBXBuildFile;
+			settings = {
+			};
+		};
+		FFFB0DBD07B43D7400B88D48 = {
+			fileRef = 65713D46025A293200000109;
+			isa = PBXBuildFile;
+			settings = {
+			};
 		};
 	};
 	rootObject = 08FB7793FE84155DC02AAC07;

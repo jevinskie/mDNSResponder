@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: DNSServiceBrowser.cs,v $
+Revision 1.6  2005/02/10 22:35:06  cheshire
+<rdar://problem/3727944> Update name
+
 Revision 1.5  2004/09/21 16:26:58  shersche
 Check to make sure browse list selected item is not null before resolving
 Submitted by: prepin@gmail.com
@@ -107,9 +110,13 @@ namespace DNSServiceBrowser_NET
 		}
 
 		private void Form1_Load(object sender, EventArgs e) 
+
 		{
+
 			typeBox.SelectedItem = "_spike._tcp";
+
 		}
+
 
 		/// <summary>
 		/// Clean up any resources being used.
@@ -267,7 +274,6 @@ namespace DNSServiceBrowser_NET
 				"_raop._tcp",
 				"_rce._tcp",
 				"_realplayfavs._tcp",
-				"_rendezvouspong._tcp",
 				"_riousbprint._tcp",
 				"_rfb._tcp",
 				"_rtsp._tcp",

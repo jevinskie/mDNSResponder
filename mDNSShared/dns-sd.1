@@ -20,6 +20,12 @@
 .\" @APPLE_LICENSE_HEADER_END@
 .\"
 .\" $Log: dns-sd.1,v $
+.\" Revision 1.4  2005/02/16 02:29:32  cheshire
+.\" Update terminology
+.\"
+.\" Revision 1.3  2005/02/10 22:35:28  cheshire
+.\" <rdar://problem/3727944> Update name
+.\"
 .\" Revision 1.2  2004/09/24 18:33:05  cheshire
 .\" <rdar://problem/3561780> Update man pages to clarify that mDNS and dns-sd are not intended for script use
 .\"
@@ -34,7 +40,7 @@
 .\"
 .Sh NAME
 .Nm dns-sd
-.Nd Multicast DNS Service Discovery (mDNS-SD) Test Tool \" For whatis
+.Nd Multicast DNS (mDNS) & DNS Service Discovery (DNS-SD) Test Tool \" For whatis
 .\" 
 .Sh SYNOPSIS
 .Nm Fl R Ar name type domain port Op Ar key=value ...
@@ -160,7 +166,7 @@ print.
 .Pp
 To advertise the existence of LPR printing service on port 515 on this
 machine, such that it will be discovered by the Mac OS X printing software
-and other mDNS-SD compatible printing clients, use:
+and other DNS-SD compatible printing clients, use:
 .Pp
 .Dl Nm Fl R Ns \ \&"My Test\&" _printer._tcp. \&. 515 pdl=application/postscript
 .Pp
@@ -171,7 +177,7 @@ network.
 .Pp
 Similarly, to advertise a web page being served by an HTTP
 server on port 80 on this machine, such that it will show up in the
-Rendezvous list in Safari and other mDNS-SD compatible Web clients, use:
+Bonjour list in Safari and other DNS-SD compatible Web clients, use:
 .Pp
 .Dl Nm Fl R Ns \ \&"My Test\&" _http._tcp \&. 80 path=/path-to-page.html
 .Pp

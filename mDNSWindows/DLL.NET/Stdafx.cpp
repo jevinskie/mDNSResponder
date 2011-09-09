@@ -23,9 +23,11 @@
     Change History (most recent first):
 
 $Log: Stdafx.cpp,v $
+Revision 1.2  2005/02/05 02:37:01  cheshire
+Convert newlines to Unix-style (ASCII 10)
+
 Revision 1.1  2004/06/26 04:01:22  shersche
 Initial revision
-
 
  */
     

@@ -24,6 +24,9 @@
     Change History (most recent first):
 
 $Log: PlatformCommon.c,v $
+Revision 1.5  2005/02/01 19:33:30  ksekar
+<rdar://problem/3985239> Keychain format too restrictive
+
 Revision 1.4  2005/01/19 19:19:21  ksekar
 <rdar://problem/3960191> Need a way to turn off domain discovery
 
@@ -96,7 +99,6 @@ mDNSexport void ReadDDNSSettingsFromConfFile(mDNS *const m, const char *const fi
 	{
 	char buf   [MAX_ESCAPED_DOMAIN_NAME];
 	char secret[MAX_ESCAPED_DOMAIN_NAME] = "";
-	int slen;
 	mStatus err;
 	FILE *f = fopen(filename, "r");
 
@@ -122,8 +124,7 @@ mDNSexport void ReadDDNSSettingsFromConfFile(mDNS *const m, const char *const fi
 	if (domain && domain->c[0] && secret[0])
 		{
 		// for now we assume keyname = service reg domain and we use same key for service and hostname registration
-		slen = strlen(secret);
-		err = mDNS_SetSecretForZone(m, domain, domain, secret, slen, mDNStrue);
+		err = mDNS_SetSecretForZone(m, domain, domain, secret);
 		if (err) LogMsg("ERROR: mDNS_SetSecretForZone returned %d for domain %##s", err, domain->c);
 		}
 

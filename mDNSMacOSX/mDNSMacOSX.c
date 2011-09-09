@@ -24,6 +24,52 @@
     Change History (most recent first):
 
 $Log: mDNSMacOSX.c,v $
+Revision 1.308  2005/03/09 00:48:44  cheshire
+<rdar://problem/4015157> QU packets getting sent too early on wake from sleep
+Move "m->p->NetworkChanged = 0;" line from caller to callee
+
+Revision 1.307  2005/03/03 03:12:02  cheshire
+Add comment about mDNSMacOSXSystemBuildNumber()
+
+Revision 1.306  2005/03/02 22:18:00  cheshire
+<rdar://problem/3930171> mDNSResponder requires AppleInternal packages to build on Tiger
+
+Revision 1.305  2005/02/26 05:08:28  cheshire
+<rdar://problem/3930171> mDNSResponder requires AppleInternal packages to build on Tiger
+Added dnsinfo.h to project directory
+
+Revision 1.304  2005/02/25 23:51:22  cheshire
+<rdar://problem/4021868> SendServiceRegistration fails on wake from sleep
+Return mStatus_UnknownErr instead of -1
+
+Revision 1.303  2005/02/25 17:47:45  ksekar
+<rdar://problem/4021868> SendServiceRegistration fails on wake from sleep
+
+Revision 1.302  2005/02/25 02:34:14  cheshire
+<rdar://problem/4017292> Should not indicate successful dynamic update if no network connection
+Show status as 1 (in progress) while we're trying
+
+Revision 1.301  2005/02/24 21:55:57  ksekar
+<rdar://problem/4017292> Should not indicate successful dynamic update if no network connection
+
+Revision 1.300  2005/02/15 20:03:13  ksekar
+<rdar://problem/4005868> Crash when SCPreferences contains empty array
+
+Revision 1.299  2005/02/15 02:46:53  cheshire
+<rdar://problem/3967876> Don't log ENETUNREACH errors for unicast destinations
+
+Revision 1.298  2005/02/10 00:41:59  cheshire
+Fix compiler warning
+
+Revision 1.297  2005/02/09 23:38:51  ksekar
+<rdar://problem/3993508> Reregister hostname when DNS server changes but IP address does not
+
+Revision 1.296  2005/02/01 21:06:52  ksekar
+Avoid spurious log message
+
+Revision 1.295  2005/02/01 19:33:30  ksekar
+<rdar://problem/3985239> Keychain format too restrictive
+
 Revision 1.294  2005/01/27 21:30:23  cheshire
 <rdar://problem/3952067> "Can't assign requested address" message after AirPort turned off
 Don't write syslog messages for EADDRNOTAVAIL if we know network configuration changes are happening
@@ -173,7 +219,7 @@ Add "#ifdef MAC_OS_X_VERSION_10_4" around split-DNS code that can't be compiled 
 (When compiled on 10.3, code will not include split-DNS support.)
 
 Revision 1.248  2004/12/01 20:57:20  ksekar
-<rdar://problem/3873921> Wide Area Rendezvous must be split-DNS aware
+<rdar://problem/3873921> Wide Area Service Discovery must be split-DNS aware
 
 Revision 1.247  2004/12/01 03:26:58  cheshire
 Remove unused variables
@@ -213,7 +259,7 @@ Let interface name/index mapping capability live directly in JNISupport.c,
 instead of having to call through to the daemon via IPC to get this information.
 
 Revision 1.235  2004/11/17 01:45:35  cheshire
-<rdar://problem/3847435> Rendezvous buddy list frequently becomes empty if you let the machine sleep
+<rdar://problem/3847435> mDNS buddy list frequently becomes empty if you let the machine sleep
 Refresh our interface list on receiving kIOMessageSystemHasPoweredOn,
 in case we get no System Configuration Framework "network changed" event.
 
@@ -925,10 +971,7 @@ Minor code tidying
 
 #include <Security/Security.h>
 
-#include <AvailabilityMacros.h>
-#ifdef MAC_OS_X_VERSION_10_4
-#include <dnsinfo.h>
-#endif
+#include "dnsinfo.h"
 
 // Code contributed by Dave Heller:
 // Define RUN_ON_PUMA_WITHOUT_IFADDRS to compile code that will
@@ -1217,16 +1260,17 @@ mDNSexport mStatus mDNSPlatformSendUDP(const mDNS *const m, const void *const ms
 	if (err < 0)
 		{
         // Don't report EHOSTDOWN (i.e. ARP failure), ENETDOWN, or no route to host for unicast destinations
-		if (!mDNSAddressIsAllDNSLinkGroup(dst) && (errno == EHOSTDOWN || errno == ENETDOWN || errno == EHOSTUNREACH)) return(err);
+		if (!mDNSAddressIsAllDNSLinkGroup(dst))
+			if (errno == EHOSTDOWN || errno == ENETDOWN || errno == EHOSTUNREACH || errno == ENETUNREACH) return(mStatus_TransientErr);
 		// Don't report EHOSTUNREACH in the first three minutes after boot
 		// This is because mDNSResponder intentionally starts up early in the boot process (See <rdar://problem/3409090>)
 		// but this means that sometimes it starts before configd has finished setting up the multicast routing entries.
-		if (errno == EHOSTUNREACH && (mDNSu32)(mDNSPlatformRawTime()) < (mDNSu32)(mDNSPlatformOneSecond * 180)) return(err);
+		if (errno == EHOSTUNREACH && (mDNSu32)(mDNSPlatformRawTime()) < (mDNSu32)(mDNSPlatformOneSecond * 180)) return(mStatus_TransientErr);
 		// Don't report EADDRNOTAVAIL ("Can't assign requested address") if we're in the middle of a network configuration change
-		if (errno == EADDRNOTAVAIL && m->p->NetworkChanged) return(err);
+		if (errno == EADDRNOTAVAIL && m->p->NetworkChanged) return(mStatus_TransientErr);
 		LogMsg("mDNSPlatformSendUDP sendto failed to send packet on InterfaceID %p %5s/%ld to %#a:%d skt %d error %d errno %d (%s) %lu",
 			InterfaceID, ifa_name, dst->type, dst, mDNSVal16(dstPort), s, err, errno, strerror(errno), (mDNSu32)(m->timenow));
-		return(err);
+		return(mStatus_UnknownErr);
 		}
 	
 	return(mStatus_NoError);
@@ -1663,7 +1707,7 @@ mDNSlocal void GetUserSpecifiedDDNSConfig(domainname *const fqdn, domainname *co
 		if (dict)
 			{
 			CFArrayRef fqdnArray = CFDictionaryGetValue(dict, CFSTR("HostNames"));
-			if (fqdnArray)
+			if (fqdnArray && CFArrayGetCount(fqdnArray) > 0)
 				{				
 				CFDictionaryRef fqdnDict = CFArrayGetValueAtIndex(fqdnArray, 0); // for now, we only look at the first array element.  if we ever support multiple configurations, we will walk the list
 				if (fqdnDict && DDNSSettingEnabled(fqdnDict))
@@ -1680,7 +1724,7 @@ mDNSlocal void GetUserSpecifiedDDNSConfig(domainname *const fqdn, domainname *co
 				}
 
 			CFArrayRef regArray = CFDictionaryGetValue(dict, CFSTR("RegistrationDomains"));
-			if (regArray)
+			if (regArray && CFArrayGetCount(regArray) > 0)
 				{
 				CFDictionaryRef regDict = CFArrayGetValueAtIndex(regArray, 0);
 				if (regDict && DDNSSettingEnabled(regDict))
@@ -1696,7 +1740,7 @@ mDNSlocal void GetUserSpecifiedDDNSConfig(domainname *const fqdn, domainname *co
 					}
 				}
 			CFArrayRef browseArray = CFDictionaryGetValue(dict, CFSTR("BrowseDomains"));
-			if (browseArray)
+			if (browseArray && CFArrayGetCount(browseArray) > 0)
 				{
 				CFRetain(browseArray);
 				*browseDomains = browseArray;
@@ -2342,9 +2386,9 @@ mDNSlocal int ClearInactiveInterfaces(mDNS *const m, mDNSs32 utc)
 
 mDNSlocal mStatus GetDNSConfig(void **result)
 	{
-#ifndef MAC_OS_X_VERSION_10_4
+#if MDNS_NO_DNSINFO
 	static int MessageShown = 0;
-	if (!MessageShown) { MessageShown = 1; LogMsg("Note: Compiled without Apple-specific split DNS support"); }
+	if (!MessageShown) { MessageShown = 1; LogMsg("Note: Compiled without Apple-specific Split-DNS support"); }
 	*result = NULL;
 	return mStatus_UnsupportedErr;
 #else
@@ -2366,20 +2410,25 @@ mDNSlocal mStatus GetDNSConfig(void **result)
 		return mStatus_UnknownErr;
 		}
 	return mStatus_NoError;
-#endif // MAC_OS_X_VERSION_10_4
+#endif // MDNS_NO_DNSINFO
 	}
 
-mDNSlocal mStatus RegisterSplitDNS(mDNS *m)
+mDNSlocal mStatus RegisterSplitDNS(mDNS *m, int *nAdditions, int *nDeletions)
 	{
 	(void)m;  // unused on 10.3 systems
 	void *v;
+	*nAdditions = *nDeletions = 0;
 	mStatus err = GetDNSConfig(&v);
+
+#if !MDNS_NO_DNSINFO
 	if (!err && v)
 		{
-#ifdef MAC_OS_X_VERSION_10_4
 		int i;
+		DNSServer *p;
 		dns_config_t *config = v;  // use void * to allow compilation on 10.3 systems
-		mDNS_DeleteDNSServers(m);
+		mDNS_Lock(m);
+		p = m->uDNS_info.Servers;
+		while (p) { p->flag = -1; p = p->next; }  // mark all for deletion
 		
 		LogOperation("RegisterSplitDNS: Registering %d resolvers", config->n_resolver);
 		for (i = 0; i < config->n_resolver; i++)		
@@ -2415,15 +2464,47 @@ mDNSlocal mStatus RegisterSplitDNS(mDNS *m)
 					mDNSAddr saddr;
 					if (SetupAddr(&saddr, r->nameserver[n])) { LogMsg("RegisterSplitDNS: bad IP address"); continue; }
 					debugf("Adding dns server from slot %d %d.%d.%d.%d for domain %##s", i, saddr.ip.v4.b[0], saddr.ip.v4.b[1], saddr.ip.v4.b[2], saddr.ip.v4.b[3], d.c);
-					mDNS_AddDNSServer(m, &saddr, &d);
+					p = m->uDNS_info.Servers;					
+					while (p)
+						{
+						if (mDNSSameAddress(&p->addr, &saddr) && SameDomainName(&p->domain, &d)) { p->flag = 0; break; }
+						else p = p->next;
+						}
+					if (!p)
+						{
+						p = mallocL("DNSServer", sizeof(*p));
+						if (!p) { LogMsg("Error: malloc");  mDNS_Unlock(m); return mStatus_UnknownErr; }
+						p->addr = saddr;
+						AssignDomainName(&p->domain, &d);
+						p->flag = 0;
+						p->next = m->uDNS_info.Servers;
+						m->uDNS_info.Servers = p;
+						(*nAdditions)++;
+						}
 					break;  // !!!KRS if we ever support round-robin servers, don't break here
 					}
 				}
 			}
+
+		// remove all servers marked for deletion
+		DNSServer **s = &m->uDNS_info.Servers;
+		while (*s)
+			{
+			if ((*s)->flag < 0)
+				{
+				p = *s;
+				*s = (*s)->next;
+				freeL("DNSServer", p);
+				(*nDeletions)--;
+				}
+			else s = &(*s)->next;
+			}
+		mDNS_Unlock(m);
 		dns_configuration_free(config);
-#endif
 		}
-		return err;
+#endif
+
+	return err;
 	}
 
 mDNSlocal mStatus RegisterNameServers(mDNS *const m, CFDictionaryRef dict)
@@ -2561,9 +2642,10 @@ mDNSlocal mStatus GetSearchDomains(void)
 	{
 	void *v;
 	mStatus err = GetDNSConfig(&v);
+
+#if !MDNS_NO_DNSINFO
 	if (!err && v)
 		{
-#ifdef MAC_OS_X_VERSION_10_4	
 		int i;
 		dns_config_t *config = v;
 		if (!config->n_resolver) return err;
@@ -2572,8 +2654,9 @@ mDNSlocal mStatus GetSearchDomains(void)
 		for (i = 0; i < resolv->n_search; i++) MarkSearchListElem(resolv->search[i]);
 		if (resolv->domain) MarkSearchListElem(resolv->domain);
 		dns_configuration_free(config);
-#endif
 		}
+#endif
+
 	return err;
 	}
 
@@ -2725,14 +2808,20 @@ mDNSlocal void SCPrefsDynDNSCallback(mDNS *const m, AuthRecord *const rr, mStatu
 mDNSlocal void SetSecretForDomain(mDNS *m, const domainname *domain)
 	{
 	OSStatus err = 0;
-	SecKeychainRef SysKeychain = NULL;
-	SecKeychainItemRef KeychainItem;
 	char dstring[MAX_ESCAPED_DOMAIN_NAME];
 	mDNSu32 secretlen;
 	void *secret = NULL;
 	domainname *d, canon;
 	int i, dlen;
-
+	mDNSu32 type = 'ddns';
+	mDNSu32 typelen = sizeof(type);	
+	char *failedfn = "(none)";
+	SecKeychainAttributeList *attrList = NULL;
+	SecKeychainItemRef itemRef = NULL;
+	
+	err = SecKeychainSetPreferenceDomain(kSecPreferencesDomainSystem);
+	if (err) { failedfn = "SecKeychainSetPreferenceDomain"; goto cleanup; }
+	
 	// canonicalize name by converting to lower case (keychain and some name servers are case sensitive)
 	ConvertDomainNameToCString(domain, dstring);
 	dlen = strlen(dstring);
@@ -2740,30 +2829,63 @@ mDNSlocal void SetSecretForDomain(mDNS *m, const domainname *domain)
 	MakeDomainNameFromDNSNameString(&canon, dstring);
 	d = &canon;		
 	
-	err = SecKeychainOpen(SYS_KEYCHAIN_PATH, &SysKeychain);
-	if (err) { LogMsg("SetSecretForDomain: couldn't open system keychain (error %d)", err); return; }
-	// find longest-match key ("account") name, excluding last label (e.g. excluding ".com")
+	// find longest-match key, excluding last label (e.g. excluding ".com")
 	while (d->c[0] && *(d->c + d->c[0] + 1))
 		{
 		if (!ConvertDomainNameToCString(d, dstring)) { LogMsg("SetSecretForDomain: bad domain %##s", d->c); return; }	
 		dlen = strlen(dstring);		
 		if (dstring[dlen-1] == '.') { dstring[dlen-1] = '\0'; dlen--; }  // chop trailing dot
-		err = SecKeychainFindGenericPassword(SysKeychain, strlen(DYNDNS_KEYCHAIN_SERVICE), DYNDNS_KEYCHAIN_SERVICE, dlen, dstring, &secretlen, &secret, &KeychainItem);
+		SecKeychainAttribute attrs[] = { { kSecServiceItemAttr, strlen(dstring), dstring },
+										 { kSecTypeItemAttr, typelen, (UInt32 *)&type } };
+		SecKeychainAttributeList attributes = { sizeof(attrs) / sizeof(attrs[0]), attrs };
+		SecKeychainSearchRef searchRef;
+
+		err = SecKeychainSearchCreateFromAttributes(NULL, kSecGenericPasswordItemClass, &attributes, &searchRef);
+		if (err) { failedfn = "SecKeychainSearchCreateFromAttributes"; goto cleanup; }
+
+		err = SecKeychainSearchCopyNext(searchRef, &itemRef);
 		if (!err)
 			{
-			debugf("Setting shared secret for zone %s with key %##s", dstring, d->c);
-			mDNS_SetSecretForZone(m, d, d, secret, secretlen, mDNStrue);
-			free(secret);
-			return;
+	        mDNSu32 tags[1];
+			SecKeychainAttributeInfo attrInfo;
+			mDNSu32 i;
+			char keybuf[MAX_ESCAPED_DOMAIN_NAME+1];			
+			domainname keyname;
+			
+			tags[0] = kSecAccountItemAttr;
+			attrInfo.count = 1;
+			attrInfo.tag = tags;
+			attrInfo.format = NULL;
+			
+			err = SecKeychainItemCopyAttributesAndData(itemRef,  &attrInfo, NULL, &attrList, &secretlen, &secret);
+			if (err || !attrList) { failedfn = "SecKeychainItemCopyAttributesAndData"; goto cleanup; }
+			if (!secretlen || !secret) { LogMsg("SetSecretForDomain - bad shared secret"); return; }
+			if (((char *)secret)[secretlen-1]) { LogMsg("SetSecretForDomain - Shared secret not NULL-terminated"); goto cleanup; }
+			
+			for (i = 0; i < attrList->count; i++)
+				{
+				SecKeychainAttribute attr = attrList->attr[i];
+				if (attr.tag == kSecAccountItemAttr)
+					{
+					if (!attr.length || attr.length > MAX_ESCAPED_DOMAIN_NAME) { LogMsg("SetSecretForDomain - Bad key length %d", attr.length); goto cleanup; }					
+					strncpy(keybuf, attr.data, attr.length);
+					if (!MakeDomainNameFromDNSNameString(&keyname, keybuf)) { LogMsg("SetSecretForDomain - bad key %s", keybuf); goto cleanup; }
+					debugf("Setting shared secret for zone %s with key %##s", dstring, keyname.c);
+					mDNS_SetSecretForZone(m, d, &keyname, secret);
+					break;
+					}
+				}
+			if (i == attrList->count) LogMsg("SetSecretForDomain - no key name set");
+			goto cleanup;
 			}
-		if (err == errSecItemNotFound) d = (domainname *)(d->c + d->c[0] + 1);
-		else
-			{
-			if (err == errSecNoSuchKeychain) debugf("SetSecretForDomain: keychain not found");
-			else LogMsg("SetSecretForDomain: SecKeychainFindGenericPassword returned error %d", err);
-			return;
-			}
+		else if (err == errSecItemNotFound) d = (domainname *)(d->c + d->c[0] + 1);
+		else { failedfn = "SecKeychainSearchCopyNext"; goto cleanup; }
 		}
+
+	cleanup:
+	if (err && err != errSecItemNotFound) LogMsg("Error: SetSecretForDomain - %s failed with error code %d", failedfn, err);
+	if (attrList) SecKeychainItemFreeAttributesAndData(attrList, secret);
+	if (itemRef) CFRelease(itemRef);
 	}
 
 mDNSlocal void SetSCPrefsBrowseDomainsFromCFArray(mDNS *m, CFArrayRef browseDomains, mDNSBool add)
@@ -2802,6 +2924,7 @@ mDNSlocal void DynDNSConfigChanged(mDNS *const m)
 	CFStringRef     key;
 	domainname RegDomain, fqdn;
 	CFArrayRef NewBrowseDomains = NULL;
+	int nAdditions = 0, nDeletions = 0;
 	
 	// get fqdn, zone from SCPrefs
 	GetUserSpecifiedDDNSConfig(&fqdn, &RegDomain, &NewBrowseDomains);
@@ -2843,8 +2966,8 @@ mDNSlocal void DynDNSConfigChanged(mDNS *const m)
 		if (DynDNSHostname.c[0])
 			{
 			SetSecretForDomain(m, &fqdn); // no-op if "zone" secret, above, is to be used for hostname
+			SetDDNSNameStatus(&DynDNSHostname, 1);		// Set status to 1 to indicate "in progress"
 			mDNS_AddDynDNSHostName(m, &DynDNSHostname, SCPrefsDynDNSCallback, NULL);
-			SetDDNSNameStatus(&DynDNSHostname, 1);
 			}
 		}
 
@@ -2858,7 +2981,7 @@ mDNSlocal void DynDNSConfigChanged(mDNS *const m)
 	CFRelease(key);
 
 	// handle any changes to search domains and DNS server addresses
-	if (RegisterSplitDNS(m) != mStatus_NoError)
+	if (RegisterSplitDNS(m, &nAdditions, &nDeletions) != mStatus_NoError)
 		if (dict) RegisterNameServers(m, dict);  // fall back to non-split DNS aware configuration on failure
 	RegisterSearchDomains(m, dict);  // note that we register name servers *before* search domains
 	if (dict) CFRelease(dict);
@@ -2869,8 +2992,12 @@ mDNSlocal void DynDNSConfigChanged(mDNS *const m)
 	dict = SCDynamicStoreCopyValue(store, key);
 	CFRelease(key);
 	CFRelease(store);
-	if (!dict)
-		{ mDNS_SetPrimaryInterfaceInfo(m, NULL, NULL); return; } // lost v4
+	if (!dict)				// lost v4
+		{
+		mDNS_SetPrimaryInterfaceInfo(m, NULL, NULL);
+		if (DynDNSHostname.c[0]) SetDDNSNameStatus(&DynDNSHostname, 1);	// Set status to 1 to indicate temporary failure
+		return;
+		} 
 
 	// handle router changes
 	mDNSAddr r;
@@ -2896,6 +3023,8 @@ mDNSlocal void DynDNSConfigChanged(mDNS *const m)
 		}
 
 	// handle primary interface changes
+	// if we gained or lost DNS servers (e.g. logged into VPN) "toggle" primary address so it gets re-registered even if it is unchanged
+	if (nAdditions || nDeletions) mDNS_SetPrimaryInterfaceInfo(m, NULL, NULL);
 	CFStringRef primary = CFDictionaryGetValue(dict, kSCDynamicStorePropNetPrimaryInterface);
 	if (primary)
 		{
@@ -2938,6 +3067,7 @@ mDNSlocal void DynDNSConfigChanged(mDNS *const m)
 mDNSexport void mDNSMacOSXNetworkChanged(mDNS *const m)
    {
 	LogOperation("***   Network Configuration Change   ***");
+	m->p->NetworkChanged = 0;		// If we received a network change event and deferred processing, we're now dealing with it
 	mDNSs32 utc = mDNSPlatformUTC();
 	MarkAllInterfacesInactive(m, utc);
 	UpdateInterfaceList(m, utc);
@@ -3047,26 +3177,26 @@ mDNSlocal void PowerChanged(void *refcon, io_service_t service, natural_t messag
 	(void)service;    // Parameter not used
 	switch(messageType)
 		{
-		case kIOMessageCanSystemPowerOff:		debugf("PowerChanged kIOMessageCanSystemPowerOff (no action)");							break; // E0000240
-		case kIOMessageSystemWillPowerOff:		debugf("PowerChanged kIOMessageSystemWillPowerOff");
-												mDNSCoreMachineSleep(m, true); mDNSMacOSXNetworkChanged(m);								break; // E0000250
-		case kIOMessageSystemWillNotPowerOff:	debugf("PowerChanged kIOMessageSystemWillNotPowerOff (no action)");						break; // E0000260
-		case kIOMessageCanSystemSleep:			debugf("PowerChanged kIOMessageCanSystemSleep (no action)");							break; // E0000270
-		case kIOMessageSystemWillSleep:			debugf("PowerChanged kIOMessageSystemWillSleep");
-												mDNSCoreMachineSleep(m, true); mDNSMacOSXNetworkChanged(m);								break; // E0000280
-		case kIOMessageSystemWillNotSleep:		debugf("PowerChanged kIOMessageSystemWillNotSleep (no action)");						break; // E0000290
-		case kIOMessageSystemHasPoweredOn:		debugf("PowerChanged kIOMessageSystemHasPoweredOn");
+		case kIOMessageCanSystemPowerOff:		debugf      ("PowerChanged kIOMessageCanSystemPowerOff (no action)");				break; // E0000240
+		case kIOMessageSystemWillPowerOff:		LogOperation("PowerChanged kIOMessageSystemWillPowerOff");
+												mDNSCoreMachineSleep(m, true); mDNSMacOSXNetworkChanged(m);							break; // E0000250
+		case kIOMessageSystemWillNotPowerOff:	debugf      ("PowerChanged kIOMessageSystemWillNotPowerOff (no action)");			break; // E0000260
+		case kIOMessageCanSystemSleep:			debugf      ("PowerChanged kIOMessageCanSystemSleep (no action)");					break; // E0000270
+		case kIOMessageSystemWillSleep:			LogOperation("PowerChanged kIOMessageSystemWillSleep");
+												mDNSCoreMachineSleep(m, true); mDNSMacOSXNetworkChanged(m);							break; // E0000280
+		case kIOMessageSystemWillNotSleep:		debugf      ("PowerChanged kIOMessageSystemWillNotSleep (no action)");				break; // E0000290
+		case kIOMessageSystemHasPoweredOn:		LogOperation("PowerChanged kIOMessageSystemHasPoweredOn");
 												// If still sleeping (didn't get 'WillPowerOn' message for some reason?) wake now
 												if (m->SleepState) mDNSCoreMachineSleep(m, false);
 												// Just to be safe, also make sure our interface list is fully up to date, in case we
 												// haven't yet received the System Configuration Framework "network changed" event that
 												// we expect to receive some time shortly after the kIOMessageSystemWillPowerOn message
-												mDNSMacOSXNetworkChanged(m);															break; // E0000300
-		case kIOMessageSystemWillRestart:		debugf("PowerChanged kIOMessageSystemWillRestart (no action)");							break; // E0000310
-		case kIOMessageSystemWillPowerOn:		debugf("PowerChanged kIOMessageSystemWillPowerOn");
+												mDNSMacOSXNetworkChanged(m);														break; // E0000300
+		case kIOMessageSystemWillRestart:		debugf      ("PowerChanged kIOMessageSystemWillRestart (no action)");				break; // E0000310
+		case kIOMessageSystemWillPowerOn:		LogOperation("PowerChanged kIOMessageSystemWillPowerOn");
 												// Make sure our interface list is cleared to the empty state, then tell mDNSCore to wake
-												mDNSMacOSXNetworkChanged(m); mDNSCoreMachineSleep(m, false);							break; // E0000320
-		default:								debugf("PowerChanged unknown message %X", messageType);									break;
+												mDNSMacOSXNetworkChanged(m); mDNSCoreMachineSleep(m, false);						break; // E0000320
+		default:								LogOperation("PowerChanged unknown message %X", messageType);						break;
 		}
 	IOAllowPowerChange(m->p->PowerConnection, (long)messageArgument);
 	}
@@ -3089,6 +3219,9 @@ CF_EXPORT const CFStringRef _kCFSystemVersionProductNameKey;
 CF_EXPORT const CFStringRef _kCFSystemVersionProductVersionKey;
 CF_EXPORT const CFStringRef _kCFSystemVersionBuildVersionKey;
 
+// Major version 6 is 10.2.x (Jaguar)
+// Major version 7 is 10.3.x (Panther)
+// Major version 8 is 10.4.x (Tiger)
 mDNSexport int mDNSMacOSXSystemBuildNumber(char *HINFO_SWstring)
 	{
 	int major = 0, minor = 0;
@@ -3429,7 +3562,7 @@ mDNSexport mDNSs32 mDNSPlatformRawTime(void)
 		LogMsg("mDNSPlatformRawTime: this_mach_absolute_time %08X%08X", this_mach_absolute_time);
 		// Update last_mach_absolute_time *before* calling NotifyOfElusiveBug()
 		last_mach_absolute_time = this_mach_absolute_time;
-		// Only show "mach_absolute_time went backwards" notice on 10.4 (build 8xxx) or later
+		// Only show "mach_absolute_time went backwards" notice on 10.4 (build 8xyyy) or later
 		if (mDNSMacOSXSystemBuildNumber(NULL) >= 8)
 			NotifyOfElusiveBug("mach_absolute_time went backwards!", 3438376, "");
 		}

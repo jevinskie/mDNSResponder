@@ -100,7 +100,7 @@ $(BUILDDIR)\BrowserApp.jar: $(BROWSERAPPOBJ) $(BROWSERAPPMAN)
 JAVASRC	= .
 .SUFFIXES : .java
 {$(JAVASRC)}.java{$(BAOBJ)}.class:	
-	$(JAVAC) -d $(BAOBJ) -classpath $(BAOBJ) $<
+	$(JAVAC) -d $(BAOBJ) -classpath $(BAOBJ);$(DNS_SD) $<
 {$(JAVASRC)}.java{$(SCOBJ)}.class:	
-	$(JAVAC) -d $(SCOBJ) -classpath $(SCOBJ) $<
+	$(JAVAC) -d $(SCOBJ) -classpath $(SCOBJ);$(DNS_SD) $<
 

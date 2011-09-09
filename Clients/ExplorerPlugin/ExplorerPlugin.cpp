@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: ExplorerPlugin.cpp,v $
+Revision 1.7  2005/02/23 02:00:45  shersche
+<rdar://problem/4014479> Delete all the registry entries when component is unregistered
+
 Revision 1.6  2005/01/25 17:56:45  shersche
 <rdar://problem/3911084> Load resource DLLs, get icons and bitmaps from resource DLLs
 Bug #: 3911084
@@ -101,6 +104,8 @@ DEBUG_LOCAL void		MFCDLLThreadDetach( HINSTANCE inInstance );
 
 DEBUG_LOCAL OSStatus	RegisterServer( HINSTANCE inInstance, CLSID inCLSID, LPCTSTR inName );
 DEBUG_LOCAL OSStatus	RegisterCOMCategory( CLSID inCLSID, CATID inCategoryID, BOOL inRegister );
+DEBUG_LOCAL OSStatus	UnregisterServer( CLSID inCLSID );
+DEBUG_LOCAL OSStatus	MyRegDeleteKey( HKEY hKeyRoot, LPTSTR lpSubKey );
 
 // Stash away pointers to our resource DLLs
 
@@ -273,6 +278,9 @@ STDAPI	DllUnregisterServer( void )
 	dlog( kDebugLevelTrace, "DllUnregisterServer\n" );
 	
 	err = RegisterCOMCategory( CLSID_ExplorerBar, CATID_InfoBand, FALSE );
+	require_noerr( err, exit );
+
+	err = UnregisterServer( CLSID_ExplorerBar );
 	require_noerr( err, exit );
 	
 exit:
@@ -589,4 +597,139 @@ DEBUG_LOCAL OSStatus	RegisterCOMCategory( CLSID inCLSID, CATID inCategoryID, BOO
 
 exit:
 	return( err );
+}
+
+
+//===========================================================================================================================
+//	UnregisterServer
+//===========================================================================================================================
+
+DEBUG_LOCAL OSStatus	UnregisterServer( CLSID inCLSID )
+{
+	OSStatus			err = 0;
+	LPWSTR				clsidWideString;
+	TCHAR				clsidString[ 64 ];
+	HKEY				key;
+	TCHAR				keyName[ MAX_PATH * 2 ];
+	OSVERSIONINFO		versionInfo;
+
+	// Convert the CLSID to a string based on the encoding of this code (ANSI or Unicode).
+	
+	err = StringFromIID( inCLSID, &clsidWideString );
+	require_noerr( err, exit );
+	require_action( clsidWideString, exit, err = kNoMemoryErr );
+	
+	#ifdef UNICODE
+		lstrcpyn( clsidString, clsidWideString, sizeof_array( clsidString ) );
+		CoTaskMemFree( clsidWideString );
+	#else
+		nChars = WideCharToMultiByte( CP_ACP, 0, clsidWideString, -1, clsidString, sizeof_array( clsidString ), NULL, NULL );
+		err = translate_errno( nChars > 0, (OSStatus) GetLastError(), kUnknownErr );
+		CoTaskMemFree( clsidWideString );
+		require_noerr( err, exit );
+	#endif
+
+	wsprintf( keyName, L"CLSID\\%s", clsidString );
+	MyRegDeleteKey( HKEY_CLASSES_ROOT, keyName );
+	
+	// If running on NT, de-register the extension as approved.
+	
+	versionInfo.dwOSVersionInfoSize = sizeof( versionInfo );
+	GetVersionEx( &versionInfo );
+	if( versionInfo.dwPlatformId == VER_PLATFORM_WIN32_NT )
+	{
+		lstrcpyn( keyName, TEXT( "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Shell Extensions\\Approved" ), sizeof_array( keyName ) );
+		err = RegCreateKeyEx( HKEY_LOCAL_MACHINE, keyName, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &key, NULL );
+		require_noerr( err, exit );
+
+		RegDeleteValue( key, clsidString );
+
+		err = RegCloseKey( key );
+		require_noerr( err, exit );
+	}
+
+	// de-register toolbar button
+
+	lstrcpyn( keyName, TEXT( "SOFTWARE\\Microsoft\\Internet Explorer\\Extensions\\{7F9DB11C-E358-4ca6-A83D-ACC663939424}"), sizeof_array( keyName ) );
+	MyRegDeleteKey( HKEY_LOCAL_MACHINE, keyName );
+	
+exit:
+	return( err );
+}
+
+
+
+//===========================================================================================================================
+//	MyRegDeleteKey
+//===========================================================================================================================
+
+DEBUG_LOCAL OSStatus MyRegDeleteKey( HKEY hKeyRoot, LPTSTR lpSubKey )
+{
+    LPTSTR lpEnd;
+    OSStatus err;
+    DWORD dwSize;
+    TCHAR szName[MAX_PATH];
+    HKEY hKey;
+    FILETIME ftWrite;
+
+    // First, see if we can delete the key without having to recurse.
+
+    err = RegDeleteKey( hKeyRoot, lpSubKey );
+
+    if ( !err )
+	{
+		goto exit;
+	}
+
+    err = RegOpenKeyEx( hKeyRoot, lpSubKey, 0, KEY_READ, &hKey );
+	require_noerr( err, exit );
+
+    // Check for an ending slash and add one if it is missing.
+
+    lpEnd = lpSubKey + lstrlen(lpSubKey);
+
+    if ( *( lpEnd - 1 ) != TEXT( '\\' ) ) 
+    {
+        *lpEnd =  TEXT('\\');
+        lpEnd++;
+        *lpEnd =  TEXT('\0');
+    }
+
+    // Enumerate the keys
+
+    dwSize = MAX_PATH;
+    err = RegEnumKeyEx(hKey, 0, szName, &dwSize, NULL, NULL, NULL, &ftWrite);
+
+    if ( !err ) 
+    {
+        do
+		{
+            lstrcpy (lpEnd, szName);
+
+            if ( !MyRegDeleteKey( hKeyRoot, lpSubKey ) )
+			{
+                break;
+            }
+
+            dwSize = MAX_PATH;
+
+            err = RegEnumKeyEx( hKey, 0, szName, &dwSize, NULL, NULL, NULL, &ftWrite );
+
+        }
+		while ( !err );
+    }
+
+    lpEnd--;
+    *lpEnd = TEXT('\0');
+
+    RegCloseKey( hKey );
+
+    // Try again to delete the key.
+
+    err = RegDeleteKey(hKeyRoot, lpSubKey);
+	require_noerr( err, exit );
+
+exit:
+
+	return err;
 }

@@ -39,7 +39,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="../../mDNSWindows/DLL/Debug/dnssd.lib ws2_32.lib iphlpapi.lib winspool.lib"
-				OutputFile="$(OutDir)/RendezvousPrinterWizard.exe"
+				OutputFile="$(OutDir)/PrinterWizard.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="TRUE"
 				ProgramDatabaseFile="$(IntDir)/$(ProjectName).pdb"
@@ -68,7 +68,7 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release\Root\Program Files"
+			OutputDirectory=".\Release\Root\Program Files\Bonjour"
 			IntermediateDirectory=".\Release"
 			ConfigurationType="1"
 			UseOfMFC="1"
@@ -95,7 +95,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="../../mDNSWindows/DLL/Release/dnssd.lib ws2_32.lib iphlpapi.lib winspool.lib"
-				OutputFile="$(OutDir)/RendezvousPrinterWizard.exe"
+				OutputFile="$(OutDir)/PrinterWizard.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="TRUE"
 				ProgramDatabaseFile="$(IntDir)/$(ProjectName).pdb"

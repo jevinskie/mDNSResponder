@@ -1,11 +1,11 @@
 What is mDNSResponder?
 ----------------------
 
-The mDNSResponder project is a component of Rendezvous,
+The mDNSResponder project is a component of Bonjour,
 Apple's ease-of-use IP networking initiative:
-<http://developer.apple.com/macosx/rendezvous/>
+<http://developer.apple.com/bonjour/>
 
-Apple's Rendezvous software derives from the ongoing standardization
+Apple's Bonjour software derives from the ongoing standardization
 work of the IETF Zero Configuration Networking Working Group:
 <http://zeroconf.org/>
 
@@ -57,8 +57,8 @@ local significance (e.g. "yourcomputer.local.").
 About the mDNSResponder Code
 ----------------------------
 
-Because Apple benefits more from widespread adoption of Rendezvous than
-it would benefit from keeping Rendezvous proprietary, Apple is making
+Because Apple benefits more from widespread adoption of Bonjour than
+it would benefit from keeping Bonjour proprietary, Apple is making
 this code open so that other developers can use it too.
 
 Because Apple recognises that networks are hetrogenous environments

@@ -24,6 +24,9 @@
     Change History (most recent first):
 
 $Log: mDNSPosix.h,v $
+Revision 1.17  2005/02/04 00:39:59  cheshire
+Move ParseDNSServers() from PosixDaemon.c to mDNSPosix.c so all Posix client layers can use it
+
 Revision 1.16  2004/11/30 22:37:01  cheshire
 Update copyright dates and add "Mode: C; tab-width: 4" headers
 
@@ -117,6 +120,8 @@ struct mDNS_PlatformSupport_struct
 #endif
 	};
 
+#define uDNS_SERVERS_FILE "/etc/resolv.conf"
+extern int ParseDNSServers(mDNS *m, const char *filePath);
 extern mStatus mDNSPlatformPosixRefreshInterfaceList(mDNS *const m);
     // See comment in implementation.
 

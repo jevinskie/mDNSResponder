@@ -30,16 +30,19 @@
  * (not into any common system area where it might interfere with other
  * applications using a future completed version of these APIs).
  * If you plan to do this, please be sure to inform us by sending email
- * to rendezvous@apple.com to let us know.
- * You may want to discuss what you're doing on the Rendezvous mailing
+ * to bonjour@apple.com to let us know.
+ * You may want to discuss what you're doing on the Bonjour mailing
  * list to see if others in similar positions have any suggestions for you:
  * 
- * <http://lists.apple.com/mailman/listinfo/rendezvous-dev/>
+ * <http://lists.apple.com/bonjour-dev/>
  * 
 
     Change History (most recent first):
 
 $Log: dnssd_NET.h,v $
+Revision 1.8  2005/02/10 22:35:33  cheshire
+<rdar://problem/3727944> Update name
+
 Revision 1.7  2004/12/16 19:56:12  cheshire
 Update comments
 

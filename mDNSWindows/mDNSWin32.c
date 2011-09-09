@@ -23,6 +23,42 @@
     Change History (most recent first):
     
 $Log: mDNSWin32.c,v $
+Revision 1.83  2005/03/07 18:27:42  shersche
+<rdar://problem/4037940> Fix problem when ControlPanel commits changes to the browse domain list
+
+Revision 1.82  2005/03/06 05:20:24  shersche
+<rdar://problem/4037635> Fix corrupt UTF-8 name when non-ASCII system name used, enabled unicode support
+
+Revision 1.81  2005/03/04 22:44:53  shersche
+<rdar://problem/4022802> mDNSResponder did not notice changes to DNS server config
+
+Revision 1.80  2005/03/03 21:07:38  shersche
+<rdar://problem/4034460> mDNSResponder doesn't handle multiple browse domains
+
+Revision 1.79  2005/03/03 02:29:00  shersche
+Use the RegNames.h header file for registry key names
+
+Revision 1.78  2005/03/02 04:04:17  shersche
+Support for multiple browse domains
+
+Revision 1.77  2005/02/25 20:02:18  shersche
+<rdar://problem/4022802> Call ProcessingThreadDynDNSConfigChanged() when interface list changes
+
+Revision 1.76  2005/02/23 02:59:20  shersche
+<rdar://problem/4013482> Check to see if locks have been initialized before using them.
+
+Revision 1.75  2005/02/16 02:36:25  shersche
+<rdar://problem/3830846> Use IPv6 if interface has no routable IPv4 address
+
+Revision 1.74  2005/02/08 06:06:16  shersche
+<rdar://problem/3986597> Implement mDNSPlatformTCPConnect, mDNSPlatformTCPCloseConnection, mDNSPlatformTCPRead, mDNSPlatformTCPWrite
+
+Revision 1.73  2005/02/01 19:35:43  ksekar
+Removed obsolete arguments from mDNS_SetSecretForZone
+
+Revision 1.72  2005/02/01 01:38:53  shersche
+Handle null DynDNS configuration more gracefully
+
 Revision 1.71  2005/01/27 22:57:57  cheshire
 Fix compile errors on gcc4
 
@@ -297,6 +333,7 @@ Multicast DNS platform plugin for Win32
 
 #include	"CommonServices.h"
 #include	"DebugServices.h"
+#include	"RegNames.h"
 #include	<dns_sd.h>
 
 #include	<Iphlpapi.h>
@@ -323,8 +360,6 @@ Multicast DNS platform plugin for Win32
 #define	MDNS_WINDOWS_USE_IPV6_IF_ADDRS				1
 #define	MDNS_WINDOWS_ENABLE_IPV4					1
 #define	MDNS_WINDOWS_ENABLE_IPV6					1
-#define	MDNS_WINDOWS_EXCLUDE_IPV4_ROUTABLE_IPV6		1
-#define	MDNS_WINDOWS_AAAA_OVER_IPV4					1
 #define	MDNS_FIX_IPHLPAPI_PREFIX_BUG				1
 
 #define	kMDNSDefaultName							"My Computer"
@@ -336,9 +371,11 @@ Multicast DNS platform plugin for Win32
 #define	kWaitListInterfaceListChangedEvent			( WAIT_OBJECT_0 + 1 )
 #define	kWaitListWakeupEvent						( WAIT_OBJECT_0 + 2 )
 #define kWaitListComputerDescriptionEvent			( WAIT_OBJECT_0 + 3 )
-#define kWaitListDynDNSEvent						( WAIT_OBJECT_0 + 4 )
-#define	kWaitListFixedItemCount						5 + MDNS_WINDOWS_ENABLE_IPV4 + MDNS_WINDOWS_ENABLE_IPV6
+#define kWaitListTCPIPEvent							( WAIT_OBJECT_0 + 4 )
+#define kWaitListDynDNSEvent						( WAIT_OBJECT_0 + 5 )
+#define	kWaitListFixedItemCount						6 + MDNS_WINDOWS_ENABLE_IPV4 + MDNS_WINDOWS_ENABLE_IPV6
 
+#define kRegistryMaxKeyLength						255
 
 #if( !TARGET_OS_WINDOWS_CE )
 	static GUID										kWSARecvMsgGUID = WSAID_WSARECVMSG;
@@ -375,6 +412,7 @@ mDNSlocal mStatus			ProcessingThreadSetupWaitList( mDNS * const inMDNS, HANDLE *
 mDNSlocal void				ProcessingThreadProcessPacket( mDNS *inMDNS, mDNSInterfaceData *inIFD, SocketRef inSock );
 mDNSlocal void				ProcessingThreadInterfaceListChanged( mDNS *inMDNS );
 mDNSlocal void				ProcessingThreadComputerDescriptionChanged( mDNS * inMDNS );
+mDNSlocal void				ProcessingThreadTCPIPConfigChanged( mDNS * inMDNS );
 mDNSlocal void				ProcessingThreadDynDNSConfigChanged( mDNS * inMDNS );
 
 
@@ -390,6 +428,18 @@ struct	mDNSPlatformInterfaceInfo
 	const char *		name;
 	mDNSAddr			ip;
 };
+
+typedef struct	mDNSTCPConnectionData	mDNSTCPConnectionData;
+struct	mDNSTCPConnectionData
+{
+	SocketRef					sock;
+	BOOL						connected;
+	TCPConnectionCallback		callback;
+	void					*	context;
+	HANDLE						pendingEvent;
+	mDNSTCPConnectionData	*	next;
+};
+
 
 mDNSexport mStatus	mDNSPlatformInterfaceNameToID( mDNS * const inMDNS, const char *inName, mDNSInterfaceID *outID );
 mDNSexport mStatus	mDNSPlatformInterfaceIDToInfo( mDNS * const inMDNS, mDNSInterfaceID inID, mDNSPlatformInterfaceInfo *outInfo );
@@ -410,11 +460,14 @@ mDNSexport mStatus	mDNSPlatformInterfaceIDToInfo( mDNS * const inMDNS, mDNSInter
 
 mDNSlocal mDNSBool	CanReceiveUnicast( void );
 
-mDNSlocal mStatus			StringToAddress( mDNSAddr * ip, const char * string );
-mDNSlocal mStatus			RegQueryString( HKEY key, const char * param, char ** string, DWORD * stringLen, DWORD * enabled );
+mDNSlocal mStatus			StringToAddress( mDNSAddr * ip, LPSTR string );
+mDNSlocal mStatus			RegQueryString( HKEY key, LPCSTR param, LPSTR * string, DWORD * stringLen, DWORD * enabled );
 mDNSlocal struct ifaddrs*	myGetIfAddrs(int refresh);
+mDNSlocal OSStatus			TCHARtoUTF8( const TCHAR *inString, char *inBuffer, size_t inBufferSize );
+mDNSlocal OSStatus			WindowsLatin1toUTF8( const char *inString, char *inBuffer, size_t inBufferSize );
 mDNSlocal OSStatus			ConvertUTF8ToLsaString( const char * input, PLSA_UNICODE_STRING output );
 mDNSlocal OSStatus			ConvertLsaStringToUTF8( PLSA_UNICODE_STRING input, char ** output );
+mDNSlocal void				FreeTCPConnectionData( mDNSTCPConnectionData * data );
 
 #ifdef	__cplusplus
 	}
@@ -430,6 +483,9 @@ mDNSlocal OSStatus			ConvertLsaStringToUTF8( PLSA_UNICODE_STRING input, char ** 
 
 mDNSlocal mDNS_PlatformSupport		gMDNSPlatformSupport;
 mDNSs32								mDNSPlatformOneSecond = 0;
+mDNSlocal mDNSTCPConnectionData	*	gTCPConnectionList		= NULL;
+mDNSlocal int						gTCPConnections			= 0;
+mDNSlocal BOOL						gWaitListChanged		= FALSE;
 
 #if( MDNS_WINDOWS_USE_IPV6_IF_ADDRS )
 
@@ -462,6 +518,8 @@ mStatus	mDNSPlatformInit( mDNS * const inMDNS )
 	int			supported;
 	struct sockaddr_in	sa4;
 	struct sockaddr_in6 sa6;
+	int					sa4len;
+	int					sa6len;
 	
 	dlog( kDebugLevelTrace, DEBUG_NAME "platform init\n" );
 	
@@ -507,6 +565,10 @@ mStatus	mDNSPlatformInit( mDNS * const inMDNS )
 	sa4.sin_addr.s_addr = INADDR_ANY;
 	err = SetupSocket( inMDNS, (const struct sockaddr*) &sa4, zeroIPPort, &inMDNS->p->unicastSock4 );
 	check_noerr( err );
+	sa4len = sizeof( sa4 );
+	err = getsockname( inMDNS->p->unicastSock4, (struct sockaddr*) &sa4, &sa4len );
+	require_noerr( err, exit );
+	inMDNS->UnicastPort4.NotAnInteger = sa4.sin_port;
 	inMDNS->p->unicastSock4ReadEvent = CreateEvent( NULL, FALSE, FALSE, NULL );
 	err = translate_errno( inMDNS->p->unicastSock4ReadEvent, (mStatus) GetLastError(), kUnknownErr );
 	require_noerr( err, exit );
@@ -553,6 +615,11 @@ mStatus	mDNSPlatformInit( mDNS * const inMDNS )
 
 	if ( inMDNS->p->unicastSock6 != INVALID_SOCKET )
 	{
+		sa6len = sizeof( sa6 );
+		err = getsockname( inMDNS->p->unicastSock6, (struct sockaddr*) &sa6, &sa6len );
+		require_noerr( err, exit );
+		inMDNS->UnicastPort6.NotAnInteger = sa6.sin6_port;
+
 		err = WSAEventSelect( inMDNS->p->unicastSock6, inMDNS->p->unicastSock6ReadEvent, FD_READ );
 		require_noerr( err, exit );
 
@@ -740,9 +807,11 @@ exit:
 void	mDNSPlatformLock( const mDNS * const inMDNS )
 {
 	check( inMDNS );
-	check( inMDNS->p->lockInitialized );
 	
-	EnterCriticalSection( &inMDNS->p->lock );
+	if ( inMDNS->p->lockInitialized )
+	{
+		EnterCriticalSection( &inMDNS->p->lock );
+	}
 }
 
 //===========================================================================================================================
@@ -753,20 +822,23 @@ void	mDNSPlatformUnlock( const mDNS * const inMDNS )
 {
 	check( inMDNS );
 	check( inMDNS->p );
-	check( inMDNS->p->lockInitialized );
-	check( inMDNS->p->threadID );
-	
-	// Signal a wakeup event if when called from a task other than the mDNS task since if we are called from mDNS task, 
-	// we'll loop back and call mDNS_Execute anyway. Signaling is needed to re-evaluate the wakeup via mDNS_Execute.
-	
-	if( GetCurrentThreadId() != inMDNS->p->threadID )
+
+	if ( inMDNS->p->lockInitialized )
 	{
-		BOOL		wasSet;
+		check( inMDNS->p->threadID );
+	
+		// Signal a wakeup event if when called from a task other than the mDNS task since if we are called from mDNS task, 
+		// we'll loop back and call mDNS_Execute anyway. Signaling is needed to re-evaluate the wakeup via mDNS_Execute.
+	
+		if( GetCurrentThreadId() != inMDNS->p->threadID )
+		{
+			BOOL		wasSet;
 		
-		wasSet = SetEvent( inMDNS->p->wakeupEvent );
-		check_translated_errno( wasSet, GetLastError(), kUnknownErr );
+			wasSet = SetEvent( inMDNS->p->wakeupEvent );
+			check_translated_errno( wasSet, GetLastError(), kUnknownErr );
+		}
+		LeaveCriticalSection( &inMDNS->p->lock );
 	}
-	LeaveCriticalSection( &inMDNS->p->lock );
 }
 
 //===========================================================================================================================
@@ -1049,14 +1121,80 @@ mStatus
 		void *					inContext, 
 		int *					outSock )
 {
-	DEBUG_UNUSED( inDstIP );
-	DEBUG_UNUSED( inDstPort );
+	u_long						on		= 1;  // "on" for setsockopt
+	struct sockaddr_in			saddr;
+	mDNSTCPConnectionData	*	tcd		= NULL;
+	mStatus						err		= mStatus_NoError;
+
 	DEBUG_UNUSED( inInterfaceID );
-	DEBUG_UNUSED( inCallback );
-	DEBUG_UNUSED( inContext );
-	DEBUG_UNUSED( outSock );
 	
-	return( mStatus_UnsupportedErr );
+	*outSock = INVALID_SOCKET;
+
+	if ( inDstIP->type != mDNSAddrType_IPv4 )
+	{
+		LogMsg("ERROR: mDNSPlatformTCPConnect - attempt to connect to an IPv6 address: operation not supported");
+		return mStatus_UnknownErr;
+	}
+
+	// Setup connection data object
+
+	tcd = (mDNSTCPConnectionData*) malloc( sizeof( mDNSTCPConnectionData ) );
+	require_action( tcd, exit, err = mStatus_NoMemoryErr );
+	memset( tcd, 0, sizeof( mDNSTCPConnectionData ) );
+
+	tcd->sock		= INVALID_SOCKET;
+	tcd->callback	= inCallback;
+	tcd->context	= inContext;
+
+	bzero(&saddr, sizeof(saddr));
+	saddr.sin_family	= AF_INET;
+	saddr.sin_port		= inDstPort.NotAnInteger;
+	memcpy(&saddr.sin_addr, &inDstIP->ip.v4.NotAnInteger, sizeof(saddr.sin_addr));
+
+	// Create the socket
+
+	tcd->sock = socket(AF_INET, SOCK_STREAM, 0);
+	err = translate_errno( tcd->sock != INVALID_SOCKET, WSAGetLastError(), mStatus_UnknownErr );
+	require_noerr( err, exit );
+
+	// Set it to be non-blocking
+
+	err = ioctlsocket( tcd->sock, FIONBIO, &on );
+	err = translate_errno( err == 0, WSAGetLastError(), mStatus_UnknownErr );
+	require_noerr( err, exit );
+
+	// Try and do connect
+
+	err = connect( tcd->sock, ( struct sockaddr* ) &saddr, sizeof( saddr ) );
+	require_action( !err || ( WSAGetLastError() == WSAEWOULDBLOCK ), exit, err = mStatus_ConnFailed );
+	tcd->connected		= !err ? TRUE : FALSE;
+	tcd->pendingEvent	= CreateEvent( NULL, FALSE, FALSE, NULL );
+	err = translate_errno( tcd->pendingEvent, GetLastError(), mStatus_UnknownErr );
+	require_noerr( err, exit );
+	err = WSAEventSelect( tcd->sock, tcd->pendingEvent, FD_CONNECT|FD_READ|FD_CLOSE );
+	require_noerr( err, exit );
+
+	// Bookkeeping
+
+	tcd->next			= gTCPConnectionList;
+	gTCPConnectionList	= tcd;
+	gTCPConnections++;
+	gWaitListChanged	= TRUE;
+
+	*outSock = (int) tcd->sock;
+	
+exit:
+
+	if ( !err )
+	{
+		err = tcd->connected ? mStatus_ConnEstablished : mStatus_ConnPending;
+	}
+	else if ( tcd )
+	{
+		FreeTCPConnectionData( tcd );
+	}
+
+	return err;
 }
 
 //===========================================================================================================================
@@ -1065,7 +1203,33 @@ mStatus
 
 void	mDNSPlatformTCPCloseConnection( int inSock )
 {
-	DEBUG_UNUSED( inSock );
+	mDNSTCPConnectionData	*	tcd  = gTCPConnectionList;
+	mDNSTCPConnectionData	*	last = NULL;
+
+	while ( tcd )
+	{
+		if ( tcd->sock == ( SOCKET ) inSock )
+		{
+			if ( last == NULL )
+			{
+				gTCPConnectionList = tcd->next;
+			}
+			else
+			{
+				last->next = tcd->next;
+			}
+
+			FreeTCPConnectionData( tcd );
+
+			gTCPConnections--;
+			gWaitListChanged = TRUE;
+
+			break;
+		}
+
+		last = tcd;
+		tcd  = tcd->next;
+	}
 }
 
 //===========================================================================================================================
@@ -1074,11 +1238,21 @@ void	mDNSPlatformTCPCloseConnection( int inSock )
 
 int	mDNSPlatformReadTCP( int inSock, void *inBuffer, int inBufferSize )
 {
-	DEBUG_UNUSED( inSock );
-	DEBUG_UNUSED( inBuffer );
-	DEBUG_UNUSED( inBufferSize );
-	
-	return( -1 );
+	int			nread;
+	OSStatus	err;
+
+	nread = recv( inSock, inBuffer, inBufferSize, 0);
+	err = translate_errno( ( nread >= 0 ) || ( WSAGetLastError() == WSAEWOULDBLOCK ), WSAGetLastError(), mStatus_UnknownErr );
+	require_noerr( err, exit );
+
+	if ( nread < 0 )
+	{
+		nread = 0;
+	}
+		
+exit:
+
+	return nread;
 }
 
 //===========================================================================================================================
@@ -1087,32 +1261,51 @@ int	mDNSPlatformReadTCP( int inSock, void *inBuffer, int inBufferSize )
 
 int	mDNSPlatformWriteTCP( int inSock, const char *inMsg, int inMsgSize )
 {
-	DEBUG_UNUSED( inSock );
-	DEBUG_UNUSED( inMsg );
-	DEBUG_UNUSED( inMsgSize );
-	
-	return( -1 );
-}
+	int			nsent;
+	OSStatus	err;
 
+	nsent = send( inSock, inMsg, inMsgSize, 0 );
+
+	err = translate_errno( ( nsent >= 0 ) || ( WSAGetLastError() == WSAEWOULDBLOCK ), WSAGetLastError(), mStatus_UnknownErr );
+	require_noerr( err, exit );
+
+	if ( nsent < 0)
+	{
+		nsent = 0;
+	}
+		
+exit:
+
+	return nsent;
+}
 
 //===========================================================================================================================
 //	dDNSPlatformGetConfig
 //===========================================================================================================================
 
 void
-dDNSPlatformGetConfig(domainname * const fqdn, domainname *const regDomain, domainname *const browseDomain)
+dDNSPlatformGetConfig(domainname * const fqdn, domainname *const regDomain, DNameListElem ** browseDomains)
 {
-	char	*	name = NULL;
+	LPSTR		name = NULL;
+	char		subKeyName[kRegistryMaxKeyLength + 1];
+	DWORD		cSubKeys = 0;
+	DWORD		cbMaxSubKey;
+	DWORD		cchMaxClass;
 	DWORD		dwSize;
 	DWORD		enabled;
 	HKEY		key;
+	HKEY		subKey = NULL;
+	domainname	dname;
+	DWORD		i;
 	OSStatus	err;
 
 	// Initialize
 
-	fqdn->c[0] = regDomain->c[0] = browseDomain->c[0] = 0;
+	fqdn->c[0] = regDomain->c[0] = '\0';
+
+	*browseDomains = NULL;
 	
-	err = RegCreateKey( HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\" kServiceName "\\Parameters\\DynDNS\\Setup\\" kServiceDynDNSHostNames, &key );
+	err = RegCreateKey( HKEY_LOCAL_MACHINE, TEXT("SYSTEM\\CurrentControlSet\\Services\\") kServiceName TEXT("\\Parameters\\DynDNS\\Setup\\") kServiceDynDNSHostNames, &key );
 	require_noerr( err, exit );
 
 	err = RegQueryString( key, "", &name, &dwSize, &enabled );
@@ -1136,16 +1329,51 @@ dDNSPlatformGetConfig(domainname * const fqdn, domainname *const regDomain, doma
 		name = NULL;
 	}
 
-	err = RegCreateKey( HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\" kServiceName "\\Parameters\\DynDNS\\Setup\\" kServiceDynDNSBrowseDomains, &key );
+	err = RegCreateKey( HKEY_LOCAL_MACHINE, TEXT("SYSTEM\\CurrentControlSet\\Services\\") kServiceName TEXT("\\Parameters\\DynDNS\\Setup\\") kServiceDynDNSBrowseDomains, &key );
 	require_noerr( err, exit );
 
-	err = RegQueryString( key, "", &name, &dwSize, &enabled );
-	if ( !err && ( name[0] != '\0' ) && enabled )
+	// Get information about this node
+
+    err = RegQueryInfoKey( key, NULL, NULL, NULL, &cSubKeys, &cbMaxSubKey, &cchMaxClass, NULL, NULL, NULL, NULL, NULL );       
+	require_noerr( err, exit );
+
+	for ( i = 0; i < cSubKeys; i++)
 	{
-		if ( !MakeDomainNameFromDNSNameString( browseDomain, name ) || !browseDomain->c[0] )
+		DWORD enabled;
+
+		dwSize = kRegistryMaxKeyLength;
+            
+		err = RegEnumKeyExA( key, i, subKeyName, &dwSize, NULL, NULL, NULL, NULL );
+
+		if ( !err )
 		{
-			dlog( kDebugLevelError, "bad DDNS browse domain in registry: %s", name[0] ? name : "(unknown)");
-		}
+			err = RegOpenKeyExA( key, subKeyName, 0, KEY_READ, &subKey );
+			require_noerr( err, exit );
+
+			dwSize = sizeof( DWORD );
+			err = RegQueryValueExA( subKey, "Enabled", NULL, NULL, (LPBYTE) &enabled, &dwSize );
+
+			if ( !err && ( subKeyName[0] != '\0' ) && enabled )
+			{
+				if ( !MakeDomainNameFromDNSNameString( &dname, subKeyName ) || !dname.c[0] )
+				{
+					dlog( kDebugLevelError, "bad DDNS browse domain in registry: %s", subKeyName[0] ? subKeyName : "(unknown)");
+				}
+				else
+				{
+					DNameListElem * browseDomain = (DNameListElem*) malloc( sizeof( DNameListElem ) );
+					require_action( browseDomain, exit, err = mStatus_NoMemoryErr );
+					
+					AssignDomainName(&browseDomain->name, &dname);
+					browseDomain->next = *browseDomains;
+
+					*browseDomains = browseDomain;
+				}
+			}
+
+			RegCloseKey( subKey );
+			subKey = NULL;
+    	}
 	}
 
 	if ( key )
@@ -1154,13 +1382,7 @@ dDNSPlatformGetConfig(domainname * const fqdn, domainname *const regDomain, doma
 		key = NULL;
 	}
 
-	if ( name )
-	{
-		free( name );
-		name = NULL;
-	}
-
-	err = RegCreateKey( HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\" kServiceName "\\Parameters\\DynDNS\\Setup\\" kServiceDynDNSRegistrationDomains, &key );
+	err = RegCreateKey( HKEY_LOCAL_MACHINE, TEXT("SYSTEM\\CurrentControlSet\\Services\\") kServiceName TEXT("\\Parameters\\DynDNS\\Setup\\") kServiceDynDNSRegistrationDomains, &key );
 	require_noerr( err, exit );
 	
 	err = RegQueryString( key, "", &name, &dwSize, &enabled );
@@ -1173,6 +1395,11 @@ dDNSPlatformGetConfig(domainname * const fqdn, domainname *const regDomain, doma
 	}
 
 exit:
+
+	if ( subKey )
+	{
+		RegCloseKey( subKey );
+	}
 
 	if ( key )
 	{
@@ -1194,7 +1421,7 @@ void
 dDNSPlatformSetNameStatus(domainname *const dname, mStatus status)
 {
 	char		uname[MAX_ESCAPED_DOMAIN_NAME];
-	char		name[MAX_ESCAPED_DOMAIN_NAME + 256];
+	LPCTSTR		name;
 	HKEY		key = NULL;
 	mStatus		err;
 	char	*	p;
@@ -1211,10 +1438,11 @@ dDNSPlatformSetNameStatus(domainname *const dname, mStatus status)
 	}
 
 	check( strlen( p ) <= MAX_ESCAPED_DOMAIN_NAME );
-	sprintf( name, "SYSTEM\\CurrentControlSet\\Services\\%s\\Parameters\\DynDNS\\State\\HostNames", kServiceName );
+	name = TEXT("SYSTEM\\CurrentControlSet\\Services\\") kServiceName TEXT("\\Parameters\\DynDNS\\State\\HostNames");
 	err = RegCreateKey( HKEY_LOCAL_MACHINE, name, &key );
 	require_noerr( err, exit );
 
+	status = ( status ) ? 0 : 1;
 	err = RegSetValueEx( key, kServiceDynDNSStatus, 0, REG_DWORD, (const LPBYTE) &status, sizeof(DWORD) );
 	require_noerr( err, exit );
 
@@ -1285,7 +1513,7 @@ dDNSPlatformSetSecretForDomain( mDNS *m, const domainname * domain )
 	err = ConvertLsaStringToUTF8( secret, &converted );
 	require_noerr( err, exit );
 
-	mDNS_SetSecretForZone( m, d, d, converted, (mDNSu32) strlen( converted ) + 1, mDNStrue );
+	mDNS_SetSecretForZone( m, d, d, converted );
 
 exit:
 
@@ -1330,7 +1558,7 @@ dDNSPlatformGetSearchDomainList( void )
 	HKEY				key;
 	mStatus				err;
 
-	err = RegCreateKey( HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters", &key );
+	err = RegCreateKey( HKEY_LOCAL_MACHINE, TEXT("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters"), &key );
 	require_noerr( err, exit );
 
 	err = RegQueryString( key, "SearchList", &searchList, &searchListLen, NULL );
@@ -1847,16 +2075,18 @@ mDNSlocal mStatus	SetupNiceName( mDNS * const inMDNS )
 {
 	mStatus		err = 0;
 	char		tempString[ 256 ];
+	char		utf8[ 256 ];
 	
 	check( inMDNS );
 	
 	// Set up the nice name.
 	tempString[ 0 ] = '\0';
+	utf8[0]			= '\0';
 
 	// First try and open the registry key that contains the computer description value
 	if (inMDNS->p->descKey == NULL)
 	{
-		const char * s = "SYSTEM\\CurrentControlSet\\Services\\lanmanserver\\parameters";
+		LPCTSTR s = TEXT("SYSTEM\\CurrentControlSet\\Services\\lanmanserver\\parameters");
 		err = RegOpenKeyEx( HKEY_LOCAL_MACHINE, s, 0, KEY_READ, &inMDNS->p->descKey);
 		check_translated_errno( err == 0, errno_compat(), kNameErr );
 
@@ -1869,33 +2099,51 @@ mDNSlocal mStatus	SetupNiceName( mDNS * const inMDNS )
 	// if we opened it...
 	if (inMDNS->p->descKey != NULL)
 	{
-		DWORD type;
-		DWORD valueLen = sizeof(tempString);
+		TCHAR	desc[256];
+		DWORD	descSize = sizeof( desc );
 
 		// look for the computer description
-		err = RegQueryValueEx(inMDNS->p->descKey, "srvcomment", 0, &type, (LPBYTE) &tempString, &valueLen);
-		check_translated_errno( err == 0, errno_compat(), kNameErr );
+		err = RegQueryValueEx(inMDNS->p->descKey, TEXT("srvcomment"), 0, NULL, (LPBYTE) &desc, &descSize);
+		
+		if ( !err )
+		{
+			err = TCHARtoUTF8( desc, utf8, sizeof( utf8 ) );
+		}
+
+		if ( err )
+		{
+			utf8[ 0 ] = '\0';
+		}
 	}
 
 	// if we can't find it in the registry, then use the hostname of the machine
-	if (err || ( tempString[ 0] == '\0' ) )
+	if ( err || ( utf8[ 0 ] == '\0' ) )
 	{
 		err = gethostname( tempString, sizeof( tempString ) - 1 );
 		check_translated_errno( err == 0, errno_compat(), kNameErr );
+		
+		if( !err )
+		{
+			err = WindowsLatin1toUTF8( tempString, utf8, sizeof( utf8 ) );
+		}
+
+		if ( err )
+		{
+			utf8[ 0 ] = '\0';
+		}
 	}
 
 	// if we can't get the hostname
-	if( err || ( tempString[ 0 ] == '\0' ) )
+	if ( err || ( utf8[ 0 ] == '\0' ) )
 	{
 		// Invalidate name so fall back to a default name.
 		
-		strcpy( tempString, kMDNSDefaultName );
+		strcpy( utf8, kMDNSDefaultName );
 	}
 
-	tempString[ sizeof( tempString ) - 1 ] = '\0';
-	
-	inMDNS->nicelabel.c[ 0 ] = (mDNSu8) (strlen( tempString ) < MAX_DOMAIN_LABEL ? strlen( tempString ) : MAX_DOMAIN_LABEL);
-	memcpy( &inMDNS->nicelabel.c[ 1 ], tempString, inMDNS->nicelabel.c[ 0 ] );
+	utf8[ sizeof( utf8 ) - 1 ]	= '\0';	
+	inMDNS->nicelabel.c[ 0 ]	= (mDNSu8) (strlen( utf8 ) < MAX_DOMAIN_LABEL ? strlen( utf8 ) : MAX_DOMAIN_LABEL);
+	memcpy( &inMDNS->nicelabel.c[ 1 ], utf8, inMDNS->nicelabel.c[ 0 ] );
 	
 	dlog( kDebugLevelInfo, DEBUG_NAME "nice name \"%.*s\"\n", inMDNS->nicelabel.c[ 0 ], &inMDNS->nicelabel.c[ 1 ] );
 	
@@ -2229,9 +2477,10 @@ mDNSlocal mStatus	TearDownInterfaceList( mDNS * const inMDNS )
 
 mDNSlocal mStatus	SetupInterface( mDNS * const inMDNS, const struct ifaddrs *inIFA, mDNSInterfaceData **outIFD )
 {
-	mStatus					err;
-	mDNSInterfaceData *		ifd;
+	mDNSInterfaceData	*	ifd;
+	mDNSInterfaceData	*	p;
 	SocketRef				sock;
+	mStatus					err;
 	
 	ifd = NULL;
 	dlog( kDebugLevelTrace, DEBUG_NAME "setting up interface\n" );
@@ -2263,50 +2512,35 @@ mDNSlocal mStatus	SetupInterface( mDNS * const inMDNS, const struct ifaddrs *inI
 	// but we cut the packet rate in half. At this time, reducing the packet rate is more important than v6-only 
 	// devices on a large configured network, so we are willing to make that sacrifice.
 	
-	ifd->interfaceInfo.McastTxRx		= mDNStrue;
-	
-#if( MDNS_WINDOWS_EXCLUDE_IPV4_ROUTABLE_IPV6 )
-	if( inIFA->ifa_addr->sa_family != AF_INET )
+	ifd->interfaceInfo.McastTxRx   = mDNStrue;
+	ifd->interfaceInfo.InterfaceID = NULL;
+
+	for( p = inMDNS->p->interfaceList; p; p = p->next )
 	{
-		const mDNSInterfaceData *		p;
-		
-		for( p = inMDNS->p->interfaceList; p; p = p->next )
+		if ( strcmp( p->name, ifd->name ) == 0 )
 		{
-			if( ( p->interfaceInfo.ip.type == mDNSAddrType_IPv4 ) &&
-				( ( p->interfaceInfo.ip.ip.v4.b[ 0 ] != 169 ) && ( p->interfaceInfo.ip.ip.v4.b[ 1 ] != 254 ) ) &&
-				( strcmp( p->name, inIFA->ifa_name ) == 0 ) )
+			if (!ifd->interfaceInfo.InterfaceID)
+			{
+				p->scopeID						= ifd->scopeID;
+				ifd->interfaceInfo.InterfaceID	= (mDNSInterfaceID) p;
+			}
+
+			if ( ( inIFA->ifa_addr->sa_family != AF_INET ) &&
+			     ( p->interfaceInfo.ip.type == mDNSAddrType_IPv4 ) &&
+			     ( p->interfaceInfo.ip.ip.v4.b[ 0 ] != 169 || p->interfaceInfo.ip.ip.v4.b[ 1 ] != 254 ) )
 			{
 				ifd->interfaceInfo.McastTxRx = mDNSfalse;
-				break;
 			}
-		}
-	}
-#endif
 
-	// If this is an IPv6 interface, search for its IPv4 equivalent and use that InterfaceID. This causes the IPv4
-	// interface to send both A and AAAA records so we can publish IPv6 support without doubling the packet rate.
-	// Note: this search only works because we register all IPv4 interfaces before IPv6 interfaces.
-	
-	ifd->interfaceInfo.InterfaceID = (mDNSInterfaceID) ifd;
-	
-#if( MDNS_WINDOWS_AAAA_OVER_IPV4 )
-	if( inIFA->ifa_addr->sa_family != AF_INET )
-	{
-		mDNSInterfaceData *		ipv4IFD;
-		
-		for( ipv4IFD = inMDNS->p->interfaceList; ipv4IFD; ipv4IFD = ipv4IFD->next )
-		{
-			if( strcmp( ipv4IFD->name, ifd->name ) == 0 )
-			{
-				ipv4IFD->scopeID				= ifd->scopeID;
-				ifd->interfaceInfo.McastTxRx	= mDNSfalse;
-				ifd->interfaceInfo.InterfaceID	= (mDNSInterfaceID) ipv4IFD;
-				break;
-			}
+			break;
 		}
 	}
-#endif
-	
+
+	if ( !ifd->interfaceInfo.InterfaceID )
+	{
+		ifd->interfaceInfo.InterfaceID = (mDNSInterfaceID) ifd;
+	}
+
 	// Set up a socket for this interface (if needed).
 	
 	if( ifd->interfaceInfo.McastTxRx )
@@ -2712,11 +2946,25 @@ mDNSlocal mStatus	SetupNotifications( mDNS * const inMDNS )
 		require_noerr( err, exit );
 	}
 
+	// This will catch all changes to tcp/ip networking, including changes to the domain search list
+
+	inMDNS->p->tcpipChangedEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+	err = translate_errno( inMDNS->p->tcpipChangedEvent, (mStatus) GetLastError(), kUnknownErr );
+	require_noerr( err, exit );
+
+	err = RegCreateKey( HKEY_LOCAL_MACHINE, TEXT("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters"), &inMDNS->p->tcpipKey );
+	require_noerr( err, exit );
+
+	err = RegNotifyChangeKeyValue(inMDNS->p->tcpipKey, TRUE, REG_NOTIFY_CHANGE_NAME|REG_NOTIFY_CHANGE_LAST_SET, inMDNS->p->tcpipChangedEvent, TRUE);
+	require_noerr( err, exit );
+
+	// This will catch all changes to ddns configuration
+
 	inMDNS->p->ddnsChangedEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 	err = translate_errno( inMDNS->p->ddnsChangedEvent, (mStatus) GetLastError(), kUnknownErr );
 	require_noerr( err, exit );
 
-	err = RegCreateKey( HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\" kServiceName "\\Parameters\\DynDNS\\Setup", &inMDNS->p->ddnsKey );
+	err = RegCreateKey( HKEY_LOCAL_MACHINE, TEXT("SYSTEM\\CurrentControlSet\\Services\\") kServiceName TEXT("\\Parameters\\DynDNS\\Setup"), &inMDNS->p->ddnsKey );
 	require_noerr( err, exit );
 
 	err = RegNotifyChangeKeyValue(inMDNS->p->ddnsKey, TRUE, REG_NOTIFY_CHANGE_NAME|REG_NOTIFY_CHANGE_LAST_SET, inMDNS->p->ddnsChangedEvent, TRUE);
@@ -2752,6 +3000,12 @@ mDNSlocal mStatus	TearDownNotifications( mDNS * const inMDNS )
 	{
 		RegCloseKey( inMDNS->p->descKey );
 		inMDNS->p->descKey = NULL;
+	}
+
+	if ( inMDNS->p->tcpipChangedEvent != NULL )
+	{
+		CloseHandle( inMDNS->p->tcpipChangedEvent );
+		inMDNS->p->tcpipChangedEvent = NULL;
 	}
 
 	if ( inMDNS->p->ddnsChangedEvent != NULL )
@@ -2876,11 +3130,19 @@ mDNSlocal unsigned WINAPI	ProcessingThread( LPVOID inParam )
 		
 		// Main processing loop.
 		
+		gWaitListChanged = FALSE;
+
 		for( ;; )
 		{
 			// Give the mDNS core a chance to do its work and determine next event time.
 			
 			mDNSs32 interval = mDNS_Execute(m) - mDNS_TimeNow(m);
+
+			if ( gWaitListChanged )
+			{
+				break;
+			}
+
 			if (m->p->idleThreadCallback)
 			{
 				interval = m->p->idleThreadCallback(m, interval);
@@ -2929,6 +3191,14 @@ mDNSlocal unsigned WINAPI	ProcessingThread( LPVOID inParam )
 				ProcessingThreadComputerDescriptionChanged( m );
 				break;
 			}
+			else if ( result == kWaitListTCPIPEvent )
+			{	
+				//
+				// The TCP/IP might have changed
+				//
+				ProcessingThreadTCPIPConfigChanged( m );
+				break;
+			}
 			else if ( result == kWaitListDynDNSEvent )
 			{
 				//
@@ -2950,7 +3220,8 @@ mDNSlocal unsigned WINAPI	ProcessingThread( LPVOID inParam )
 				{
 					HANDLE					signaledObject;
 					int						n = 0;
-					mDNSInterfaceData *		ifd;
+					mDNSInterfaceData		*	ifd;
+					mDNSTCPConnectionData	*	tcd;
 					
 					signaledObject = waitList[ waitItemIndex ];
 
@@ -2976,6 +3247,26 @@ mDNSlocal unsigned WINAPI	ProcessingThread( LPVOID inParam )
 						{
 							ProcessingThreadProcessPacket( m, ifd, ifd->sock );
 							++n;
+						}
+					}
+
+					for ( tcd = gTCPConnectionList; tcd; tcd = tcd->next )
+					{
+						if ( tcd->pendingEvent == signaledObject )
+						{
+							mDNSBool connect = FALSE;
+
+							if ( !tcd->connected )
+							{
+								tcd->connected	= mDNStrue;
+								connect			= mDNStrue;
+							}
+
+							tcd->callback( ( int ) tcd->sock, tcd->context, connect );
+
+							++n;
+
+							break;
 						}
 					}
 
@@ -3052,11 +3343,12 @@ exit:
 
 mDNSlocal mStatus	ProcessingThreadSetupWaitList( mDNS * const inMDNS, HANDLE **outWaitList, int *outWaitListCount )
 {
-	mStatus					err;
-	int						waitListCount;
-	HANDLE *				waitList;
-	HANDLE *				waitItemPtr;
-	mDNSInterfaceData *		ifd;
+	mStatus						err;
+	int							waitListCount;
+	HANDLE *					waitList;
+	HANDLE *					waitItemPtr;
+	mDNSInterfaceData		*	ifd;
+	mDNSTCPConnectionData	*	tcd;
 	
 	dlog( kDebugLevelTrace, DEBUG_NAME "thread setting up wait list\n" );
 	check( inMDNS );
@@ -3066,7 +3358,7 @@ mDNSlocal mStatus	ProcessingThreadSetupWaitList( mDNS * const inMDNS, HANDLE **o
 	
 	// Allocate an array to hold all the objects to wait on.
 	
-	waitListCount = kWaitListFixedItemCount + inMDNS->p->interfaceCount;
+	waitListCount = kWaitListFixedItemCount + inMDNS->p->interfaceCount + gTCPConnections;
 	waitList = (HANDLE *) malloc( waitListCount * sizeof( *waitList ) );
 	require_action( waitList, exit, err = mStatus_NoMemoryErr );
 	waitItemPtr = waitList;
@@ -3077,6 +3369,7 @@ mDNSlocal mStatus	ProcessingThreadSetupWaitList( mDNS * const inMDNS, HANDLE **o
 	*waitItemPtr++ = inMDNS->p->interfaceListChangedEvent;
 	*waitItemPtr++ = inMDNS->p->wakeupEvent;
 	*waitItemPtr++ = inMDNS->p->descChangedEvent;
+	*waitItemPtr++ = inMDNS->p->tcpipChangedEvent;
 	*waitItemPtr++ = inMDNS->p->ddnsChangedEvent;
 	
 	// Append all the dynamic wait items to the list.
@@ -3092,6 +3385,12 @@ mDNSlocal mStatus	ProcessingThreadSetupWaitList( mDNS * const inMDNS, HANDLE **o
 	{
 		*waitItemPtr++ = ifd->readPendingEvent;
 	}
+
+	for ( tcd = gTCPConnectionList; tcd; tcd = tcd->next )
+	{
+		*waitItemPtr++ = tcd->pendingEvent;
+	}
+
 	check( (int)( waitItemPtr - waitList ) == waitListCount );
 	
 	*outWaitList 		= waitList;
@@ -3325,6 +3624,33 @@ mDNSlocal void	ProcessingThreadComputerDescriptionChanged( mDNS *inMDNS )
 
 
 //===========================================================================================================================
+//	ProcessingThreadTCPIPConfigChanged
+//===========================================================================================================================
+mDNSlocal void ProcessingThreadTCPIPConfigChanged( mDNS * inMDNS )
+{
+	mStatus		err;
+	
+	dlog( kDebugLevelInfo, DEBUG_NAME "TCP/IP config has changed\n" );
+	check( inMDNS );
+
+	mDNSPlatformLock( inMDNS );
+
+	err = dDNS_Setup( inMDNS );
+	check_noerr( err );
+
+	// and reset the event handler
+
+	if ( ( inMDNS->p->tcpipKey != NULL ) && ( inMDNS->p->tcpipChangedEvent ) )
+	{
+		err = RegNotifyChangeKeyValue( inMDNS->p->tcpipKey, TRUE, REG_NOTIFY_CHANGE_NAME|REG_NOTIFY_CHANGE_LAST_SET, inMDNS->p->tcpipChangedEvent, TRUE );
+		check_noerr( err );
+	}
+
+	mDNSPlatformUnlock( inMDNS );
+}
+
+
+//===========================================================================================================================
 //	ProcessingThreadDynDNSConfigChanged
 //===========================================================================================================================
 mDNSlocal void	ProcessingThreadDynDNSConfigChanged( mDNS *inMDNS )
@@ -3340,6 +3666,7 @@ mDNSlocal void	ProcessingThreadDynDNSConfigChanged( mDNS *inMDNS )
 	check_noerr( err );
 
 	// and reset the event handler
+
 	if ((inMDNS->p->ddnsKey != NULL) && (inMDNS->p->ddnsChangedEvent))
 	{
 		err = RegNotifyChangeKeyValue(inMDNS->p->ddnsKey, TRUE, REG_NOTIFY_CHANGE_NAME|REG_NOTIFY_CHANGE_LAST_SET, inMDNS->p->ddnsChangedEvent, TRUE);
@@ -4106,7 +4433,7 @@ exit:
 //===========================================================================================================================
 
 static mStatus
-RegQueryString( HKEY key, const char * valueName, char ** string, DWORD * stringLen, DWORD * enabled )
+RegQueryString( HKEY key, LPCSTR valueName, LPSTR * string, DWORD * stringLen, DWORD * enabled )
 {
 	DWORD	type;
 	int		i;
@@ -4126,17 +4453,19 @@ RegQueryString( HKEY key, const char * valueName, char ** string, DWORD * string
 		*string = (char*) malloc( *stringLen );
 		require_action( *string, exit, err = mStatus_NoMemoryErr );
 
-		err = RegQueryValueEx( key, valueName, 0, &type, (LPBYTE) *string, stringLen );
+		err = RegQueryValueExA( key, valueName, 0, &type, (LPBYTE) *string, stringLen );
 
 		i++;
 	}
 	while ( ( err == ERROR_MORE_DATA ) && ( i < 100 ) );
 
+	require_noerr_quiet( err, exit );
+
 	if ( enabled )
 	{
 		DWORD dwSize = sizeof( DWORD );
 
-		err = RegQueryValueEx( key, "Enabled", NULL, NULL, (LPBYTE) enabled, &dwSize );
+		err = RegQueryValueEx( key, TEXT("Enabled"), NULL, NULL, (LPBYTE) enabled, &dwSize );
 		check_noerr( err );
 
 		err = kNoErr;
@@ -4152,7 +4481,7 @@ exit:
 //	StringToAddress
 //===========================================================================================================================
 
-static mStatus StringToAddress( mDNSAddr * ip, const char * string )
+static mStatus StringToAddress( mDNSAddr * ip, LPSTR string )
 {
 	struct sockaddr_in6 sa6;
 	struct sockaddr_in	sa4;
@@ -4162,7 +4491,7 @@ static mStatus StringToAddress( mDNSAddr * ip, const char * string )
 	sa6.sin6_family	= AF_INET6;
 	dwSize			= sizeof( sa6 );
 
-	err = WSAStringToAddress( (LPSTR) string, AF_INET6, NULL, (struct sockaddr*) &sa6, &dwSize );
+	err = WSAStringToAddressA( string, AF_INET6, NULL, (struct sockaddr*) &sa6, &dwSize );
 
 	if ( err == mStatus_NoError )
 	{
@@ -4174,7 +4503,7 @@ static mStatus StringToAddress( mDNSAddr * ip, const char * string )
 		sa4.sin_family = AF_INET;
 		dwSize = sizeof( sa4 );
 
-		err = WSAStringToAddress( (LPSTR) string, AF_INET, NULL, (struct sockaddr*) &sa4, &dwSize );
+		err = WSAStringToAddressA( string, AF_INET, NULL, (struct sockaddr*) &sa4, &dwSize );
 		require_noerr( err, exit );
 			
 		err = dDNS_SetupAddr( ip, (struct sockaddr*) &sa4 );
@@ -4208,6 +4537,67 @@ myGetIfAddrs(int refresh)
 	}
 	
 	return ifa;
+}
+
+
+//===========================================================================================================================
+//	TCHARtoUTF8
+//===========================================================================================================================
+
+mDNSlocal OSStatus
+TCHARtoUTF8( const TCHAR *inString, char *inBuffer, size_t inBufferSize )
+{
+#if( defined( UNICODE ) || defined( _UNICODE ) )
+	OSStatus		err;
+	int				len;
+	
+	len = WideCharToMultiByte( CP_UTF8, 0, inString, -1, inBuffer, (int) inBufferSize, NULL, NULL );
+	err = translate_errno( len > 0, errno_compat(), kUnknownErr );
+	require_noerr( err, exit );
+	
+exit:
+	return( err );
+#else
+	return( WindowsLatin1toUTF8( inString, inBuffer, inBufferSize ) );
+#endif
+}
+
+
+//===========================================================================================================================
+//	WindowsLatin1toUTF8
+//===========================================================================================================================
+
+mDNSlocal OSStatus
+WindowsLatin1toUTF8( const char *inString, char *inBuffer, size_t inBufferSize )
+{
+	OSStatus		err;
+	WCHAR *			utf16;
+	int				len;
+	
+	utf16 = NULL;
+	
+	// Windows doesn't support going directly from Latin-1 to UTF-8 so we have to go from Latin-1 to UTF-16 first.
+	
+	len = MultiByteToWideChar( CP_ACP, 0, inString, -1, NULL, 0 );
+	err = translate_errno( len > 0, errno_compat(), kUnknownErr );
+	require_noerr( err, exit );
+	
+	utf16 = (WCHAR *) malloc( len * sizeof( *utf16 ) );
+	require_action( utf16, exit, err = kNoMemoryErr );
+	
+	len = MultiByteToWideChar( CP_ACP, 0, inString, -1, utf16, len );
+	err = translate_errno( len > 0, errno_compat(), kUnknownErr );
+	require_noerr( err, exit );
+	
+	// Now convert the temporary UTF-16 to UTF-8.
+	
+	len = WideCharToMultiByte( CP_UTF8, 0, utf16, -1, inBuffer, (int) inBufferSize, NULL, NULL );
+	err = translate_errno( len > 0, errno_compat(), kUnknownErr );
+	require_noerr( err, exit );
+
+exit:
+	if( utf16 ) free( utf16 );
+	return( err );
 }
 
 
@@ -4296,4 +4686,27 @@ exit:
 	}
 
 	return err;
+}
+
+
+//===========================================================================================================================
+//	FreeTCPConnectionData
+//===========================================================================================================================
+
+mDNSlocal void
+FreeTCPConnectionData( mDNSTCPConnectionData * data )
+{
+	check( data );
+
+	if ( data->pendingEvent )
+	{
+		CloseHandle( data->pendingEvent );
+	}
+
+	if ( data->sock != INVALID_SOCKET )
+	{
+		closesocket( data->sock );
+	}
+
+	free( data );
 }

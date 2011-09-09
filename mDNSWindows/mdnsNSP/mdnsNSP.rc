@@ -72,9 +72,9 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "Apple Computer, Inc."
-            VALUE "FileDescription", "mdnsNSP Dynamic Link Library"
+            VALUE "FileDescription", "Bonjour Namespace Provider"
             VALUE "FileVersion", MASTER_PROD_VERS_STR
-            VALUE "InternalName", "mdnsNSP"
+            VALUE "InternalName", "mdnsNSP.dll"
             VALUE "LegalCopyright", MASTER_LEGAL_COPYRIGHT
             VALUE "OriginalFilename", "mdnsNSP.dll"
             VALUE "ProductName", MASTER_PROD_NAME

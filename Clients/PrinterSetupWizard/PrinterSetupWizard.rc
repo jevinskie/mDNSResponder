@@ -103,11 +103,11 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "Apple Computer, Inc."
-            VALUE "FileDescription", "Rendezvous Printer Wizard"
+            VALUE "FileDescription", "Bonjour Printer Wizard"
             VALUE "FileVersion", MASTER_PROD_VERS_STR
-            VALUE "InternalName", "RendezvousPrinterWizard.exe"
+            VALUE "InternalName", "PrinterWizard.exe"
             VALUE "LegalCopyright", MASTER_LEGAL_COPYRIGHT
-            VALUE "OriginalFilename", "RendezvousPrinterWizard.exe"
+            VALUE "OriginalFilename", "PrinterWizard.exe"
             VALUE "ProductName", MASTER_PROD_NAME
             VALUE "ProductVersion", MASTER_PROD_VERS_STR
         END
@@ -133,8 +133,8 @@ IDR_MANIFEST            RT_MANIFEST             "res\\PrinterSetupWizard.manifes
 
 STRINGTABLE 
 BEGIN
-    IDS_REINSTALL    "Rendezvous Printer Wizard cannot run because some of its required files are missing.  Please reinstall Rendezvous Printer Wizard."
-	IDS_REINSTALL_CAPTION "Rendezvous Printer Wizard"
+    IDS_REINSTALL    "Bonjour Printer Wizard cannot run because some of its required files are missing.  Please reinstall Bonjour Printer Wizard."
+	IDS_REINSTALL_CAPTION "Bonjour Printer Wizard"
 END
 
 #endif    // English (U.S.) resources

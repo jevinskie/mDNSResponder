@@ -37,7 +37,7 @@ Revision 1.7  2004/09/11 00:36:40  shersche
 Bug #: 3786226
 
 Revision 1.6  2004/09/02 21:20:56  cheshire
-<rdar://problem/3774871> Rendezvous DLL.NET crashes on null record
+<rdar://problem/3774871> DLL.NET crashes on null record
 
 Revision 1.5  2004/07/27 07:12:56  shersche
 make TextRecord an instantiable class object

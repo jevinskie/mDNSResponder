@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: uDNS.h,v $
+Revision 1.30  2005/03/04 03:00:03  ksekar
+<rdar://problem/4026546> Retransmissions happen too early, causing registrations to conflict with themselves
+
 Revision 1.29  2005/01/11 22:50:53  ksekar
 Fixed constant naming (was using kLLQ_DefLease for update leases)
 
@@ -128,12 +131,12 @@ Revision 1.1  2003/12/13 03:05:27  ksekar
 	extern "C" {
 #endif
 
-#define RESTART_GOODBYE_DELAY (2 * mDNSPlatformOneSecond) // delay after restarting LLQ before nuking previous known answers (avoids flutter if we restart before we have networking up)
-#define MIN_UCAST_PERIODIC_EXEC (5 * mDNSPlatformOneSecond) 	
-#define INIT_UCAST_POLL_INTERVAL mDNSPlatformOneSecond      // this interval is used after send failures on network transitions
-	                                                        // which typically heal quickly, so we start agressively and exponentially back off
+#define RESTART_GOODBYE_DELAY    (6 * mDNSPlatformOneSecond) // delay after restarting LLQ before nuking previous known answers (avoids flutter if we restart before we have networking up)
+#define MIN_UCAST_PERIODIC_EXEC  (5 * mDNSPlatformOneSecond) 	
+#define INIT_UCAST_POLL_INTERVAL (3 * mDNSPlatformOneSecond) // this interval is used after send failures on network transitions
+	                                                         // which typically heal quickly, so we start agressively and exponentially back off
 #define MAX_UCAST_POLL_INTERVAL (60 * 60 * mDNSPlatformOneSecond)
-#define RESPONSE_WINDOW (60 * mDNSPlatformOneSecond)        // require server responses within one minute of request
+#define RESPONSE_WINDOW (60 * mDNSPlatformOneSecond)         // require server responses within one minute of request
 #define UPDATE_PORT_NAME "_dns-update._udp."
 #define LLQ_PORT_NAME "_dns-llq._udp"
 #define DEFAULT_UPDATE_LEASE 7200

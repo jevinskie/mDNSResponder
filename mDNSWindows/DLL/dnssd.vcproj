@@ -65,7 +65,7 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release\Root\Program Files\bin"
+			OutputDirectory=".\Release\Root\Program Files\Bonjour"
 			IntermediateDirectory=".\Release"
 			ConfigurationType="2"
 			CharacterSet="2">

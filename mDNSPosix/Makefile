@@ -24,6 +24,9 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # $Log: Makefile,v $
+# Revision 1.56  2005/02/02 02:25:21  cheshire
+# <rdar://problem/3980388> /var/run/mDNSResponder should be /var/run/mdnsd on Linux
+#
 # Revision 1.55  2005/01/27 22:55:00  cheshire
 # Add "make os=tiger" target which uses gcc4 and "-Wdeclaration-after-statement"
 #
@@ -216,7 +219,7 @@ LD = ld -shared
 CP = cp
 RM = rm
 LN = ln -s -f
-CFLAGS_COMMON = -I. -I$(COREDIR) -I$(SHAREDDIR) -W -Wall -DPID_FILE=\"/var/run/mdnsd.pid\"
+CFLAGS_COMMON = -I. -I$(COREDIR) -I$(SHAREDDIR) -W -Wall -DPID_FILE=\"/var/run/mdnsd.pid\" -DMDNS_UDS_SERVERPATH=\"/var/run/mdnsd\"
 LIBFLAGS =
 DNSEXT_FLAGS = -D_REENTRANT -g -Wall -lpthread
 LDSUFFIX = so

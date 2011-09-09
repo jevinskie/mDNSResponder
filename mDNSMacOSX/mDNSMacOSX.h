@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: mDNSMacOSX.h,v $
+Revision 1.50  2005/02/19 00:04:18  cheshire
+Add comments
+
 Revision 1.49  2004/12/17 23:37:47  cheshire
 <rdar://problem/3485365> Guard against repeating wireless dissociation/re-association
 (and other repetitive configuration changes)
@@ -241,8 +244,8 @@ struct mDNS_PlatformSupport_struct
     {
     NetworkInterfaceInfoOSX *InterfaceList;
     CFSocketSet              unicastsockets;
-    domainlabel              userhostlabel;
-    domainlabel              usernicelabel;
+    domainlabel              userhostlabel;		// The hostlabel as it was set in System Preferences the last time we looked
+    domainlabel              usernicelabel;		// The nicelabel as it was set in System Preferences the last time we looked
     mDNSs32                  NotifyUser;
     mDNSs32                  NetworkChanged;
     SCDynamicStoreRef        Store;

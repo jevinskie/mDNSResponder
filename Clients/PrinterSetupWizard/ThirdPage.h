@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: ThirdPage.h,v $
+Revision 1.4  2005/02/08 21:45:06  shersche
+<rdar://problem/3947490> Default to Generic PostScript or PCL if unable to match driver
+
 Revision 1.3  2005/01/25 08:57:28  shersche
 <rdar://problem/3911084> Add m_printerControl member for dynamic loading of icons from resource DLLs
 Bug #: 3911084
@@ -86,6 +89,13 @@ private:
 	OSStatus LoadPrintDriverDefs(Manufacturers & manufacturers);
 
 	//
+	// LoadGenericPrintDriversDefs
+	//
+	// Loads generic postscript and pcl print driver defs
+	//
+	OSStatus LoadGenericPrintDriverDefs( Manufacturers & manufacturers );
+
+	//
 	// PopulateUI
 	//
 	// Load print driver defs into UI for browsing/selection
@@ -115,7 +125,8 @@ private:
 
 	Manufacturer	*	MatchManufacturer( Manufacturers & manufacturer, const CString & name );
 	Model			*	MatchModel( Manufacturer * manufacturer, const CString & name );
-	void				SelectMatch(Printer * printer, Service * service, Manufacturer * manufacturer, Model * model);
+	BOOL				MatchGeneric( Printer * printer, Service * service, Manufacturer ** manufacturer, Model ** model );
+	void				SelectMatch(Printer * printer, Service * service, Manufacturers & manufacturers, Manufacturer * manufacturer, Model * model);
 	void				CopyPrinterSettings(Printer * printer, Service * service, Manufacturer * manufacturer, Model * model);
 
 	Manufacturers		m_manufacturers;
@@ -125,6 +136,9 @@ private:
 	
 	CListCtrl			m_modelListCtrl;
 	Model			*	m_modelSelected;
+
+	Model			*	m_genericPostscript;
+	Model			*	m_genericPCL;
 
 	bool				m_initialized;
 

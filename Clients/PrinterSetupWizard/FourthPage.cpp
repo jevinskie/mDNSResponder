@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: FourthPage.cpp,v $
+Revision 1.6  2005/02/08 21:45:06  shersche
+<rdar://problem/3947490> Default to Generic PostScript or PCL if unable to match driver
+
 Revision 1.5  2005/01/06 08:17:08  shersche
 Display the selected protocol ("Raw", "LPR", "IPP") rather than the port name
 
@@ -126,7 +129,7 @@ CFourthPage::OnSetActive()
 
 	m_printerNameCtrl.SetWindowText( printer->actualName );
 	m_printerManufacturerCtrl.SetWindowText ( printer->manufacturer );
-	m_printerModelCtrl.SetWindowText ( printer->model );
+	m_printerModelCtrl.SetWindowText ( printer->displayModelName );
 
 	Service * service = printer->services.front();
 	require_quiet( service, exit );

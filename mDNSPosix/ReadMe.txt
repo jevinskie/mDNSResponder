@@ -15,9 +15,9 @@ technologies, see the zeroconf web site.
 
   <http://www.zeroconf.org/>
 
-Apple uses the brand name "Rendezvous" to describe our implementation of
+Apple uses the trade mark "Bonjour" to describe our implementation of
 zeroconf technologies.  This sample is designed to show how easy it is
-to make a device "Rendezvous compatible".
+to make a device "Bonjour compatible".
 
 The code in this sample was compiled and tested on Mac OS X (10.1.x,
 10.2, 10.3), Solaris (SunOS 5.8), Linux (Redhat 2.4.9-21, Fedora Core 1), 

@@ -20,6 +20,12 @@
 # @APPLE_LICENSE_HEADER_END@
 #
 # $Log: makefile,v $
+# Revision 1.6  2005/02/10 22:35:36  cheshire
+# <rdar://problem/3727944> Update name
+#
+# Revision 1.5  2005/02/08 23:47:51  shersche
+# Build into proper directories for installer
+#
 # Revision 1.4  2004/12/16 22:38:00  shersche
 # Compile DNSSDException.java first to avoid build errors, copy output to appropriate "buildroot" folder
 #
@@ -78,11 +84,13 @@ DEBUG=0
 CFLAGS_DEBUG = -Zi -DMDNS_DEBUGMSGS=2 
 OBJDIR = objects\debug
 BUILDDIR = build\debug
+INSTALLDIR = root\"Program Files"\Bonjour
 LIBDIR = ..\DLL\Debug
 !else
 CFLAGS_DEBUG = -Os -DMDNS_DEBUGMSGS=0 
 OBJDIR = objects\prod
 BUILDDIR = build\prod
+INSTALLDIR = root\"Program Files"\Bonjour
 LIBDIR = ..\DLL\Release
 !endif
 
@@ -100,19 +108,12 @@ setup:
 	@if not exist $(OBJDIR)		mkdir $(OBJDIR)
 	@if not exist $(BUILDDIR)	mkdir $(BUILDDIR)
 
-!if DEFINED(DNSSD_BUILD_ROOT)
-!if $(DEBUG) == 1
 postbuild:
-	copy $(BUILDDIR)\dns_sd.jar $(DNSSD_BUILD_ROOT)\Debug\Root\"Program Files"\bin
-	copy $(BUILDDIR)\jdns_sd.dll $(DNSSD_BUILD_ROOT)\Debug\Root\"Program Files"\bin
-!else
-postbuild:
-	copy $(BUILDDIR)\dns_sd.jar $(DNSSD_BUILD_ROOT)\Release\Root\"Program Files"\bin
-	copy $(BUILDDIR)\jdns_sd.dll $(DNSSD_BUILD_ROOT)\Release\Root\"Program Files"\bin
-!endif
-!else
-postbuild:
-!endif
+	@if not exist root						mkdir root
+	@if not exist root\"Program Files"	mkdir root\"Program Files"
+	@if not exist $(INSTALLDIR)			mkdir $(INSTALLDIR)
+	copy $(BUILDDIR)\dns_sd.jar $(INSTALLDIR)
+	copy $(BUILDDIR)\jdns_sd.dll $(INSTALLDIR)
 
 # clean removes targets and objects
 clean:

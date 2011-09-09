@@ -23,6 +23,18 @@
     Change History (most recent first):
 
 $Log: DNSCommon.c,v $
+Revision 1.87  2005/02/25 04:21:00  cheshire
+<rdar://problem/4015377> mDNS -F returns the same domain multiple times with different casing
+
+Revision 1.86  2005/02/18 00:43:12  cheshire
+<rdar://problem/4010245> mDNSResponder should auto-truncate service names that are too long
+
+Revision 1.85  2005/02/10 22:35:17  cheshire
+<rdar://problem/3727944> Update name
+
+Revision 1.84  2005/02/03 00:44:38  cheshire
+<rdar://problem/3986663> DNSServiceUpdateRecord returns kDNSServiceErr_Invalid when rdlen=0, rdata=NULL
+
 Revision 1.83  2005/01/27 22:57:55  cheshire
 Fix compile errors on gcc4
 
@@ -55,7 +67,7 @@ Revision 1.74  2004/12/09 22:49:15  ksekar
 <rdar://problem/3913653> Wide-Area Goodbyes broken
 
 Revision 1.73  2004/12/07 22:49:06  cheshire
-<rdar://problem/3908850> BIND doesn't like zero-length rdata
+<rdar://problem/3908850> BIND doesn't allow zero-length TXT records
 
 Revision 1.72  2004/12/06 21:15:20  ksekar
 <rdar://problem/3884386> mDNSResponder crashed in CheckServiceRegistrations
@@ -156,7 +168,7 @@ Fix param order error moving putPrereqNameNotInUse from uDNS.c using
 ustrcpy macro to DNSCommon.c using mDNSPlatformStrCopy().
 
 Revision 1.42  2004/08/10 23:19:14  ksekar
-<rdar://problem/3722542>: DNS Extension daemon for Wide Area Rendezvous
+<rdar://problem/3722542>: DNS Extension daemon for Wide Area Service Discovery
 Moved routines/constants to allow extern access for garbage collection daemon
 
 Revision 1.41  2004/08/10 01:10:01  cheshire
@@ -410,6 +422,9 @@ mDNSexport char *DNSTypeName(mDNSu16 rrtype)
 		}
 	}
 
+// Note slight bug: this code uses the rdlength from the ResourceRecord object, to display
+// the rdata from the RDataBody object. Sometimes this could be the wrong length -- but as
+// long as this routine is only used for debugging messages, it probably isn't a big problem.
 mDNSexport char *GetRRDisplayString_rdb(const ResourceRecord *rr, RDataBody *rd, char *buffer)
 	{
 	char *ptr = buffer;
@@ -817,7 +832,7 @@ mDNSexport mDNSu8 *ConstructServiceName(domainname *const fqdn,
 					for (i=0; i < (int)sizeof(SubTypeLabel); i++) *dst++ = SubTypeLabel[i];
 					type = (domainname *)s1;
 					
-					// Special support for queries done by older versions of "Rendezvous Browser"
+					// Special support for queries done by some third-party network monitoring software
 					// For these queries, we retract the "._sub" we just added between the subtype and the main type
 					if (SameDomainName((domainname*)s0, (domainname*)"\x09_services\x07_dns-sd\x04_udp") ||
 						SameDomainName((domainname*)s0, (domainname*)"\x09_services\x05_mdns\x04_udp"))
@@ -910,6 +925,45 @@ mDNSexport mDNSBool DeconstructServiceName(const domainname *const fqdn,
 	return(mDNStrue);
 	}
 
+// Notes on UTF-8:
+// 0xxxxxxx represents a 7-bit ASCII value from 0x00 to 0x7F
+// 10xxxxxx is a continuation byte of a multi-byte character
+// 110xxxxx is the first byte of a 2-byte character (11 effective bits; values 0x     80 - 0x     800-1)
+// 1110xxxx is the first byte of a 3-byte character (16 effective bits; values 0x    800 - 0x   10000-1)
+// 11110xxx is the first byte of a 4-byte character (21 effective bits; values 0x  10000 - 0x  200000-1)
+// 111110xx is the first byte of a 5-byte character (26 effective bits; values 0x 200000 - 0x 4000000-1)
+// 1111110x is the first byte of a 6-byte character (31 effective bits; values 0x4000000 - 0x80000000-1)
+//
+// UTF-16 surrogate pairs are used in UTF-16 to encode values larger than 0xFFFF.
+// Although UTF-16 surrogate pairs are not supposed to appear in legal UTF-8, we want to be defensive
+// about that too. (See <http://www.unicode.org/faq/utf_bom.html#34>, "What are surrogates?")
+// The first of pair is a UTF-16 value in the range 0xD800-0xDBFF (11101101 1010xxxx 10xxxxxx in UTF-8),
+// and the second    is a UTF-16 value in the range 0xDC00-0xDFFF (11101101 1011xxxx 10xxxxxx in UTF-8).
+
+mDNSexport mDNSu32 TruncateUTF8ToLength(mDNSu8 *string, mDNSu32 length, mDNSu32 max)
+	{
+	if (length > max)
+		{
+		mDNSu8 c1 = string[max];								// First byte after cut point
+		mDNSu8 c2 = (max+1 < length) ? string[max+1] : 0xB0;	// Second byte after cut point
+		length = max;	// Trim length down
+		while (length > 0)
+			{
+			// Check if the byte right after the chop point is a UTF-8 continuation byte,
+			// or if the character right after the chop point is the second of a UTF-16 surrogate pair.
+			// If so, then we continue to chop more bytes until we get to a legal chop point.
+			mDNSBool continuation    = ((c1 & 0xC0) == 0x80);
+			mDNSBool secondsurrogate = (c1 == 0xED && (c2 & 0xF0) == 0xB0);
+			if (!continuation && !secondsurrogate) break;
+			c2 = c1;
+			c1 = string[--length];
+			}
+		// Having truncated characters off the end of our string, also cut off any residual white space
+		while (length > 0 && string[length-1] <= ' ') length--;
+		}
+	return(length);
+	}
+
 // Returns true if a rich text label ends in " (nnn)", or if an RFC 1034
 // name ends in "-nnn", where n is some decimal number.
 mDNSexport mDNSBool LabelContainsSuffix(const domainlabel *const name, const mDNSBool RichText)
@@ -974,13 +1028,7 @@ mDNSexport void AppendLabelSuffix(domainlabel *name, mDNSu32 val, mDNSBool RichT
 
 	while (val >= divisor * 10) { divisor *= 10; chars++; }
 
-	if (name->c[0] > (mDNSu8)(MAX_DOMAIN_LABEL - chars))
-		{
-		name->c[0] = (mDNSu8)(MAX_DOMAIN_LABEL - chars);
-		// If the following character is a UTF-8 continuation character,
-		// we just chopped a multi-byte UTF-8 character in the middle, so strip back to a safe truncation point
-		while (name->c[0] > 0 && (name->c[name->c[0]+1] & 0xC0) == 0x80) name->c[0]--;
-		}
+	name->c[0] = TruncateUTF8ToLength(name->c+1, name->c[0], MAX_DOMAIN_LABEL - chars);
 
 	if (RichText) { name->c[++name->c[0]] = ' '; name->c[++name->c[0]] = '('; }
 	else          { name->c[++name->c[0]] = '-'; }
@@ -1037,10 +1085,9 @@ mDNSexport mDNSu32 RDataHashValue(mDNSu16 const rdlength, const RDataBody *const
 
 mDNSexport mDNSBool SameRData(const ResourceRecord *const r1, const ResourceRecord *const r2)
 	{
-	if (r1->rrtype     != r2->rrtype)   return(mDNSfalse);
-	if (r1->rdlength   != r2->rdlength) return(mDNSfalse);
-	if (r1->rdatahash  != r2->rdatahash) return(mDNSfalse);
-	if (r1->rdnamehash != r2->rdnamehash) return(mDNSfalse);
+	if (r1->rrtype     != r2->rrtype)     return(mDNSfalse);
+	if (r1->rdlength   != r2->rdlength)   return(mDNSfalse);
+	if (r1->rdatahash  != r2->rdatahash)  return(mDNSfalse);
 	switch(r1->rrtype)
 		{
 		case kDNSType_CNAME:// Same as PTR
@@ -1102,10 +1149,6 @@ mDNSexport mDNSu16 GetRDLength(const ResourceRecord *const rr, mDNSBool estimate
 mDNSexport mDNSBool ValidateRData(const mDNSu16 rrtype, const mDNSu16 rdlength, const RData *const rd)
 	{
 	mDNSu16 len;
-	// Some (or perhaps all) versions of BIND named (name daemon) don't allow updates
-	// with zero-length rdata, so for consistency we don't allow them for mDNS either.
-	// Otherwise we risk having applications that work with mDNS but not with uDNS.
-	if (!rdlength) return(mDNSfalse);
 
 	switch(rrtype)
 		{
@@ -1121,12 +1164,14 @@ mDNSexport mDNSBool ValidateRData(const mDNSu16 rrtype, const mDNSu16 rdlength, 
 		case kDNSType_MR:	// Same as PTR
 		//case kDNSType_NULL not checked (no specified format, so always valid)
 		//case kDNSType_WKS not checked
-		case kDNSType_PTR:	len = DomainNameLength(&rd->u.name);
+		case kDNSType_PTR:	if (!rdlength) return(mDNSfalse);
+							len = DomainNameLength(&rd->u.name);
 							return(len <= MAX_DOMAIN_NAME && rdlength == len);
 
 		case kDNSType_HINFO:// Same as TXT (roughly)
 		case kDNSType_MINFO:// Same as TXT (roughly)
-		case kDNSType_TXT:  {
+		case kDNSType_TXT:  if (!rdlength) return(mDNSfalse); // TXT record has to be at least one byte (RFC 1035)
+							{
 							const mDNSu8 *ptr = rd->u.txt.c;
 							const mDNSu8 *end = rd->u.txt.c + rdlength;
 							while (ptr < end) ptr += 1 + ptr[0];
@@ -1135,10 +1180,12 @@ mDNSexport mDNSBool ValidateRData(const mDNSu16 rrtype, const mDNSu16 rdlength, 
 
 		case kDNSType_AAAA:	return(rdlength == sizeof(mDNSv6Addr));
 
-		case kDNSType_MX:   len = DomainNameLength(&rd->u.mx.exchange);
+		case kDNSType_MX:   if (!rdlength) return(mDNSfalse);
+							len = DomainNameLength(&rd->u.mx.exchange);
 							return(len <= MAX_DOMAIN_NAME && rdlength == 2+len);
 
-		case kDNSType_SRV:	len = DomainNameLength(&rd->u.srv.target);
+		case kDNSType_SRV:	if (!rdlength) return(mDNSfalse);
+							len = DomainNameLength(&rd->u.srv.target);
 							return(len <= MAX_DOMAIN_NAME && rdlength == 6+len);
 
 		default:			return(mDNStrue);	// Allow all other types without checking
@@ -1628,8 +1675,7 @@ mDNSexport void SetNewRData(ResourceRecord *const rr, RData *NewRData, mDNSu16 r
 	target = GetRRDomainNameTarget(rr);
 	rr->rdlength   = GetRDLength(rr, mDNSfalse);
 	rr->rdestimate = GetRDLength(rr, mDNStrue);
-	rr->rdatahash  = RDataHashValue(rr->rdlength, &rr->rdata->u);
-	rr->rdnamehash = target ? DomainNameHashValue(target) : 0;
+	rr->rdatahash  = target ? DomainNameHashValue(target) : RDataHashValue(rr->rdlength, &rr->rdata->u);
 	}
 
 mDNSexport const mDNSu8 *skipDomainName(const DNSMessage *const msg, const mDNSu8 *ptr, const mDNSu8 *const end)

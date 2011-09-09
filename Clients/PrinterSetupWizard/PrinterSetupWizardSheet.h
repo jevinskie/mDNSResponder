@@ -23,6 +23,12 @@
     Change History (most recent first):
     
 $Log: PrinterSetupWizardSheet.h,v $
+Revision 1.8  2005/02/08 18:53:33  shersche
+Remove qtotalDefined parameter from ParseTextRecord()
+
+Revision 1.7  2005/01/31 23:54:29  shersche
+<rdar://problem/3947508> Start browsing when printer wizard starts. Move browsing logic from CSecondPage object to CPrinterSetupWizardSheet object.
+
 Revision 1.6  2005/01/03 19:05:01  shersche
 Store pointer to instance of wizard sheet so that print driver install thread sends a window message to the correct window
 
@@ -97,6 +103,9 @@ public:
 	//
 	virtual LONG
 	OnProcessEvent(WPARAM inWParam, LPARAM inLParam);
+	
+	virtual LONG
+	OnSocketEvent(WPARAM inWParam, LPARAM inLParam);
 
 	virtual BOOL
 	OnCommand(WPARAM wParam, LPARAM lParam);
@@ -112,6 +121,14 @@ public:
 
 	afx_msg void
 	OnOK();
+
+	OSStatus
+	StartResolve( Printer * printer );
+
+	OSStatus
+	StopResolve( Printer * printer );
+
+	Printers				m_printers;
 
 	HCURSOR					m_active;
 	HCURSOR					m_arrow;
@@ -132,6 +149,106 @@ protected:
 
 private:
 
+	static void DNSSD_API
+	OnBrowse(
+		DNSServiceRef 			inRef,
+		DNSServiceFlags 		inFlags,
+		uint32_t 				inInterfaceIndex,
+		DNSServiceErrorType 	inErrorCode,
+		const char *			inName,	
+		const char *			inType,	
+		const char *			inDomain,	
+		void *					inContext );
+
+	static void DNSSD_API
+	OnResolve(
+		DNSServiceRef			inRef,
+		DNSServiceFlags			inFlags,
+		uint32_t				inInterfaceIndex,
+		DNSServiceErrorType		inErrorCode,
+		const char *			inFullName,	
+		const char *			inHostName, 
+		uint16_t 				inPort,
+		uint16_t 				inTXTSize,
+		const char *			inTXT,
+		void *					inContext );
+
+	static void DNSSD_API
+	OnQuery(
+		DNSServiceRef			inRef, 
+		DNSServiceFlags			inFlags, 
+		uint32_t				inInterfaceIndex, 
+		DNSServiceErrorType		inErrorCode,
+		const char			*	inFullName, 
+		uint16_t				inRRType, 
+		uint16_t				inRRClass, 
+		uint16_t				inRDLen, 
+		const void			*	inRData, 
+		uint32_t				inTTL, 
+		void				*	inContext);
+
+	Printer*
+	OnAddPrinter(
+		uint32_t 				inInterfaceIndex,
+		const char			*	inName,	
+		const char			*	inType,	
+		const char			*	inDomain,
+		bool					moreComing);
+
+	OSStatus
+	OnRemovePrinter(
+		Printer				*	printer,
+		bool					moreComing);
+
+	OSStatus
+	OnAddService(
+		Printer				*	printer,
+		uint32_t 				inInterfaceIndex,
+		const char			*	inName,	
+		const char			*	inType,	
+		const char			*	inDomain);
+
+	OSStatus
+	OnRemoveService(
+		Service				*	service);
+
+	void
+	OnResolveService(
+		Service				*	service );
+
+	static bool
+	OrderServiceFunc( const Service * a, const Service * b );
+
+	static bool
+	OrderQueueFunc( const Queue * q1, const Queue * q2 );
+
+	OSStatus
+	StartOperation( DNSServiceRef ref );
+
+	OSStatus
+	StopOperation( DNSServiceRef & ref );
+
+	OSStatus
+	StartBrowse();
+
+	OSStatus
+	StopBrowse();
+
+	OSStatus
+	StartResolve( Service * service );
+
+	OSStatus
+	StopResolve( Service * service );
+
+	OSStatus
+	ParseTextRecord( Service * service, uint16_t inTXTSize, const char * inTXT, CString & qname, uint32_t & qpriority );
+
+	OSStatus
+	LoadPrinterNames();
+
+	Printer*
+	Lookup( const char * name );
+
 	OSStatus
 	InstallPrinter(Printer * printer);
 
@@ -144,10 +261,18 @@ private:
 	static unsigned WINAPI
 	InstallDriverThread( LPVOID inParam );
 
+	typedef std::map<CString,CString>	PrinterNameMap;
+	typedef std::list<DNSServiceRef>	ServiceRefList;
 	static CPrinterSetupWizardSheet	*	m_self;
+	PrinterNameMap						m_printerNames;
 	Printer							*	m_selectedPrinter;
 	bool								m_driverThreadFinished;
 	DWORD								m_driverThreadExitCode;
+	ServiceRefList						m_serviceRefList;
+	DNSServiceRef						m_pdlBrowser;
+	DNSServiceRef						m_lprBrowser;
+	DNSServiceRef						m_ippBrowser;
+	DNSServiceRef						m_resolver;
 };
 
 

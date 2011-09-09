@@ -36,6 +36,43 @@
     Change History (most recent first):
 
 $Log: daemon.c,v $
+Revision 1.255  2005/03/09 00:48:43  cheshire
+<rdar://problem/4015157> QU packets getting sent too early on wake from sleep
+Move "m->p->NetworkChanged = 0;" line from caller to callee
+
+Revision 1.254  2005/03/03 04:34:19  cheshire
+<rdar://problem/4025973> Bonjour name conflict dialog appears during MacBuddy
+
+Revision 1.253  2005/03/03 03:55:09  cheshire
+<rdar://problem/3862944> Name collision notifications should be localized
+
+Revision 1.252  2005/02/23 02:29:17  cheshire
+<rdar://problem/4005191> "Local Hostname is already in use..." dialogue shows for only 60 seconds before being removed
+Minor refinements, better variable names, improved comments
+
+Revision 1.251  2005/02/21 21:31:24  ksekar
+<rdar://problem/4015162> changed LogMsg to debugf
+
+Revision 1.250  2005/02/19 01:25:04  cheshire
+<rdar://problem/4005191> "Local Hostname is already in use..." dialogue shows for only 60 seconds before being removed
+Further refinements
+
+Revision 1.249  2005/02/19 00:28:45  cheshire
+<rdar://problem/4005191> "Local Hostname is already in use..." dialogue shows for only 60 seconds before being removed
+
+Revision 1.248  2005/02/19 00:18:34  cheshire
+Confusing variable name -- alertMessage should be called alertHeader
+
+Revision 1.247  2005/02/15 02:13:49  cheshire
+If we did registerBootstrapService() when starting, then we must do
+destroyBootstrapService() before exiting, or Mach init will keep restarting us.
+
+Revision 1.246  2005/02/03 00:44:37  cheshire
+<rdar://problem/3986663> DNSServiceUpdateRecord returns kDNSServiceErr_Invalid when rdlen=0, rdata=NULL
+
+Revision 1.245  2005/02/01 19:56:47  ksekar
+Moved LogMsg from daemon.c to uds_daemon.c, cleaned up wording
+
 Revision 1.244  2005/01/28 00:34:49  cheshire
 Turn off "Starting time value" log message
 
@@ -609,6 +646,8 @@ static mach_port_t server_priv_port  = MACH_PORT_NULL;
 static int restarting_via_mach_init = 0;
 static int started_via_launchdaemon = 0;
 
+static int OSXVers;
+
 //*************************************************************************************************************
 // Active client list structures
 
@@ -707,7 +746,7 @@ static DNSServiceRegistration      *DNSServiceRegistrationList      = NULL;
 
 char _malloc_options[] = "AXZ";
 
-static void validatelists(mDNS *const m)
+mDNSlocal void validatelists(mDNS *const m)
 	{
 	DNSServiceDomainEnumeration *e;
 	DNSServiceBrowser           *b;
@@ -1513,7 +1552,6 @@ mDNSexport void DefaultRegDomainChanged(const domainname *d, mDNSBool add)
 	{
 	DNSServiceRegistration *reg;
 
-	LogMsg("%s default registration domain %##s", add ? "Adding" : "Removing", d->c);
 	for (reg = DNSServiceRegistrationList; reg; reg = reg->next)
 		{
 		if (reg->DefaultDomain)
@@ -1538,7 +1576,7 @@ mDNSexport void DefaultRegDomainChanged(const domainname *d, mDNSBool add)
 					prev = si;
 					si = si->next;
 					}
-				if (!si) LogMsg("Requested removal of default domain %##s not in client %5d's list", d, reg->ClientMachPort);
+				if (!si) debugf("Requested removal of default domain %##s not in client %5d's list", d, reg->ClientMachPort); // normal if registration failed
 				}					
 			}
 		}
@@ -1670,21 +1708,73 @@ fail:
 	return(err);
 	}
 
+mDNSlocal CFUserNotificationRef gNotification    = NULL;
+mDNSlocal CFRunLoopSourceRef    gNotificationRLS = NULL;
+mDNSlocal domainlabel           gNotificationPrefHostLabel;	// The prefs as they were the last time we saw them
+mDNSlocal domainlabel           gNotificationPrefNiceLabel;
+mDNSlocal domainlabel           gNotificationUserHostLabel;	// The prefs as they were the last time the user changed them
+mDNSlocal domainlabel           gNotificationUserNiceLabel;
+
+mDNSlocal void NotificationCallBackDismissed(CFUserNotificationRef userNotification, CFOptionFlags responseFlags)
+	{
+	(void)responseFlags;	// Unused
+	if (userNotification != gNotification) LogMsg("NotificationCallBackDismissed: Wrong CFUserNotificationRef");
+	if (gNotificationRLS)
+		{
+		CFRunLoopRemoveSource(CFRunLoopGetCurrent(), gNotificationRLS, kCFRunLoopDefaultMode);
+		CFRelease(gNotificationRLS);
+		gNotificationRLS = NULL;
+		CFRelease(gNotification);
+		gNotification = NULL;
+		}
+	// By dismissing the alert, the user has conceptually acknowleged the rename.
+	// (e.g. the machine's name is now officially "computer-2.local", not "computer.local".)
+	// If we get *another* conflict, the new alert should refer to the 'old'.
+	// name as now being "computer-2.local", not "computer.local"
+	gNotificationUserHostLabel = gNotificationPrefHostLabel;
+	gNotificationUserNiceLabel = gNotificationPrefNiceLabel;
+	}
+
+mDNSlocal void ShowNameConflictNotification(CFStringRef header, CFStringRef subtext)
+	{
+	CFMutableDictionaryRef dictionary = CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+	if (!dictionary) return;
+	CFDictionarySetValue(dictionary, kCFUserNotificationAlertHeaderKey, header);
+	CFDictionarySetValue(dictionary, kCFUserNotificationAlertMessageKey, subtext);
+
+	CFURLRef urlRef = CFURLCreateWithFileSystemPath(NULL, CFSTR("/System/Library/CoreServices/mDNSResponder.bundle"), kCFURLPOSIXPathStyle, true);
+	if (urlRef) { CFDictionarySetValue(dictionary, kCFUserNotificationLocalizationURLKey, urlRef); CFRelease(urlRef); }
+
+	if (gNotification)	// If notification already on-screen, update it in place
+		CFUserNotificationUpdate(gNotification, 0, kCFUserNotificationCautionAlertLevel, dictionary);
+	else				// else, we need to create it
+		{
+		SInt32 error;
+		gNotification = CFUserNotificationCreate(NULL, 0, kCFUserNotificationCautionAlertLevel, &error, dictionary);
+		if (!gNotification) { LogMsg("ShowNameConflictNotification: CFUserNotificationRef"); return; }
+		gNotificationRLS = CFUserNotificationCreateRunLoopSource(NULL, gNotification, NotificationCallBackDismissed, 0);
+		if (!gNotificationRLS) { LogMsg("ShowNameConflictNotification: RLS"); CFRelease(gNotification); gNotification = NULL; return; }
+		CFRunLoopAddSource(CFRunLoopGetCurrent(), gNotificationRLS, kCFRunLoopDefaultMode);
+		}
+
+	CFRelease(dictionary);
+	}
+
 // This updates either the text of the field currently labelled "Local Hostname",
 // or the text of the field currently labelled "Computer Name"
 // in the Sharing Prefs Control Panel
-mDNSlocal void RecordUpdatedName(const mDNS *const m, domainlabel *n1, domainlabel *n2, char *msg, char *suffix, CFStringRef subtext)
+mDNSlocal void RecordUpdatedName(const mDNS *const m, const domainlabel *const olddl, const domainlabel *const newdl,
+	const char *const msg, const char *const suffix, const CFStringRef subtext)
 	{
 	char oldname[MAX_DOMAIN_LABEL+1];
 	char newname[MAX_DOMAIN_LABEL+1];
-	ConvertDomainLabelToCString_unescaped(n1, oldname);
-	ConvertDomainLabelToCString_unescaped(n2, newname);
-	const CFStringRef      cfoldname = CFStringCreateWithCString(NULL, oldname,    kCFStringEncodingUTF8);
-	const CFStringRef      cfnewname = CFStringCreateWithCString(NULL, newname,    kCFStringEncodingUTF8);
-	const CFStringRef      f1        = CFStringCreateWithCString(NULL, "“%@%s”", kCFStringEncodingUTF8);
-	const CFStringRef      f2        = CFStringCreateWithCString(NULL, "“%@%s”", kCFStringEncodingUTF8);
+	ConvertDomainLabelToCString_unescaped(olddl, oldname);
+	ConvertDomainLabelToCString_unescaped(newdl, newname);
+	const CFStringRef      cfoldname = CFStringCreateWithCString(NULL, oldname,  kCFStringEncodingUTF8);
+	const CFStringRef      cfnewname = CFStringCreateWithCString(NULL, newname,  kCFStringEncodingUTF8);
+	const CFStringRef      f1        = CFStringCreateWithCString(NULL, " “%@%s” ", kCFStringEncodingUTF8);
+	const CFStringRef      f2        = CFStringCreateWithCString(NULL, " “%@%s” ", kCFStringEncodingUTF8);
 	const SCPreferencesRef session   = SCPreferencesCreate(NULL, CFSTR("mDNSResponder"), NULL);
-	*n1 = *n2;
 	if (!cfoldname || !cfnewname || !f1 || !f2 || !session || !SCPreferencesLock(session, 0))	// If we can't get the lock don't wait
 		LogMsg("RecordUpdatedName: ERROR: Couldn't create SCPreferences session");
 	else
@@ -1692,30 +1782,41 @@ mDNSlocal void RecordUpdatedName(const mDNS *const m, domainlabel *n1, domainlab
 		const CFStringRef       s0           = CFStringCreateWithCString(NULL, msg, kCFStringEncodingUTF8);
 		const CFStringRef       s1           = CFStringCreateWithFormat(NULL, NULL, f1, cfoldname, suffix);
 		const CFStringRef       s2           = CFStringCreateWithFormat(NULL, NULL, f2, cfnewname, suffix);
-//		const CFMutableArrayRef alertMessage = CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
-		const CFMutableStringRef alertMessage = CFStringCreateMutable(NULL, 0);
+		// On Tiger and later, if we pass an array instead of a string, CFUserNotification will translate each
+		// element of the array individually for us, and then concatenate the results to make the final message.
+		// This lets us have the relevant bits localized, but not the literal names, which should not be translated.
+		// On Panther this does not work, so we just build the string directly, and it will not be translated.
+		const CFMutableStringRef alertHeader =
+			(OSXVers < 8) ? CFStringCreateMutable(NULL, 0) : (CFMutableStringRef)CFArrayCreateMutable(NULL, 0, &kCFTypeArrayCallBacks);
 		Boolean result;
-		if (n2 == &m->hostlabel) result = SCPreferencesSetLocalHostName(session, cfnewname);
-		else                     result = SCPreferencesSetComputerName(session, cfnewname, kCFStringEncodingUTF8);
-		if (!result || !SCPreferencesCommitChanges(session) || !SCPreferencesApplyChanges(session) || !s0 || !s1 || !s2 || !alertMessage)
+		if (newdl == &gNotificationPrefHostLabel) result = SCPreferencesSetLocalHostName(session, cfnewname);
+		else result = SCPreferencesSetComputerName(session, cfnewname, kCFStringEncodingUTF8);
+		if (!result || !SCPreferencesCommitChanges(session) || !SCPreferencesApplyChanges(session) || !s0 || !s1 || !s2 || !alertHeader)
 			LogMsg("RecordUpdatedName: ERROR: Couldn't update SCPreferences");
 		else if (m->p->NotifyUser)
 			{
-//			CFArrayAppendValue(alertMessage, s0);
-			CFStringAppend(alertMessage, s0);
-			CFStringAppend(alertMessage, s1);
-			CFStringAppend(alertMessage, CFSTR(" is already in use on this network.  The name has been changed to "));
-			CFStringAppend(alertMessage, s2);
-			CFStringAppend(alertMessage, CFSTR(" automatically."));
-			CFUserNotificationDisplayNotice(60.0,			// Auto-dismiss after 60 seconds
-				kCFUserNotificationCautionAlertLevel,
-				NULL, NULL, NULL,							// iconURL, soundURL, localizationURL
-				(CFStringRef)alertMessage, subtext, NULL);	// alertHeader, alertMessage, defaultButtonTitle
+			uid_t uid;
+			gid_t gid;
+			CFStringRef userName = SCDynamicStoreCopyConsoleUser(NULL, &uid, &gid);
+			if (userName)
+				{
+				CFRelease(userName);
+				typedef void CFStringAppendFN(CFMutableStringRef theString, CFStringRef appendedString);
+				CFStringAppendFN *const append = (OSXVers < 8) ? &CFStringAppend : (CFStringAppendFN*)&CFArrayAppendValue;
+				append(alertHeader, s0);
+				append(alertHeader, s1);
+				append(alertHeader, CFSTR("is already in use on this network."));
+				append(alertHeader, CFSTR("  "));
+				append(alertHeader, CFSTR("The name has been changed to"));
+				append(alertHeader, s2);
+				append(alertHeader, CFSTR("automatically."));
+				ShowNameConflictNotification(alertHeader, subtext);
+				}
 			}
-		if (s0)           CFRelease(s0);
-		if (s1)           CFRelease(s1);
-		if (s2)           CFRelease(s2);
-		if (alertMessage) CFRelease(alertMessage);
+		if (s0)          CFRelease(s0);
+		if (s1)          CFRelease(s1);
+		if (s2)          CFRelease(s2);
+		if (alertHeader) CFRelease(alertHeader);
 		SCPreferencesUnlock(session);
 		}
 	if (cfoldname) CFRelease(cfoldname);
@@ -1730,11 +1831,24 @@ mDNSlocal void mDNS_StatusCallback(mDNS *const m, mStatus result)
 	(void)m; // Unused
 	if (result == mStatus_NoError)	
 		{
-		// Allow three seconds in case we get a Computer Name update too -- don't want to alert the user twice
-		RecordUpdatedNiceLabel(m, mDNSPlatformOneSecond*3);
+		// One second pause in case we get a Computer Name update too -- don't want to alert the user twice
+		RecordUpdatedNiceLabel(m, mDNSPlatformOneSecond);
 		}
 	else if (result == mStatus_ConfigChanged)
 		{
+		// If the user-specified hostlabel from System Configuration has changed since the last time
+		// we saw it, and *we* didn't change it, then that implies that the user has changed it,
+		// so we auto-dismiss the name conflict alert.
+		if (!SameDomainLabel(m->p->userhostlabel.c, gNotificationPrefHostLabel.c) ||
+			!SameDomainLabel(m->p->usernicelabel.c, gNotificationPrefNiceLabel.c))
+			{
+			gNotificationUserHostLabel = gNotificationPrefHostLabel = m->p->userhostlabel;
+			gNotificationUserNiceLabel = gNotificationPrefNiceLabel = m->p->usernicelabel;
+			// If we're showing a name conflict notification, and the user has manually edited
+			// the name to remedy the conflict, we should now remove the notification window.
+			if (gNotificationRLS) CFUserNotificationCancel(gNotification);
+			}
+
 		DNSServiceRegistration *r;
 		for (r = DNSServiceRegistrationList; r; r=r->next)
 			if (r->autoname)
@@ -1847,6 +1961,11 @@ mDNSlocal mStatus UpdateRecord(ServiceRecordSet *srs, mach_port_t client, AuthRe
 	// Fill in new length, and data
 	newrdata->MaxRDLength = size;
 	memcpy(&newrdata->u, data, data_len);
+	
+	// BIND named (name daemon) doesn't allow TXT records with zero-length rdata. This is strictly speaking correct,
+	// since RFC 1035 specifies a TXT record as "One or more <character-string>s", not "Zero or more <character-string>s".
+	// Since some legacy apps try to create zero-length TXT records, we'll silently correct it here.
+	if (rr->resrec.rrtype == kDNSType_TXT && data_len == 0) { data_len = 1; newrdata->u.txt.c[0] = 0; }
 
 	// Do the operation
 	LogOperation("%5d: DNSServiceRegistrationUpdateRecord(%##s, new length %d)",
@@ -2223,6 +2342,9 @@ mDNSlocal void SignalCallback(CFMachPortRef port, void *msg, CFIndex size, void 
 		}
 	}
 
+// On 10.2 the MachServerName is DNSServiceDiscoveryServer
+// On 10.3 and later, the MachServerName is com.apple.mDNSResponder
+
 mDNSlocal kern_return_t mDNSDaemonInitialize(void)
 	{
 	mStatus            err;
@@ -2230,7 +2352,7 @@ mDNSlocal kern_return_t mDNSDaemonInitialize(void)
 	CFMachPortRef      s_port = CFMachPortCreate(NULL, DNSserverCallback, NULL, NULL);
 	CFMachPortRef      i_port = CFMachPortCreate(NULL, SignalCallback, NULL, NULL);
 	mach_port_t        m_port = CFMachPortGetPort(s_port);
-	char *MachServerName = mDNSMacOSXSystemBuildNumber(NULL) < 7 ? "DNSServiceDiscoveryServer" : "com.apple.mDNSResponder";
+	char *MachServerName = OSXVers < 7 ? "DNSServiceDiscoveryServer" : "com.apple.mDNSResponder";
 	kern_return_t      status = bootstrap_register(bootstrap_port, MachServerName, m_port);
 	CFRunLoopSourceRef d_rls  = CFMachPortCreateRunLoopSource(NULL, d_port, 0);
 	CFRunLoopSourceRef s_rls  = CFMachPortCreateRunLoopSource(NULL, s_port, 0);
@@ -2251,6 +2373,9 @@ mDNSlocal kern_return_t mDNSDaemonInitialize(void)
 		mDNS_StatusCallback, mDNS_Init_NoInitCallbackContext);
 
 	if (err) { LogMsg("Daemon start: mDNS_Init failed %ld", err); return(err); }
+
+	gNotificationUserHostLabel = gNotificationPrefHostLabel = PlatformStorage.userhostlabel;
+	gNotificationUserNiceLabel = gNotificationPrefNiceLabel = PlatformStorage.usernicelabel;
 
 	client_death_port = CFMachPortGetPort(d_port);
 	signal_port = CFMachPortGetPort(i_port);
@@ -2275,7 +2400,7 @@ mDNSlocal mDNSs32 mDNSDaemonIdle(mDNS *const m)
 	// mDNS_Execute() generates packets, including multicasts that are looped back to ourself.
 	// If we call mDNS_Execute() first, and generate packets, and then call mDNSMacOSXNetworkChanged() immediately afterwards
 	// we then systematically lose our own looped-back packets.
-	if (m->p->NetworkChanged && now - m->p->NetworkChanged >= 0) { m->p->NetworkChanged = 0; mDNSMacOSXNetworkChanged(m); }
+	if (m->p->NetworkChanged && now - m->p->NetworkChanged >= 0) mDNSMacOSXNetworkChanged(m);
 
 	// 2. Call mDNS_Execute() to let mDNSCore do what it needs to do
 	mDNSs32 nextevent = mDNS_Execute(m);
@@ -2346,15 +2471,20 @@ mDNSlocal mDNSs32 mDNSDaemonIdle(mDNS *const m)
 			if (!SameDomainLabel(m->p->usernicelabel.c, m->nicelabel.c))
 				{
 				LogMsg("Updating Computer Name from \"%#s\" to \"%#s\"", m->p->usernicelabel.c, m->nicelabel.c);
-				RecordUpdatedName(m, &m->p->usernicelabel, &m->nicelabel, "The name of your computer ", "",
-					CFSTR("To change the name of your computer, open System Preferences and click Sharing.  Then type the name in the Computer Name field."));
-				m->p->NotifyUser = 0;	// Clear m->p->NotifyUser here -- even if the hostlabel has changed too, we don't want to bug the user with *two* alerts
+				gNotificationPrefNiceLabel = m->p->usernicelabel = m->nicelabel;
+				RecordUpdatedName(m, &gNotificationUserNiceLabel, &gNotificationPrefNiceLabel, "The name of your computer", "",
+					CFSTR("To change the name of your computer, open System Preferences and click Sharing.  "
+							"Then type the name in the Computer Name field."));
+				// Clear m->p->NotifyUser here -- even if the hostlabel has changed too, we don't want to bug the user with *two* alerts
+				m->p->NotifyUser = 0;
 				}
 			if (!SameDomainLabel(m->p->userhostlabel.c, m->hostlabel.c))
 				{
 				LogMsg("Updating Local Hostname from \"%#s.local\" to \"%#s.local\"", m->p->userhostlabel.c, m->hostlabel.c);
-				RecordUpdatedName(m, &m->p->userhostlabel, &m->hostlabel, "This computer's local hostname ", ".local",
-					CFSTR("To change the local hostname, open System Preferences and click Sharing.  Then click Edit and type the name in the Local Hostname field."));
+				gNotificationPrefHostLabel = m->p->userhostlabel = m->hostlabel;
+				RecordUpdatedName(m, &gNotificationUserHostLabel, &gNotificationPrefHostLabel, "This computer’s local hostname", ".local",
+					CFSTR("To change the local hostname, open System Preferences and click Sharing.  "
+							"Then click Edit and type the name in the Local Hostname field."));
 				}
 			m->p->NotifyUser = 0;
 			}
@@ -2436,10 +2566,11 @@ mDNSexport int main(int argc, char **argv)
 	// Make our PID file and Unix Domain Socket first, because launchd waits for those before it starts launching other daemons.
 	// The sooner we do this, the faster the machine will boot.
 	status = udsserver_init();
-	if (status) { LogMsg("Daemon start: udsserver_init failed"); return(status); }
+	if (status) { LogMsg("Daemon start: udsserver_init failed"); goto exit; }
 	
 	// First do the all the initialization we need root privilege for, before we change to user "nobody"
 	LogMsgIdent(mDNSResponderVersionString, "starting");
+	OSXVers = mDNSMacOSXSystemBuildNumber(NULL);
 	status = mDNSDaemonInitialize();
 
 #if CAN_UPDATE_DYNAMIC_STORE_WITHOUT_BEING_ROOT
@@ -2502,9 +2633,10 @@ mDNSexport int main(int argc, char **argv)
 		mDNS_Close(&mDNSStorage);
 		}
 
-	if (!mDNS_DebugMode && !started_via_launchdaemon) destroyBootstrapService();
-
 	LogMsgIdent(mDNSResponderVersionString, "exiting");
+
+exit:
+	if (!mDNS_DebugMode && !started_via_launchdaemon) destroyBootstrapService();
 	return(status);
 	}
 
@@ -2524,7 +2656,7 @@ typedef struct CFSocketEventSource	CFSocketEventSource;
 
 static GenLinkedList	gEventSources;			// linked list of CFSocketEventSource's
 
-static void cf_callback(CFSocketRef s, CFSocketCallBackType t, CFDataRef dr, const void *c, void *i)
+mDNSlocal void cf_callback(CFSocketRef s, CFSocketCallBackType t, CFDataRef dr, const void *c, void *i)
 	// Called by CFSocket when data appears on socket
 	{
 	(void)s; // Unused

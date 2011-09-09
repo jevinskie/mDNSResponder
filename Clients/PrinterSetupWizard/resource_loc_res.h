@@ -25,11 +25,12 @@
 #define IDS_INSTALL_ERROR_MESSAGE       115
 #define IDS_MANUFACTURER_HEADING        116
 #define IDS_MODEL_HEADING               117
-#define IDS_NO_RENDEZVOUS_PRINTERS      118
+#define IDS_NO_PRINTERS                 118
 #define IDS_NO_MDNSRESPONDER_SERVICE_TEXT 119
 #define IDS_NO_MDNSRESPONDER_SERVICE_CAPTION 120
 #define IDS_PRINTER_MATCH_GOOD          121
 #define IDS_PRINTER_MATCH_BAD           122
+#define IDS_PRINTER_MATCH_MAYBE         146
 #define IDS_YES                         123
 #define IDS_NO                          124
 #define IDS_LARGE_FONT                  125
@@ -49,6 +50,7 @@
 #define IDS_REINSTALL                   142
 #define IDS_REINSTALL_CAPTION           143
 #define IDC_INFO								 144
+#define IDS_PRINTER_UNAVAILABLE         145
 #define IDC_BUTTON1                     1000
 #define IDC_LIST1                       1000
 #define IDC_BROWSE_LIST                 1000

@@ -24,6 +24,15 @@
     Change History (most recent first):
 
 $Log: dnsextd.c,v $
+Revision 1.33  2005/03/11 19:09:02  ksekar
+Fixed ZERO_LLQID macro
+
+Revision 1.32  2005/03/10 22:54:33  ksekar
+<rdar://problem/4046285> dnsextd leaks memory/ports
+
+Revision 1.31  2005/02/24 02:37:57  ksekar
+<rdar://problem/4021977> dnsextd memory management improvements
+
 Revision 1.30  2005/01/27 22:57:56  cheshire
 Fix compile errors on gcc4
 
@@ -71,7 +80,7 @@ Revision 1.16  2004/11/25 02:02:28  ksekar
 Fixed verbose log message argument
 
 Revision 1.15  2004/11/19 02:35:02  ksekar
-<rdar://problem/3886317> Wide Area Rendezvous Security: Add LLQ-ID to events
+<rdar://problem/3886317> Wide Area Security: Add LLQ-ID to events
 
 Revision 1.14  2004/11/17 06:17:58  cheshire
 Update comments to show correct SRV names: _dns-update._udp.<zone>. and _dns-llq._udp.<zone>.
@@ -180,7 +189,7 @@ Revision 1.1  2004/08/11 00:43:26  ksekar
 #endif
 
 #define SAME_INADDR(x,y) (*((mDNSu32 *)&x) == *((mDNSu32 *)&y))
-#define ZERO_LLQID(x) (!memcmp(x, "\x0\x0\x0\x0", 8))
+#define ZERO_LLQID(x) (!memcmp(x, "\x0\x0\x0\x0\x0\x0\x0\x0", 8))
 
 //
 // Data Structures
@@ -213,6 +222,16 @@ typedef enum
 	Established     = 2
 	} LLQState;
 
+typedef struct AnswerListElem
+	{
+    struct AnswerListElem *next;
+    domainname name;
+    mDNSu16 type;
+    CacheRecord *KnownAnswers;  // All valid answers delivered to client
+    CacheRecord *EventList;     // New answers (adds/removes) to be sent to client
+    int refcount;          
+	} AnswerListElem;
+
 // llq table entry
 typedef struct LLQEntry
 	{
@@ -224,7 +243,7 @@ typedef struct LLQEntry
     LLQState state;
     mDNSu32 lease;            // original lease, in seconds
     mDNSs32 expire;           // expiration, absolute, in seconds since epoch
-    CacheRecord *KnownAnswers;// !!!KRS this should be shared amongst identical questions
+    AnswerListElem *AnswerList;
 	} LLQEntry;
 
 // daemon-wide information
@@ -248,6 +267,7 @@ typedef struct
 
     // LLQ table variables
     LLQEntry *LLQTable[LLQ_TABLESIZE];  // !!!KRS change this and RRTable to use a common data structure
+    AnswerListElem *AnswerTable[LLQ_TABLESIZE];
     int LLQEventListenSock;       // Unix domain socket pair - polling thread writes to ServPollSock, which wakes
     int LLQServPollSock;          // the main thread listening on EventListenSock, indicating that the zone has changed
 	} DaemonInfo;
@@ -576,6 +596,7 @@ mDNSlocal void RehashTable(DaemonInfo *d)
 	RRTableElem *ptr, *tmp, **new;
 	int i, bucket, newnbuckets = d->nbuckets * 2;
 
+	VLog("Rehashing lease table (new size %d buckets)", newnbuckets);
 	new = malloc(sizeof(RRTableElem *) * newnbuckets);
 	if (!new) { LogErr("RehashTable", "malloc");  return; }
 	bzero(new, newnbuckets * sizeof(RRTableElem *));
@@ -593,6 +614,8 @@ mDNSlocal void RehashTable(DaemonInfo *d)
 			}
 		}
 	d->nbuckets = newnbuckets;
+	free(d->table);
+	d->table = new;
 	}
 
 // print entire contents of hashtable, invoked via SIGINFO
@@ -995,9 +1018,10 @@ mDNSlocal void DeleteExpiredRecords(DaemonInfo *d)
 // Add, delete, or refresh records in table based on contents of a successfully completed dynamic update
 mDNSlocal void UpdateLeaseTable(PktMsg *pkt, DaemonInfo *d, mDNSs32 lease)
 	{
-	RRTableElem *prev, *rptr, *new = NULL;
-	int i, bucket;
+	RRTableElem **rptr, *tmp;
+	int i, allocsize, bucket;
 	LargeCacheRecord lcr;
+	ResourceRecord *rr = &lcr.r.resrec;
 	const mDNSu8 *ptr, *end;
 	struct timeval time;
 	DNSQuestion zone;
@@ -1014,67 +1038,76 @@ mDNSlocal void UpdateLeaseTable(PktMsg *pkt, DaemonInfo *d, mDNSs32 lease)
 	
 	for (i = 0; i < pkt->msg.h.mDNS_numUpdates; i++)
 		{
+		mDNSBool DeleteAllRRSets = mDNSfalse, DeleteOneRRSet = mDNSfalse, DeleteOneRR = mDNSfalse;
+		
 		ptr = GetLargeResourceRecord(NULL, &pkt->msg, ptr, end, 0, kDNSRecordTypePacketAns, &lcr);
 		if (!ptr) { Log("UpdateLeaseTable: GetLargeResourceRecord returned NULL"); goto cleanup; }
-		//!!!KRS we should include rdata in hash here
-		bucket = lcr.r.resrec.namehash % d->nbuckets;
-		
-		// look for RR in table
-		prev = NULL;
-		rptr = d->table[bucket];
-		while (rptr)
+		bucket = rr->namehash % d->nbuckets;
+		rptr = &d->table[bucket];
+
+		// handle deletions		
+		if (rr->rrtype == kDNSQType_ANY && !rr->rroriginalttl && rr->rrclass == kDNSQClass_ANY && !rr->rdlength)
+			DeleteAllRRSets = mDNStrue; // delete all rrsets for a name
+		else if (!rr->rroriginalttl && rr->rrclass == kDNSQClass_ANY && !rr->rdlength)
+			DeleteOneRRSet = mDNStrue;
+		else if (!rr->rroriginalttl && rr->rrclass == kDNSClass_NONE)
+			DeleteOneRR = mDNStrue;
+
+		if (DeleteAllRRSets || DeleteOneRRSet || DeleteOneRR)
 			{
-			if (SameResourceRecord(&rptr->rr.resrec, &lcr.r.resrec)) break;
-			prev = rptr;
-			rptr = rptr->next;
-			}
-		
-		if (rptr)
-			{
-			// Record is already in table
-			if (!lcr.r.resrec.rroriginalttl && lcr.r.resrec.rrclass == kDNSClass_NONE)
-				{
-				// deletion record				
-				VLog("Received deletion update for %s", GetRRDisplayString_rdb(&lcr.r.resrec, &lcr.r.resrec.rdata->u, buf));
-				if (prev) prev->next = rptr->next;
-				else d->table[bucket] = rptr->next;
-				free(rptr);
-				d->nelems--;
-				}
-			else
-				{
-				// refresh
-				if (lease < 0)
-					{
-					Log("Update for record %s already in lease table with no refresh lease specified",
-						GetRRDisplayString_rdb(&lcr.r.resrec, &lcr.r.resrec.rdata->u, buf));
-					}
-				else
-					{
-					if (gettimeofday(&time, NULL)) { LogErr("UpdateLeaseTable", "gettimeofday"); goto cleanup; }
-					rptr->expire = time.tv_sec + (unsigned)lease;
-					VLog("Refreshing lease for %s", GetRRDisplayString_rdb(&lcr.r.resrec, &lcr.r.resrec.rdata->u, buf));					
-					}
-				}
+			while (*rptr)
+			  {
+			  if (SameDomainName((*rptr)->rr.resrec.name, rr->name) &&
+				 (DeleteAllRRSets ||
+				 (DeleteOneRRSet && (*rptr)->rr.resrec.rrtype == rr->rrtype) ||
+				  (DeleteOneRR && SameResourceRecord(&(*rptr)->rr.resrec, rr))))
+				  {
+				  tmp = *rptr;
+				  VLog("Received deletion update for %s", GetRRDisplayString_rdb(&tmp->rr.resrec, &tmp->rr.resrec.rdata->u, buf));
+				  *rptr = (*rptr)->next;
+				  free(tmp);
+				  d->nelems--;
+				  }
+			  else rptr = &(*rptr)->next;
+			  }
 			}
 		else if (lease > 0)
 			{
-			// New record - add to table
-			if (d->nelems > d->nbuckets) RehashTable(d);
-			if (gettimeofday(&time, NULL)) { LogErr("UpdateLeaseTable", "gettimeofday"); goto cleanup; }
-			new = malloc(sizeof(RRTableElem) + lcr.r.resrec.rdlength - InlineCacheRDSize);
-			if (!new) { LogErr("UpdateLeaseTable", "malloc"); goto cleanup; }
-			memcpy(&new->rr, &lcr.r, sizeof(CacheRecord) + lcr.r.resrec.rdlength - InlineCacheRDSize);
-			new->rr.resrec.rdata = (RData *)&new->rr.rdatastorage;
-			AssignDomainName(&new->name, lcr.r.resrec.name);
-			new->rr.resrec.name = &new->name;
-			new->expire = time.tv_sec + (unsigned)lease;
-			new->cli.sin_addr = pkt->src.sin_addr;
-			AssignDomainName(&new->zone, &zone.qname);
-			new->next = d->table[bucket];
-			d->table[bucket] = new;
-			d->nelems++;
-			VLog("Adding update for %s to lease table", GetRRDisplayString_rdb(&lcr.r.resrec, &lcr.r.resrec.rdata->u, buf));
+			// see if add or refresh
+			while (*rptr && !SameResourceRecord(&(*rptr)->rr.resrec, rr)) rptr = &(*rptr)->next;
+			if (*rptr)
+				{
+				// refresh
+				if (gettimeofday(&time, NULL)) { LogErr("UpdateLeaseTable", "gettimeofday"); goto cleanup; }
+				(*rptr)->expire = time.tv_sec + (unsigned)lease;
+				VLog("Refreshing lease for %s", GetRRDisplayString_rdb(&lcr.r.resrec, &lcr.r.resrec.rdata->u, buf));					
+				}
+			else
+				{
+				// New record - add to table
+				if (d->nelems > d->nbuckets)
+					{
+					RehashTable(d);
+					bucket = rr->namehash % d->nbuckets;
+					rptr = &d->table[bucket];
+					}
+				if (gettimeofday(&time, NULL)) { LogErr("UpdateLeaseTable", "gettimeofday"); goto cleanup; }
+				allocsize = sizeof(RRTableElem);
+				if (rr->rdlength > InlineCacheRDSize) allocsize += (rr->rdlength - InlineCacheRDSize);
+				tmp = malloc(allocsize);
+				if (!tmp) { LogErr("UpdateLeaseTable", "malloc"); goto cleanup; }
+				memcpy(&tmp->rr, &lcr.r, sizeof(CacheRecord) + rr->rdlength - InlineCacheRDSize);
+				tmp->rr.resrec.rdata = (RData *)&tmp->rr.rdatastorage;
+				AssignDomainName(&tmp->name, rr->name);
+				tmp->rr.resrec.name = &tmp->name;
+				tmp->expire = time.tv_sec + (unsigned)lease;
+				tmp->cli.sin_addr = pkt->src.sin_addr;
+				AssignDomainName(&tmp->zone, &zone.qname);
+				tmp->next = d->table[bucket];
+				d->table[bucket] = tmp;
+				d->nelems++;
+				VLog("Adding update for %s to lease table", GetRRDisplayString_rdb(&lcr.r.resrec, &lcr.r.resrec.rdata->u, buf));
+				}
 			}
 		}
 					
@@ -1172,41 +1205,39 @@ mDNSlocal mDNSu32 LLQLease(LLQEntry *e)
 	else return e->expire - t.tv_sec;
 	}
 
-mDNSlocal void FreeKnownAnswers(LLQEntry *e)
-	{
-	CacheRecord *tmp;
-
-	while(e->KnownAnswers)
-		{
-		tmp = e->KnownAnswers;
-		e->KnownAnswers = e->KnownAnswers->next;
-		free(tmp);
-		}
-	}
-
 mDNSlocal void DeleteLLQ(DaemonInfo *d, LLQEntry *e)
 	{
-	int bucket = bucket = DomainNameHashValue(&e->qname) % LLQ_TABLESIZE;
-	LLQEntry *prev = NULL, *ptr = d->LLQTable[bucket];
+	int  bucket = DomainNameHashValue(&e->qname) % LLQ_TABLESIZE;
+	LLQEntry **ptr = &d->LLQTable[bucket];
+	AnswerListElem *a = e->AnswerList;
 	char addr[32];
 	
 	inet_ntop(AF_INET, &e->cli.sin_addr, addr, 32);
 	VLog("Deleting LLQ table entry for %##s client %s", e->qname.c, addr);
 
-	FreeKnownAnswers(e);
-	while(ptr)
+	// free shared answer structure if ref count drops to zero
+	if (a && !(--a->refcount))
 		{
-		if (ptr == e)
+		CacheRecord *cr = a->KnownAnswers, *tmp;
+		AnswerListElem **tbl = &d->AnswerTable[bucket];
+
+		while (cr)
 			{
-			if (prev) prev->next = ptr->next;
-			else d->LLQTable[bucket] = ptr->next;
-			free(e);
-			return;
+			tmp = cr;
+			cr = cr->next;
+			free(tmp);
 			}
-		prev = ptr;
-		ptr = ptr->next;
+
+		while (*tbl && *tbl != a) tbl = &(*tbl)->next;
+		if (*tbl) { *tbl = (*tbl)->next; free(a); }
+		else Log("Error: DeleteLLQ - AnswerList not found in table");
 		}
-	Log("Error: DeleteLLQ - LLQ not in table");
+
+	// remove LLQ from table, free memory
+	while(*ptr && *ptr != e) ptr = &(*ptr)->next;
+	if (!*ptr) { Log("Error: DeleteLLQ - LLQ not in table"); return; }
+	*ptr = (*ptr)->next;
+	free(e);	
 	}
 
 mDNSlocal int SendLLQ(DaemonInfo *d, PktMsg *pkt, struct sockaddr_in dst)
@@ -1227,7 +1258,7 @@ mDNSlocal int SendLLQ(DaemonInfo *d, PktMsg *pkt, struct sockaddr_in dst)
 
 // if non-negative, sd is a TCP socket connected to the nameserver
 // otherwise, this routine creates and closes its own socket
-mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, LLQEntry *e, int sd)
+mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, AnswerListElem *e, int sd)
 	{
 	PktMsg q;
 	int i;
@@ -1240,13 +1271,13 @@ mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, LLQEntry *e, int sd)
 	mDNSu8 rcode;
 	mDNSBool CloseSDOnExit = sd < 0;
 	
-	VLog("Querying server for %##s type %d", e->qname.c, e->qtype);
+	VLog("Querying server for %##s type %d", e->name.c, e->type);
 	
 	flags.b[0] |= kDNSFlag0_RD;  // recursion desired
 	id.NotAnInteger = 0;
 	InitializeDNSMessage(&q.msg.h, id, flags);
 	
-	end = putQuestion(&q.msg, end, end + AbsoluteMaxDNSMessageData, &e->qname, e->qtype, kDNSClass_IN);
+	end = putQuestion(&q.msg, end, end + AbsoluteMaxDNSMessageData, &e->name, e->type, kDNSClass_IN);
 	if (!end) { Log("Error: AnswerQuestion - putQuestion returned NULL"); goto end; }
 	q.len = (int)(end - (mDNSu8 *)&q.msg);
 	
@@ -1258,7 +1289,7 @@ mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, LLQEntry *e, int sd)
 	if ((reply->msg.h.flags.b[0] & kDNSFlag0_QROP_Mask) != (kDNSFlag0_QR_Response | kDNSFlag0_OP_StdQuery))
 		{ Log("AnswerQuestion: %##s type %d - Invalid response flags from server"); goto end; }
 	rcode = (mDNSu8)(reply->msg.h.flags.b[1] & kDNSFlag1_RC);
-	if (rcode && rcode != kDNSFlag1_RC_NXDomain) { Log("AnswerQuestion: %##s type %d - non-zero rcode %d from server", e->qname.c, e->qtype, rcode); goto end; }
+	if (rcode && rcode != kDNSFlag1_RC_NXDomain) { Log("AnswerQuestion: %##s type %d - non-zero rcode %d from server", e->name.c, e->type, rcode); goto end; }
 
 	end = (mDNSu8 *)&reply->msg + reply->len;
 	ansptr = LocateAnswers(&reply->msg, end);
@@ -1266,18 +1297,16 @@ mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, LLQEntry *e, int sd)
 
 	for (i = 0; i < reply->msg.h.numAnswers; i++)
 		{
-		//rr = malloc(sizeof(*rr));
-		//if (!rr) { LogErr("AnswerQuestion", "malloc"); goto end; }
 		ansptr = GetLargeResourceRecord(NULL, &reply->msg, ansptr, end, 0, kDNSRecordTypePacketAns, &lcr);
 		if (!ansptr) { Log("AnswerQuestions: GetLargeResourceRecord returned NULL"); goto end; }
-		if (lcr.r.resrec.rrtype != e->qtype || lcr.r.resrec.rrclass != kDNSClass_IN || !SameDomainName(lcr.r.resrec.name, &e->qname))
+		if (lcr.r.resrec.rrtype != e->type || lcr.r.resrec.rrclass != kDNSClass_IN || !SameDomainName(lcr.r.resrec.name, &e->name))
 			{
 			Log("AnswerQuestion: response %##s type #d does not answer question %##s type #d.  Discarding",
-				  lcr.r.resrec.name->c, lcr.r.resrec.rrtype, e->qname.c, e->qtype);
+				  lcr.r.resrec.name->c, lcr.r.resrec.rrtype, e->name.c, e->type);
 			}
 		else
 			{
-			CacheRecord *cr = CopyCacheRecord(&lcr.r, &e->qname);
+			CacheRecord *cr = CopyCacheRecord(&lcr.r, &e->name);
 			if (!cr) { Log("Error: AnswerQuestion - CopyCacheRecord returned NULL"); goto end; }						   
 			cr->next = AnswerList;
 			AnswerList = cr;
@@ -1287,94 +1316,102 @@ mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, LLQEntry *e, int sd)
 	end:
 	if (sd > -1 && CloseSDOnExit) close(sd);
 	if (reply) free(reply);
-	e->state = Established;
 	return AnswerList;
 	}
 
-mDNSlocal void UpdateAnswerList(DaemonInfo *d, LLQEntry *e, CacheRecord *answers)
+// Routine sets EventList to contain Add/Remove events, and deletes any removes from the KnownAnswer list
+mDNSlocal void UpdateAnswerList(DaemonInfo *d, AnswerListElem *a, int sd)
 	{
-	CacheRecord *prev = NULL, *na, *ka; // "new answer", "known answer"
+	CacheRecord *cr, *NewAnswers, **na, **ka; // "new answer", "known answer"
+
+	// get up to date answers
+	NewAnswers = AnswerQuestion(d, a, sd);
+	
+	// first pass - mark all answers for deletion
+	for (ka = &a->KnownAnswers; *ka; ka = &(*ka)->next)
+		(*ka)->resrec.rroriginalttl = (unsigned)-1; // -1 means delete
+
+	// second pass - mark answers pre-existent
+	for (ka = &a->KnownAnswers; *ka; ka = &(*ka)->next)
+		{
+		for (na = &NewAnswers; *na; na = &(*na)->next)
+			{
+			if (SameResourceRecord(&(*ka)->resrec, &(*na)->resrec))
+				{ (*ka)->resrec.rroriginalttl = 0; break; } // 0 means no change
+			}
+		}
+
+	// third pass - add new records to Event list
+	na = &NewAnswers;
+	while (*na)		
+		{
+		for (ka = &a->KnownAnswers; *ka; ka = &(*ka)->next)
+			if (SameResourceRecord(&(*ka)->resrec, &(*na)->resrec)) break;
+		if (!*ka)
+			{
+			// answer is not in list - splice from NewAnswers list, add to Event list
+			cr = *na;
+			*na = (*na)->next;        // splice from list
+			cr->next = a->EventList;  // add spliced record to event list
+			a->EventList = cr;
+			cr->resrec.rroriginalttl = 1; // 1 means add
+			}
+		else na = &(*na)->next;
+		}
+	
+	// move all the removes from the answer list to the event list	
+	ka = &a->KnownAnswers;
+	while (*ka) 
+		{
+		if ((*ka)->resrec.rroriginalttl == (unsigned)-1)
+			{
+			cr = *ka;
+			*ka = (*ka)->next;
+			cr->next = a->EventList;
+			a->EventList = cr;
+			}
+		else ka = &(*ka)->next;
+		}
+	
+	// lastly, free the remaining records (known answers) in NewAnswers list
+	while (NewAnswers)
+		{
+		cr = NewAnswers;
+		NewAnswers = NewAnswers->next;
+		free(cr);
+		}  	
+	}
+
+mDNSlocal void SendEvents(DaemonInfo *d, LLQEntry *e)
+	{
 	PktMsg  response;
+	CacheRecord *cr;
 	mDNSu8 *end = (mDNSu8 *)&response.msg.data;
 	mDNSOpaque16 msgID;
 	char rrbuf[80], addrbuf[32];
 	AuthRecord opt;
 	
-	// first pass - mark all answers for deletion
-	for (ka = e->KnownAnswers; ka; ka = ka->next)
-		ka->resrec.rroriginalttl = -1; // -1 means delete
-
-	// second pass - mark answers pre-existent
-	for (ka = e->KnownAnswers; ka; ka = ka->next)
-		{
-		for (na = answers; na; na = na->next)
-			{
-			if (SameResourceRecord(&ka->resrec, &na->resrec))
-				{ ka->resrec.rroriginalttl = 0; break; } // 0 means no change
-			}
-		}
-
-	// third pass - add new records
-	for (na = answers; na; na = na->next)
-		{
-		for (ka = e->KnownAnswers; ka; ka = ka->next)
-			if (SameResourceRecord(&ka->resrec, &na->resrec)) break;
-		if (!ka)
-			{
-			// answer is not in KA list
-			CacheRecord *cr = CopyCacheRecord(na, &e->qname);
-			if (!cr) { Log("Error: UpdateAnswerList - CopyCacheRecord returned NULL"); return; }
-			cr->resrec.rroriginalttl = 1; // 1 means add
-			cr->next = e->KnownAnswers;
-			e->KnownAnswers = cr;
-			}
-		}
-
-	// now send the update
 	msgID.NotAnInteger = random();
+	if (verbose) inet_ntop(AF_INET, &e->cli.sin_addr, addrbuf, 32);
 	InitializeDNSMessage(&response.msg.h, msgID, ResponseFlags);
 	end = putQuestion(&response.msg, end, end + AbsoluteMaxDNSMessageData, &e->qname, e->qtype, kDNSClass_IN);
-	if (!end) { Log("Error: UpdateAnswerList - putQuestion returned NULL"); return; }
-
-	if (verbose) inet_ntop(AF_INET, &e->cli.sin_addr, addrbuf, 32);
+	if (!end) { Log("Error: SendEvents - putQuestion returned NULL"); return; }
+	
 	// put adds/removes in packet
-	for (ka = e->KnownAnswers; ka; ka = ka->next)
+	for (cr = e->AnswerList->EventList; cr; cr = cr->next)
 		{
-		if (ka->resrec.rroriginalttl)
-			{
-			if (verbose) GetRRDisplayString_rdb(&ka->resrec, &ka->resrec.rdata->u, rrbuf);
-			VLog("%s (%s): %s", addrbuf, (mDNSs32)ka->resrec.rroriginalttl < 0 ? "Remove": "Add", rrbuf);				 
-			end = PutResourceRecordTTLJumbo(&response.msg, end, &response.msg.h.numAnswers, &ka->resrec, ka->resrec.rroriginalttl);
-			if (!end) { Log("Error: UpdateAnswerList - UpdateAnswerList returned NULL"); return; }
-			}
-		}
-
-	// delete removes from list
-	ka = e->KnownAnswers;
-	while (ka)
-		{
-		if ((mDNSs32)ka->resrec.rroriginalttl < 0)
-			{
-			CacheRecord *fptr = ka;
-			if (prev) prev->next = ka->next;
-			else e->KnownAnswers = ka->next;
-			ka = ka->next;
-			free(fptr);
-			}
-		else
-			{
-			prev = ka;
-			ka = ka->next;
-			}
+		if (verbose) GetRRDisplayString_rdb(&cr->resrec, &cr->resrec.rdata->u, rrbuf);
+		VLog("%s (%s): %s", addrbuf, (mDNSs32)cr->resrec.rroriginalttl < 0 ? "Remove": "Add", rrbuf);				 
+		end = PutResourceRecordTTLJumbo(&response.msg, end, &response.msg.h.numAnswers, &cr->resrec, cr->resrec.rroriginalttl);
+		if (!end) { Log("Error: SendEvents - UpdateAnswerList returned NULL"); return; }
 		}
 			   
 	FormatLLQOpt(&opt, kLLQOp_Event, e->id, LLQLease(e));
 	end = PutResourceRecordTTLJumbo(&response.msg, end, &response.msg.h.numAdditionals, &opt.resrec, 0);
-	if (!end) { Log("Error: PutResourceRecordTTLJumbo"); return; }
+	if (!end) { Log("Error: SendEvents - PutResourceRecordTTLJumbo"); return; }
 
 	response.len = (int)(end - (mDNSu8 *)&response.msg);
-	if (response.msg.h.numAnswers)
-		if (SendLLQ(d, &response, e->cli) < 0) LogErr("UpdateAnswerList", "SendLLQ");		
+	if (SendLLQ(d, &response, e->cli) < 0) LogMsg("Error: SendEvents - SendLLQ");		
 	}
 
 mDNSlocal void PrintLLQTable(DaemonInfo *d)
@@ -1401,38 +1438,69 @@ mDNSlocal void PrintLLQTable(DaemonInfo *d)
 // Send events to clients as a result of a change in the zone
 mDNSlocal void GenLLQEvents(DaemonInfo *d)
 	{
-	LLQEntry *e, *tmp;
+	LLQEntry **e;
 	int i, sd;
 	struct timeval t;
-	char addr[32];
+
 	VLog("Generating LLQ Events");
 
 	gettimeofday(&t, NULL);
 	sd = ConnectToServer(d);
 	if (sd < 0) { Log("GenLLQEvents: ConnectToServer failed"); return; }
-	
+
+	// get all answers up to date
 	for (i = 0; i < LLQ_TABLESIZE; i++)
 		{
-		e = d->LLQTable[i];
-		while(e)
+		AnswerListElem *a = d->AnswerTable[i];
+		while(a)
 			{
-			if (e->expire < t.tv_sec)
-				{
-				inet_ntop(AF_INET, &e->cli.sin_addr, addr, 32);
-				VLog("Expiring LLQ %##s from %s", e->qname.c, addr);
-				tmp = e;
-				e = e->next;
-				DeleteLLQ(d, tmp);
-				}
+			UpdateAnswerList(d, a, sd);
+			a = a->next;
+			}
+		}
+
+    // for each established LLQ, send events
+	for (i = 0; i < LLQ_TABLESIZE; i++)
+		{
+		e = &d->LLQTable[i];
+		while(*e)
+			{
+			if ((*e)->expire < t.tv_sec) DeleteLLQ(d, *e);
 			else
 				{
-				CacheRecord *tmp, *answers = AnswerQuestion(d, e, sd);
-				UpdateAnswerList(d, e, answers);
-				while (answers) { tmp = answers; answers = answers->next; free(tmp); }				
-				e = e->next;
+				if ((*e)->state == Established && (*e)->AnswerList->EventList) SendEvents(d, *e);
+				e = &(*e)->next;
 				}
-			}		
+			}
 		}
+	
+	// now that all LLQs are updated, we move Add events from the Event list to the Known Answer list, and free Removes
+	for (i = 0; i < LLQ_TABLESIZE; i++)
+		{
+		AnswerListElem *a = d->AnswerTable[i];
+		while(a)
+			{
+			if (a->EventList)
+				{
+				CacheRecord *cr = a->EventList, *tmp;
+				while (cr)
+					{
+					tmp = cr;
+					cr = cr->next;
+					if ((signed)tmp->resrec.rroriginalttl < 0) free(tmp);
+					else
+						{
+						tmp->next = a->KnownAnswers;
+						a->KnownAnswers = tmp;	
+						tmp->resrec.rroriginalttl = 0;
+						}
+					}
+				a->EventList = NULL;
+				}
+			a = a->next;
+			}
+		}	
+		
 	close(sd);
 	}
 
@@ -1506,14 +1574,43 @@ mDNSlocal void *LLQEventMonitor(void *DInfoPtr)
 		if (!ptr) Log("LLQEventMonitor: response to query did not contain SOA");
 		}
 	}
- 
+
+mDNSlocal void SetAnswerList(DaemonInfo *d, LLQEntry *e)
+	{
+	int bucket = DomainNameHashValue(&e->qname) % LLQ_TABLESIZE;
+	AnswerListElem *a = d->AnswerTable[bucket];
+	while (a && (a->type != e->qtype ||!SameDomainName(&a->name, &e->qname))) a = a->next;
+	if (!a)
+		{
+		a = malloc(sizeof(*a));
+		if (!a) { LogErr("SetAnswerList", "malloc"); return; }
+		AssignDomainName(&a->name, &e->qname);
+		a->type = e->qtype;
+		a->refcount = 0;
+		a->KnownAnswers = NULL;
+		a->EventList = NULL;
+		a->next = d->AnswerTable[bucket];
+		d->AnswerTable[bucket] = a;
+
+		// to get initial answer list, call UpdateAnswerList and move cache records from EventList to KnownAnswers
+		UpdateAnswerList(d, a, -1);
+		a->KnownAnswers = a->EventList;
+		a->EventList = NULL;
+		}
+	
+	e->AnswerList = a;
+	a->refcount ++;
+	}
+	
  // Allocate LLQ entry, insert into table
 mDNSlocal LLQEntry *NewLLQ(DaemonInfo *d, struct sockaddr_in cli, domainname *qname, mDNSu16 qtype, mDNSu32 lease)
 	{
 	char addr[32];
 	struct timeval t;
-	int bucket;
-	LLQEntry *e = malloc(sizeof(*e));
+	int bucket = DomainNameHashValue(qname) % LLQ_TABLESIZE;
+   	LLQEntry *e;
+
+	e = malloc(sizeof(*e));
 	if (!e) { LogErr("NewLLQ", "malloc"); return NULL; }
 
 	inet_ntop(AF_INET, &cli.sin_addr, addr, 32);
@@ -1525,7 +1622,7 @@ mDNSlocal LLQEntry *NewLLQ(DaemonInfo *d, struct sockaddr_in cli, domainname *qn
 	e->qtype = qtype;
 	memset(e->id, 0, 8);
 	e->state = RequestReceived;
-	e->KnownAnswers = NULL;
+	e->AnswerList = NULL;
 	
 	if (lease < LLQ_MIN_LEASE) lease = LLQ_MIN_LEASE;
 	else if (lease > LLQ_MAX_LEASE) lease = LLQ_MIN_LEASE;
@@ -1534,7 +1631,6 @@ mDNSlocal LLQEntry *NewLLQ(DaemonInfo *d, struct sockaddr_in cli, domainname *qn
 	e->lease = lease;
 	
 	// add to table
-	bucket = DomainNameHashValue(qname) % LLQ_TABLESIZE;
 	e->next = d->LLQTable[bucket];
 	d->LLQTable[bucket] = e;
 	
@@ -1603,9 +1699,10 @@ mDNSlocal void LLQCompleteHandshake(DaemonInfo *d, LLQEntry *e, LLQOptData *llq,
 	end = putQuestion(&ack.msg, end, end + AbsoluteMaxDNSMessageData, &e->qname, e->qtype, kDNSClass_IN);
 	if (!end) { Log("Error: putQuestion"); return; }
 	
-	if (e->state != Established) e->KnownAnswers = AnswerQuestion(d, e, -1);  // only fetch KA list the first time through
+	if (e->state != Established) { SetAnswerList(d, e); e->state = Established; }
+	
 	if (verbose) inet_ntop(AF_INET, &e->cli.sin_addr, addrbuf, 32);
-	for (ptr = e->KnownAnswers; ptr; ptr = ptr->next)
+	for (ptr = e->AnswerList->KnownAnswers; ptr; ptr = ptr->next)
 		{
 		if (verbose) GetRRDisplayString_rdb(&ptr->resrec, &ptr->resrec.rdata->u, rrbuf);
 		VLog("%s Intitial Answer - %s", addr, rrbuf);
@@ -1820,7 +1917,7 @@ mDNSlocal void *UDPUpdateRequestForkFn(void *vptr)
 
 	if (reply) free(reply);		
 	free(req);
-	return NULL;
+	pthread_exit(NULL);
 	}
 
 //!!!KRS this needs to be changed to use non-blocking sockets
@@ -1847,9 +1944,10 @@ mDNSlocal int RecvUDPRequest(int sd, DaemonInfo *d)
 		return err;
 		}
 
-	if (IsLLQAck(&req->pkt)) return 0; // !!!KRS need to do acks + retrans
+	if (IsLLQAck(&req->pkt)) { free(req); return 0; } // !!!KRS need to do acks + retrans
 	
 	if (pthread_create(&tid, NULL, UDPUpdateRequestForkFn, req)) { LogErr("RecvUDPRequest", "pthread_create"); free(req); return -1; }
+	pthread_detach(tid);
 	return 0;
 	}
 
@@ -1888,7 +1986,7 @@ mDNSlocal void *TCPRequestForkFn(void *vptr)
 	free(req);
 	if (in) free(in);
 	if (out) free(out);
-	return NULL;	
+	pthread_exit(NULL);
 	}
 
 mDNSlocal int RecvTCPRequest(int sd, DaemonInfo *d)
@@ -1905,6 +2003,7 @@ mDNSlocal int RecvTCPRequest(int sd, DaemonInfo *d)
 	if (req->sd < 0) { LogErr("RecvTCPRequest", "accept"); return -1; }	
 	if (clilen != sizeof(req->cliaddr)) { Log("Client address of unknown size %d", clilen); free(req); return -1; }
 	if (pthread_create(&tid, NULL, TCPRequestForkFn, req)) { LogErr("RecvTCPRequest", "pthread_create"); free(req); return -1; }
+	pthread_detach(tid);
 	return 0;
 	}
 
@@ -1978,15 +2077,18 @@ mDNSlocal void HndlSignal(int sig)
 int main(int argc, char *argv[])
 	{
 	pthread_t LLQtid;
-	DaemonInfo d;
-	bzero(&d, sizeof(DaemonInfo));
+	DaemonInfo *d;
+
+	d = malloc(sizeof(*d));
+	if (!d) { LogErr("main", "malloc"); exit(1); }
+	bzero(d, sizeof(DaemonInfo));
 	
 	if (signal(SIGTERM,     HndlSignal) == SIG_ERR) perror("Can't catch SIGTERM");
 	if (signal(INFO_SIGNAL, HndlSignal) == SIG_ERR) perror("Can't catch SIGINFO");
 	if (signal(SIGINT,      HndlSignal) == SIG_ERR) perror("Can't catch SIGINT");
 	if (signal(SIGPIPE,     SIG_IGN  )  == SIG_ERR) perror("Can't ignore SIGPIPE");
 	
-	if (ProcessArgs(argc, argv, &d) < 0) exit(1);
+	if (ProcessArgs(argc, argv, d) < 0) exit(1);
 
 	if (!foreground)
 		{
@@ -1998,14 +2100,19 @@ int main(int argc, char *argv[])
 			}	
 		}
 
-	if (InitLeaseTable(&d) < 0) exit(1);
-	if (SetupSockets(&d) < 0) exit(1); 
-	if (SetUpdateSRV(&d) < 0) exit(1);
+	if (InitLeaseTable(d) < 0) exit(1);
+	if (SetupSockets(d) < 0) exit(1); 
+	if (SetUpdateSRV(d) < 0) exit(1);
 	
-	if (pthread_create(&LLQtid, NULL, LLQEventMonitor, &d)) { LogErr("main", "pthread_create"); }
-	else ListenForUpdates(&d);              
+	if (pthread_create(&LLQtid, NULL, LLQEventMonitor, d)) { LogErr("main", "pthread_create"); }	
+	else
+		{
+		pthread_detach(LLQtid);
+		ListenForUpdates(d);
+		}
 		
-	if (ClearUpdateSRV(&d) < 0) exit(1);  // clear update srv's even if ListenForUpdates or pthread_create returns an error
+	if (ClearUpdateSRV(d) < 0) exit(1);  // clear update srv's even if ListenForUpdates or pthread_create returns an error
+	free(d);
 	exit(0);
+ 
 	}
-

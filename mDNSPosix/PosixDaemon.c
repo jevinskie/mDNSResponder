@@ -28,6 +28,12 @@
 	Change History (most recent first):
 
 $Log: PosixDaemon.c,v $
+Revision 1.27  2005/02/04 00:39:59  cheshire
+Move ParseDNSServers() from PosixDaemon.c to mDNSPosix.c so all Posix client layers can use it
+
+Revision 1.26  2005/02/02 02:21:30  cheshire
+Update references to "mDNSResponder" to say "mdnsd" instead
+
 Revision 1.25  2005/01/27 20:01:50  cheshire
 udsSupportRemoveFDFromEventLoop() needs to close the file descriptor as well
 
@@ -41,7 +47,7 @@ Revision 1.22  2004/12/10 13:12:08  cheshire
 Create no-op function RecordUpdatedNiceLabel(), required by uds_daemon.c
 
 Revision 1.21  2004/12/01 20:57:20  ksekar
-<rdar://problem/3873921> Wide Area Rendezvous must be split-DNS aware
+<rdar://problem/3873921> Wide Area Service Discovery must be split-DNS aware
 
 Revision 1.20  2004/12/01 04:28:43  cheshire
 <rdar://problem/3872803> Darwin patches for Solaris and Suse
@@ -118,16 +124,12 @@ Add support for mDNSResponder on Linux.
 #include <fcntl.h>
 #include <pwd.h>
 #include <sys/types.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 
 #include "mDNSEmbeddedAPI.h"
 #include "mDNSDebug.h"
 #include "mDNSPosix.h"
 #include "uds_daemon.h"
 #include "PlatformCommon.h"
-
-#define uDNS_SERVERS_FILE "/etc/resolv.conf"
 
 #define CONFIG_FILE "/etc/mdnsd.conf"
 static domainname DynDNSZone;                // Default wide-area zone for service registration
@@ -137,32 +139,6 @@ static domainname DynDNSHostname;
 static CacheEntity gRRCache[RR_CACHE_SIZE];
 
 extern const char mDNSResponderVersionString[];
-
-static int ParseDNSServers(mDNS *m, const char *filePath)
-	{
-	char line[256];
-	char nameserver[16];
-	char keyword[10];
-	int  numOfServers = 0;
-	FILE *fp = fopen(filePath, "r");
-	if (fp == NULL) return -1;
-	while (fgets(line,sizeof(line),fp))
-		{
-		struct in_addr ina;
-		line[255]='\0';		// just to be safe
-		if (sscanf(line,"%10s %15s", keyword, nameserver) != 2) continue;	// it will skip whitespaces
-		if (strncmp(keyword,"nameserver",10)) continue;
-		if (inet_aton(nameserver, (struct in_addr *)&ina) != 0)
-			{
-			mDNSAddr DNSAddr;
-			DNSAddr.type = mDNSAddrType_IPv4;
-			DNSAddr.ip.v4.NotAnInteger = ina.s_addr;
-			mDNS_AddDNSServer(m, &DNSAddr, NULL);
-			numOfServers++;
-			}
-		}  
-	return (numOfServers > 0) ? 0 : -1;
-	}
 
 static void Reconfigure(mDNS *m)
 	{
@@ -183,7 +159,7 @@ static void ParseCmdLinArgs(int argc, char **argv)
 	if (argc > 1)
 		{
 		if (0 == strcmp(argv[1], "-debug")) mDNS_DebugMode = mDNStrue;
-		else printf("Usage: mDNSResponder [-debug]\n");
+		else printf("Usage: %s [-debug]\n", argv[0]);
 		}
 
 	if (!mDNS_DebugMode)
@@ -191,7 +167,7 @@ static void ParseCmdLinArgs(int argc, char **argv)
 		int result = daemon(0, 0);
 		if (result != 0) { LogMsg("Could not run as daemon - exiting"); exit(result); }
 #if __APPLE__
-		LogMsg("The POSIX mDNSResponder should only be used on OS X for testing - exiting");
+		LogMsg("The POSIX mdnsd should only be used on OS X for testing - exiting");
 		exit(-1);
 #endif
 		}
@@ -258,6 +234,8 @@ int		main(int argc, char **argv)
 
 	ParseCmdLinArgs(argc, argv);
 
+	LogMsgIdent(mDNSResponderVersionString, "starting");
+
 	err = mDNS_Init(&mDNSRecord, &platformStorage, gRRCache, RR_CACHE_SIZE, mDNS_Init_AdvertiseLocalAddresses, 
 					mDNS_Init_NoInitCallback, mDNS_Init_NoInitCallbackContext); 
 
@@ -279,6 +257,8 @@ int		main(int argc, char **argv)
 	if (mStatus_NoError == err)
 		err = MainLoop(&mDNSRecord);
  
+	LogMsgIdent(mDNSResponderVersionString, "stopping");
+
 	mDNS_Close(&mDNSRecord);
 
 	if (udsserver_exit() < 0)

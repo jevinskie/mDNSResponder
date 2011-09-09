@@ -60,6 +60,24 @@
     Change History (most recent first):
 
 $Log: mDNSEmbeddedAPI.h,v $
+Revision 1.281  2005/02/25 17:47:44  ksekar
+<rdar://problem/4021868> SendServiceRegistration fails on wake from sleep
+
+Revision 1.280  2005/02/25 04:21:00  cheshire
+<rdar://problem/4015377> mDNS -F returns the same domain multiple times with different casing
+
+Revision 1.279  2005/02/17 01:56:14  cheshire
+Increase ifname field to 64 bytes
+
+Revision 1.278  2005/02/09 23:38:51  ksekar
+<rdar://problem/3993508> Reregister hostname when DNS server changes but IP address does not
+
+Revision 1.277  2005/02/09 23:31:12  ksekar
+<rdar://problem/3984374> NAT-PMP response callback should return a boolean indicating if the packet matched the request
+
+Revision 1.276  2005/02/01 19:33:29  ksekar
+<rdar://problem/3985239> Keychain format too restrictive
+
 Revision 1.275  2005/01/27 22:57:55  cheshire
 Fix compile errors on gcc4
 
@@ -144,10 +162,10 @@ Revision 1.249  2004/12/03 05:18:33  ksekar
 <rdar://problem/3810596> mDNSResponder needs to return more specific TSIG errors
 
 Revision 1.248  2004/12/02 20:03:48  ksekar
-<rdar://problem/3889647> Rendezvous still publishes wide-area domains even after switching to a local subnet
+<rdar://problem/3889647> Still publishes wide-area domains even after switching to a local subnet
 
 Revision 1.247  2004/12/01 20:57:19  ksekar
-<rdar://problem/3873921> Wide Area Rendezvous must be split-DNS aware
+<rdar://problem/3873921> Wide Area Service Discovery must be split-DNS aware
 
 Revision 1.246  2004/11/29 23:26:32  cheshire
 Added NonZeroTime() function, which usually returns the value given, with the exception
@@ -172,7 +190,7 @@ Revision 1.241  2004/11/22 17:16:19  ksekar
 <rdar://problem/3854298> Unicast services don't disappear when you disable all networking
 
 Revision 1.240  2004/11/19 02:32:43  ksekar
-Wide-Area Rendezvous Security: Add LLQ-ID to events
+Wide-Area Security: Add LLQ-ID to events
 
 Revision 1.239  2004/11/15 20:09:23  ksekar
 <rdar://problem/3719050> Wide Area support for Add/Remove record
@@ -360,7 +378,7 @@ Revision 1.184  2004/08/11 17:09:31  cheshire
 Add comment clarifying the applicability of these APIs
 
 Revision 1.183  2004/08/10 23:19:14  ksekar
-<rdar://problem/3722542>: DNS Extension daemon for Wide Area Rendezvous
+<rdar://problem/3722542>: DNS Extension daemon for Wide Area Service Discovery
 Moved routines/constants to allow extern access for garbage collection daemon
 
 Revision 1.182  2004/07/30 17:40:06  ksekar
@@ -1155,8 +1173,8 @@ enum
 	mStatus_BadTime           = -65559,
 	mStatus_BadSig            = -65560,     // while we define this per RFC 2845, BIND 9 returns Refused for bad/missing signatures
 	mStatus_BadKey            = -65561,
-	
-	// -65562 to -65786 currently unused; available for allocation
+	mStatus_TransientErr      = -65562,     // transient failures, e.g. sending packets shortly after a network transition or wake from sleep
+	// -65563 to -65786 currently unused; available for allocation
 
 	// tcp connection status
 	mStatus_ConnPending       = -65787,
@@ -1362,7 +1380,7 @@ typedef packedstruct
 #define StandardAuthRDSize 264
 #define MaximumRDSize 8192
 
-// InlineCacheRDSize is 64
+// InlineCacheRDSize is 68
 // Records received from the network with rdata this size or less have their rdata stored right in the CacheRecord object
 // Records received from the network with rdata larger than this have additional storage allocated for the rdata
 // A quick unscientific sample from a busy network at Apple with lots of machines revealed this:
@@ -1374,7 +1392,7 @@ typedef packedstruct
 // Only 69 records had rdata bigger than 64 bytes
 // Note that since CacheRecord object and a CacheGroup object are allocated out of the same pool, it's sensible to
 // have them both be the same size. Making one smaller without making the other smaller won't actually save any memory.
-#define InlineCacheRDSize 64
+#define InlineCacheRDSize 68
 
 #define InlineCacheGroupNameSize 144
 
@@ -1428,9 +1446,13 @@ typedef struct
 	mDNSu32         rroriginalttl;		// In seconds
 	mDNSu16         rdlength;			// Size of the raw rdata, in bytes
 	mDNSu16         rdestimate;			// Upper bound on size of rdata after name compression
-	mDNSu32         namehash;			// Name-based (i.e. case insensitive) hash of name
-	mDNSu32         rdatahash;			// 32-bit hash of the raw rdata
-	mDNSu32         rdnamehash;			// Set if this rdata contains a domain name (e.g. PTR, SRV, CNAME etc.)
+	mDNSu32         namehash;			// Name-based (i.e. case-insensitive) hash of name
+	mDNSu32         rdatahash;			// For rdata containing domain name (e.g. PTR, SRV, CNAME etc.), case-insensitive name hash
+										// else, for all other rdata, 32-bit hash of the raw rdata
+										// Note: This requirement is important. Various routines like AddAdditionalsToResponseList(),
+										// ReconfirmAntecedents(), etc., use rdatahash as a pre-flight check to see
+										// whether it's worth doing a full SameDomainName() call. If the rdatahash
+										// is not a correct case-insensitive name hash, they'll get false negatives.
 	RData           *rdata;				// Pointer to storage for this rdata
 	} ResourceRecord;
 
@@ -1610,6 +1632,7 @@ typedef struct DNSServer
     struct DNSServer *next;
     mDNSAddr addr;
     domainname domain;       // name->server matching for "split dns"
+    int flag;                // temporary marker for list intersection
 	} DNSServer;
 
 typedef struct NetworkInterfaceInfo_struct NetworkInterfaceInfo;
@@ -1641,7 +1664,7 @@ struct NetworkInterfaceInfo_struct
 	mDNSInterfaceID InterfaceID;		// Identifies physical interface; MUST NOT be 0, -1, or -2
 	mDNSAddr        ip;					// The IPv4 or IPv6 address to advertise
 	mDNSAddr        mask;
-	char            ifname[16];
+	char            ifname[64];			// Windows uses a GUID string for the interface name, which doesn't fit in 16 bytes
 	mDNSBool        Advertise;			// False if you are only searching on this interface
 	mDNSBool        McastTxRx;			// Send/Receive multicast on this { InterfaceID, address family } ?
 	};
@@ -1938,7 +1961,7 @@ typedef packedstruct
 	} NATPortMapReply;
 	
 // Pass NULL for pkt on error (including timeout)
-typedef void (*NATResponseHndlr)(NATTraversalInfo *n, mDNS *m, mDNSu8 *pkt, mDNSu16 len);
+typedef mDNSBool (*NATResponseHndlr)(NATTraversalInfo *n, mDNS *m, mDNSu8 *pkt, mDNSu16 len);
 
 struct NATTraversalInfo_struct
 	{
@@ -2474,13 +2497,12 @@ typedef struct uDNS_AuthInfo
 //
 // mDNS_SetSecretForZone tells the core to authenticate (via TSIG with an HMAC_MD5 hash of the shared secret)
 // when dynamically updating a given zone (and its subdomains).  The key used in authentication must be in
-// domain name format.  The shared secret must be a base64 encoded string with the base64 parameter set to
-// true, or binary data with the base64 parameter set to false.  The length is the size of the secret in
-// bytes.  (A minimum size of 16 bytes (128 bits) is recommended for an MD5 hash as per RFC 2485).
+// domain name format.  The shared secret must be a null-terminated base64 encoded string.  A minimum size of
+// 16 bytes (128 bits) is recommended for an MD5 hash as per RFC 2485.
 // Calling this routine multiple times for a zone replaces previously entered values.  Call with a NULL key
 // to dissable authentication for the zone.
 
-extern mStatus mDNS_SetSecretForZone(mDNS *m, const domainname *zone, const domainname *key, const char *sharedSecret, mDNSu32 ssLen, mDNSBool base64);
+extern mStatus mDNS_SetSecretForZone(mDNS *m, const domainname *zone, const domainname *key, const char *sharedSecret);
 
 // Hostname/Unicast Interface Configuration
 

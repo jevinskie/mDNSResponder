@@ -103,7 +103,7 @@ END
 
 IDD_SECOND_PAGE DIALOGEX 0, 0, 290, 154
 STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_DISABLED | WS_CAPTION
-CAPTION "Rendezvous Printer Wizard"
+CAPTION "Bonjour Printer Wizard"
 FONT 8, "MS Shell Dlg", 0, 0, 0x0
 BEGIN
     LTEXT           "Shared printers:",IDC_STATIC,3,0,171,8
@@ -120,13 +120,13 @@ END
 
 IDD_FIRST_PAGE DIALOGEX 0, 0, 290, 199
 STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_DISABLED | WS_CAPTION
-CAPTION "Rendezvous Printer Wizard"
+CAPTION "Bonjour Printer Wizard"
 FONT 8, "MS Shell Dlg", 0, 0, 0x0
 BEGIN
-    LTEXT           "Welcome to the Rendezvous Printer Setup Wizard",
+    LTEXT           "Welcome to the Bonjour Printer Setup Wizard",
                     IDC_GREETING,114,7,171,46
     LTEXT           "Click next to continue.",IDC_STATIC,115,188,143,8
-    LTEXT           "This wizard helps you connect to a shared printer using Rendezvous.  Make sure your printer is turned on and connected to your network.",
+    LTEXT           "This wizard helps you connect to a shared printer using Bonjour.  Make sure your printer is turned on and connected to your network.",
                     IDC_STATIC,146,60,139,62
     ICON            "",IDC_INFO,118,60,20,20,SS_REALSIZEIMAGE
 END
@@ -134,7 +134,7 @@ END
 IDD_THIRD_PAGE DIALOGEX 0, 0, 290, 154
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | 
     WS_SYSMENU
-CAPTION "Rendezvous Printer Wizard"
+CAPTION "Bonjour Printer Wizard"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     CONTROL         "",IDC_PRINTER_MODEL,"SysListView32",LVS_REPORT | 
@@ -145,22 +145,22 @@ BEGIN
                     LVS_ALIGNLEFT | WS_BORDER | WS_TABSTOP,2,58,105,76
     ICON            1017,1,0,0,20,27
     LTEXT           "",IDC_PRINTER_NAME,40,5,173,8
-    LTEXT           "The Rendezvous Printer Wizard has auto-selected the following printer settings.  Click 'Next' to continue installing this printer.",
-                    IDC_PRINTER_SELECTION_TEXT,40,23,243,26
+    LTEXT           "The Bonjour Printer Wizard has auto-selected the following printer settings.  Click 'Next' to continue installing this printer.",
+                    IDC_PRINTER_SELECTION_TEXT,40,18,243,33
     CONTROL         "Use this printer as the default printer",
                     IDC_DEFAULT_PRINTER,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,3,142,224,10
+                    WS_TABSTOP,3,142,140,10
     PUSHBUTTON      "Have Disk...",IDC_HAVE_DISK,238,140,50,14
 END
 
 IDD_FOURTH_PAGE DIALOGEX 0, 0, 290, 199
 STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_DISABLED | WS_CAPTION
-CAPTION "Rendezvous Printer Wizard"
+CAPTION "Bonjour Printer Wizard"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    LTEXT           "Completing the Rendezvous Printer Wizard",IDC_GOODBYE,
+    LTEXT           "Completing the Bonjour Printer Wizard",IDC_GOODBYE,
                     116,7,171,27
-    LTEXT           "You have successfully completed the Rendezvous Printer Wizard.  The printer has the following settings:",
+    LTEXT           "You have successfully completed the Bonjour Printer Wizard.  The printer has the following settings:",
                     IDC_STATIC,116,42,158,31
     LTEXT           "Name:",IDC_STATIC,116,78,22,8
     LTEXT           "Manufacturer:",IDC_STATIC,116,91,47,8
@@ -213,11 +213,11 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "Apple Computer, Inc."
-            VALUE "FileDescription", "Rendezvous Printer Wizard Resource Module"
+            VALUE "FileDescription", "Bonjour Resource Module"
             VALUE "FileVersion", MASTER_PROD_VERS_STR
-            VALUE "InternalName", "RendezvousPrinterWizardLocalized.dll"
+            VALUE "InternalName", "PrinterWizardLocalized.dll"
             VALUE "LegalCopyright", MASTER_LEGAL_COPYRIGHT
-            VALUE "OriginalFilename", "RendezvousPrinterWizardLocalized.dll"
+            VALUE "OriginalFilename", "PrinterWizardLocalized.dll"
             VALUE "ProductName", MASTER_PROD_NAME
             VALUE "ProductVersion", MASTER_PROD_VERS_STR
         END
@@ -237,15 +237,15 @@ END
 STRINGTABLE 
 BEGIN
     IDS_ABOUTBOX            "&About Printer Setup Wizard..."
-    IDS_GOODBYE             "Completing the Rendezvous Printer Setup Wizard."
-    IDS_GREETING            "Welcome to the Rendezvous Printer Setup Wizard"
-    IDS_BROWSE_TITLE        "Browse for Rendezvous Printers"
+    IDS_GOODBYE             "Completing the Bonjour Printer Setup Wizard."
+    IDS_GREETING            "Welcome to the Bonjour Printer Setup Wizard"
+    IDS_BROWSE_TITLE        "Browse for Bonjour Printers"
     IDS_BROWSE_SUBTITLE     "Select the printer you want to use from the list below."
-    IDS_CAPTION             "Rendezvous Printer Wizard"
-    IDS_GOODBYE_GOOD1       "You have successfully completed the Rendezvous Printer Wizard.  The printer has the following settings:"
+    IDS_CAPTION             "Bonjour Printer Wizard"
+    IDS_GOODBYE_GOOD1       "You have successfully completed the Bonjour Printer Wizard.  The printer has the following settings:"
     IDS_SEARCHING           "Searching for printers..."
     IDS_GOODBYTE_GOOD2      "To close this wizard, click Finish."
-    IDS_INSTALL_TITLE       "Install Rendezvous Printer"
+    IDS_INSTALL_TITLE       "Install Bonjour Printer"
     IDS_INSTALL_SUBTITLE    "The manufacturer and model determine which printer software to use."
 END
 
@@ -259,16 +259,18 @@ BEGIN
                             "You do not have sufficient access to your computer to connect to the selected printer."
     IDS_MANUFACTURER_HEADING "Manufacturer"
     IDS_MODEL_HEADING       "Model"
-    IDS_NO_RENDEZVOUS_PRINTERS "No Rendezvous Printers are available"
-    IDS_NO_MDNSRESPONDER_SERVICE_TEXT "Rendezvous Service is not available."
+    IDS_NO_PRINTERS         "No Bonjour Printers are available"
+    IDS_NO_MDNSRESPONDER_SERVICE_TEXT "Bonjour Service is not available."
     IDS_NO_MDNSRESPONDER_SERVICE_CAPTION "Error"
-    IDS_PRINTER_MATCH_GOOD  "The Rendezvous Printer Wizard has auto-selected the following printer settings.  Click 'Next' to continue installing this printer."
-    IDS_PRINTER_MATCH_BAD   "The Rendezvous Printer Wizard cannot find a driver for this printer.  Manually select from the list, or click 'Have Disk' if your printer came with an installation disk. "
+    IDS_PRINTER_MATCH_GOOD  "The Bonjour Printer Wizard has auto-selected the following printer settings.  Click 'Next' to continue installing this printer."
+    IDS_PRINTER_MATCH_BAD   "The Bonjour Printer Wizard cannot find a driver for this printer.  Manually select from the list, or click 'Have Disk' if your printer came with an installation disk. "
+    IDS_PRINTER_MATCH_MAYBE "The Bonjour Printer Wizard has selected a generic printer driver for this printer. If your printer came with an installation disk, click 'Have Disk' now to load the manufacturer's drivers."
     IDS_YES                 "Yes"
     IDS_NO                  "No"
     IDS_LARGE_FONT          "MS Sans Serif"
-    IDS_FIREWALL            "Please check firewall setting to ensure the Rendezvous Printer Wizard operates correctly."
+    IDS_FIREWALL            "Please check firewall setting to ensure the Bonjour Printer Wizard operates correctly."
     IDS_ERROR_CAPTION       "Error"
+    IDS_PRINTER_UNAVAILABLE "The Bonjour printer you have selected is no longer available. Please make sure the printer is powered-on and plugged-in."
 END
 
 STRINGTABLE 

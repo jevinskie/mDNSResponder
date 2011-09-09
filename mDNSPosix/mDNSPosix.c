@@ -37,6 +37,12 @@
 	Change History (most recent first):
 
 $Log: mDNSPosix.c,v $
+Revision 1.71  2005/02/26 01:29:12  cheshire
+Ignore multicasts accidentally delivered to our unicast receiving socket
+
+Revision 1.70  2005/02/04 00:39:59  cheshire
+Move ParseDNSServers() from PosixDaemon.c to mDNSPosix.c so all Posix client layers can use it
+
 Revision 1.69  2004/12/18 02:03:28  cheshire
 Need to #include "dns_sd.h"
 
@@ -284,6 +290,7 @@ First checkin
 #include <sys/uio.h>
 #include <sys/select.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <time.h>                   // platform support for UTC time
 
 #if USES_NETLINK
@@ -497,16 +504,21 @@ mDNSlocal void SocketDataReady(mDNS *const m, PosixNetworkInterface *intf, int s
 		// different capabilities of our target platforms.
 
 		reject = mDNSfalse;
-		if (intf)
+		if (!intf)
+			{
+			// Ignore multicasts accidentally delivered to our unicast receiving socket
+			if (mDNSAddrIsDNSMulticast(&destAddr)) packetLen = -1;
+			}
+		else
 			{
 			if      ( packetInfo.ipi_ifname[0] != 0 ) reject = (strcmp(packetInfo.ipi_ifname, intf->intfName) != 0);
 			else if ( packetInfo.ipi_ifindex != -1 )  reject = (packetInfo.ipi_ifindex != intf->index);
 	
 			if (reject)
 				{
-				verbosedebugf("SocketDataReady ignored a packet from %#a to %#a on interface %s/%d expecting %#a/%s/%d",
+				verbosedebugf("SocketDataReady ignored a packet from %#a to %#a on interface %s/%d expecting %#a/%s/%d/%d",
 					&senderAddr, &destAddr, packetInfo.ipi_ifname, packetInfo.ipi_ifindex,
-					&intf->coreIntf.ip, intf->intfName, intf->index);
+					&intf->coreIntf.ip, intf->intfName, intf->index, skt);
 				packetLen = -1;
 				num_pkts_rejected++;
 				if (num_pkts_rejected > (num_pkts_accepted + 1) * (num_registered_interfaces + 1) * 2)
@@ -520,8 +532,8 @@ mDNSlocal void SocketDataReady(mDNS *const m, PosixNetworkInterface *intf, int s
 				}
 			else
 				{
-				verbosedebugf("SocketDataReady got a packet from %#a to %#a on interface %#a/%s/%d",
-					&senderAddr, &destAddr, &intf->coreIntf.ip, intf->intfName, intf->index);
+				verbosedebugf("SocketDataReady got a packet from %#a to %#a on interface %#a/%s/%d/%d",
+					&senderAddr, &destAddr, &intf->coreIntf.ip, intf->intfName, intf->index, skt);
 				num_pkts_accepted++;
 				}
 			}
@@ -610,6 +622,32 @@ mDNSlocal void GetUserSpecifiedFriendlyComputerName(domainlabel *const namelabel
 	GetUserSpecifiedRFC1034ComputerName( namelabel);
 	}
 
+mDNSexport int ParseDNSServers(mDNS *m, const char *filePath)
+	{
+	char line[256];
+	char nameserver[16];
+	char keyword[10];
+	int  numOfServers = 0;
+	FILE *fp = fopen(filePath, "r");
+	if (fp == NULL) return -1;
+	while (fgets(line,sizeof(line),fp))
+		{
+		struct in_addr ina;
+		line[255]='\0';		// just to be safe
+		if (sscanf(line,"%10s %15s", keyword, nameserver) != 2) continue;	// it will skip whitespaces
+		if (strncmp(keyword,"nameserver",10)) continue;
+		if (inet_aton(nameserver, (struct in_addr *)&ina) != 0)
+			{
+			mDNSAddr DNSAddr;
+			DNSAddr.type = mDNSAddrType_IPv4;
+			DNSAddr.ip.v4.NotAnInteger = ina.s_addr;
+			mDNS_AddDNSServer(m, &DNSAddr, NULL);
+			numOfServers++;
+			}
+		}  
+	return (numOfServers > 0) ? 0 : -1;
+	}
+
 // Searches the interface list looking for the named interface.
 // Returns a pointer to if it found, or NULL otherwise.
 mDNSlocal PosixNetworkInterface *SearchForInterfaceByName(mDNS *const m, const char *intfName)
@@ -626,7 +664,7 @@ mDNSlocal PosixNetworkInterface *SearchForInterfaceByName(mDNS *const m, const c
 	return intf;
 	}
 
-extern mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(const mDNS *const m, mDNSu32 index)
+mDNSexport mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(const mDNS *const m, mDNSu32 index)
 	{
 	PosixNetworkInterface *intf;
 
@@ -702,7 +740,7 @@ mDNSlocal int SetupSocket(struct sockaddr *intfAddr, mDNSIPPort port, int interf
 	assert(*sktPtr == -1);
 
 	// Open the socket...
-	if       (intfAddr->sa_family == AF_INET) *sktPtr = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if      (intfAddr->sa_family == AF_INET ) *sktPtr = socket(PF_INET,  SOCK_DGRAM, IPPROTO_UDP);
 #if HAVE_IPV6
 	else if (intfAddr->sa_family == AF_INET6) *sktPtr = socket(PF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 #endif
@@ -1328,6 +1366,9 @@ mDNSexport mStatus mDNSPlatformInit(mDNS *const m)
 	// Tell mDNS core about the network interfaces on this machine.
 	if (err == mStatus_NoError) err = SetupInterfaceList(m);
 
+	// Tell mDNS core about DNS Servers
+	if (err == mStatus_NoError) ParseDNSServers(m, uDNS_SERVERS_FILE);
+
 	if (err == mStatus_NoError)
 		{
 		err = WatchForInterfaceChange(m);
@@ -1360,7 +1401,7 @@ mDNSexport void mDNSPlatformClose(mDNS *const m)
 #endif
 	}
 
-extern mStatus mDNSPlatformPosixRefreshInterfaceList(mDNS *const m)
+mDNSexport mStatus mDNSPlatformPosixRefreshInterfaceList(mDNS *const m)
 	{
 	int err;
 	ClearInterfaceList(m);

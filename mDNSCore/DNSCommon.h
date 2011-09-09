@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: DNSCommon.h,v $
+Revision 1.31  2005/02/18 00:43:11  cheshire
+<rdar://problem/4010245> mDNSResponder should auto-truncate service names that are too long
+
 Revision 1.30  2005/01/19 03:12:44  cheshire
 Move LocalRecordReady() macro from mDNS.c to DNSCommon.h
 
@@ -74,7 +77,7 @@ Revision 1.16  2004/08/13 23:46:58  cheshire
 "asyncronous" -> "asynchronous"
 
 Revision 1.15  2004/08/10 23:19:14  ksekar
-<rdar://problem/3722542>: DNS Extension daemon for Wide Area Rendezvous
+<rdar://problem/3722542>: DNS Extension daemon for Wide Area Service Discovery
 Moved routines/constants to allow extern access for garbage collection daemon
 
 Revision 1.14  2004/05/28 23:42:36  ksekar
@@ -213,6 +216,7 @@ extern mDNSu32 mDNSRandom(mDNSu32 max);
 
 extern mDNSu16 CompressedDomainNameLength(const domainname *const name, const domainname *parent);
 
+extern mDNSu32 TruncateUTF8ToLength(mDNSu8 *string, mDNSu32 length, mDNSu32 max);
 extern mDNSBool LabelContainsSuffix(const domainlabel *const name, const mDNSBool RichText);
 extern mDNSu32 RemoveLabelSuffix(domainlabel *name, mDNSBool RichText);
 extern void AppendLabelSuffix(domainlabel *name, mDNSu32 val, mDNSBool RichText);

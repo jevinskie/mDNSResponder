@@ -4,7 +4,6 @@
 //
 #define IDS_NAME                        106
 #define IDS_WEB_SITES                   107
-#define IDS_FTP_SITES                   108
 #define IDS_PRINTERS                    109
 #define IDS_MDNSRESPONDER_NOT_AVAILABLE 110
 #define IDS_FIREWALL                    111

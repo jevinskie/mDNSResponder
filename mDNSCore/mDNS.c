@@ -45,6 +45,24 @@
     Change History (most recent first):
 
 $Log: mDNS.c,v $
+Revision 1.522  2005/03/04 21:48:12  cheshire
+<rdar://problem/4037283> Fractional time rounded down instead of up on platforms with coarse clock granularity
+
+Revision 1.521  2005/02/25 04:21:00  cheshire
+<rdar://problem/4015377> mDNS -F returns the same domain multiple times with different casing
+
+Revision 1.520  2005/02/16 01:14:11  cheshire
+Convert RR Cache LogOperation() calls to debugf()
+
+Revision 1.519  2005/02/15 01:57:20  cheshire
+When setting "q->LastQTxTime = m->timenow", must also clear q->RecentAnswerPkts to zero
+
+Revision 1.518  2005/02/10 22:35:17  cheshire
+<rdar://problem/3727944> Update name
+
+Revision 1.517  2005/02/03 00:21:21  cheshire
+Update comments about BIND named and zero-length TXT records
+
 Revision 1.516  2005/01/28 06:06:32  cheshire
 Update comment
 
@@ -159,7 +177,7 @@ Revision 1.483  2004/12/07 23:00:14  ksekar
 Call RecordProbeFailure even if there is no record callback
 
 Revision 1.482  2004/12/07 22:49:06  cheshire
-<rdar://problem/3908850> BIND doesn't like zero-length rdata
+<rdar://problem/3908850> BIND doesn't allow zero-length TXT records
 
 Revision 1.481  2004/12/07 21:26:04  ksekar
 <rdar://problem/3908336> DNSServiceRegisterRecord() can crash on deregistration
@@ -168,7 +186,7 @@ Revision 1.480  2004/12/07 20:42:33  cheshire
 Add explicit context parameter to mDNS_RemoveRecordFromService()
 
 Revision 1.479  2004/12/07 17:50:49  ksekar
-<rdar://problem/3908850> BIND doesn't like zero-length rdata
+<rdar://problem/3908850> BIND doesn't allow zero-length TXT records
 
 Revision 1.478  2004/12/06 21:15:22  ksekar
 <rdar://problem/3884386> mDNSResponder crashed in CheckServiceRegistrations
@@ -466,7 +484,7 @@ Revision 1.390  2004/08/11 02:17:01  cheshire
 <rdar://problem/3514236> Registering service with port number 0 should create a "No Such Service" record
 
 Revision 1.389  2004/08/10 23:19:14  ksekar
-<rdar://problem/3722542>: DNS Extension daemon for Wide Area Rendezvous
+<rdar://problem/3722542>: DNS Extension daemon for Wide Area Service Discovery
 Moved routines/constants to allow extern access for garbage collection daemon
 
 Revision 1.388  2004/07/30 17:40:06  ksekar
@@ -2531,8 +2549,9 @@ mDNSlocal mStatus mDNS_Register_internal(mDNS *const m, AuthRecord *const rr)
 	if (!ValidateDomainName(rr->resrec.name))
 		{ LogMsg("Attempt to register record with invalid name: %s", ARDisplayString(m, rr)); return(mStatus_Invalid); }
 
-	// Some (or perhaps all) versions of BIND named (name daemon) don't allow updates with zero-length rdata. It's common for
-	// existing mDNS clients to create empty TXT records, so we silently change those to a TXT record containing a single empty string.
+	// BIND named (name daemon) doesn't allow TXT records with zero-length rdata. This is strictly speaking correct,
+	// since RFC 1035 specifies a TXT record as "One or more <character-string>s", not "Zero or more <character-string>s".
+	// Since some legacy apps try to create zero-length TXT records, we'll silently correct it here.
 	if (rr->resrec.rrtype == kDNSType_TXT && rr->resrec.rdlength == 0) { rr->resrec.rdlength = 1; rr->resrec.rdata->u.txt.c[0] = 0; }
 
 	// Don't do this until *after* we've set rr->resrec.rdlength
@@ -2540,8 +2559,7 @@ mDNSlocal mStatus mDNS_Register_internal(mDNS *const m, AuthRecord *const rr)
 		{ LogMsg("Attempt to register record with invalid rdata: %s", ARDisplayString(m, rr)); return(mStatus_Invalid); }
 
 	rr->resrec.namehash   = DomainNameHashValue(rr->resrec.name);
-	rr->resrec.rdatahash  = RDataHashValue(rr->resrec.rdlength, &rr->resrec.rdata->u);
-	rr->resrec.rdnamehash = target ? DomainNameHashValue(target) : 0;
+	rr->resrec.rdatahash  = target ? DomainNameHashValue(target) : RDataHashValue(rr->resrec.rdlength, &rr->resrec.rdata->u);
 	
 	if (rr->resrec.InterfaceID == mDNSInterface_LocalOnly)
 		{
@@ -2571,7 +2589,7 @@ mDNSlocal mStatus mDNS_Register_internal(mDNS *const m, AuthRecord *const rr)
 	
 	if (r)
 		{
-		debugf("Adding %p %##s (%s) to duplicate list", rr, rr->resrec.name->c, DNSTypeName(rr->resrec.rrtype));
+		debugf("Adding to duplicate list %p %s", rr, ARDisplayString(m,rr));
 		*d = rr;
 		// If the previous copy of this record is already verified unique,
 		// then indicate that we should move this record promptly to kDNSRecordTypeUnique state.
@@ -2582,7 +2600,7 @@ mDNSlocal mStatus mDNS_Register_internal(mDNS *const m, AuthRecord *const rr)
 		}
 	else
 		{
-		debugf("Adding %p %##s (%s) to active record list", rr, rr->resrec.name->c, DNSTypeName(rr->resrec.rrtype));
+		debugf("Adding to active record list %p %s", rr, ARDisplayString(m,rr));
 		if (!m->NewLocalRecords) m->NewLocalRecords = rr;
 		*p = rr;
 		}
@@ -2808,7 +2826,7 @@ mDNSlocal void AddAdditionalsToResponseList(mDNS *const m, AuthRecord *ResponseR
 			for (rr2=m->ResourceRecords; rr2; rr2=rr2->next)					// Scan list of resource records
 				if (RRTypeIsAddressType(rr2->resrec.rrtype) &&					// For all address records (A/AAAA) ...
 					ResourceRecordIsValidInterfaceAnswer(rr2, InterfaceID) &&	// ... which are valid for answer ...
-					rr->resrec.rdnamehash == rr2->resrec.namehash &&			// ... whose name is the name of the SRV target
+					rr->resrec.rdatahash == rr2->resrec.namehash &&			// ... whose name is the name of the SRV target
 					SameDomainName(&rr->resrec.rdata->u.srv.target, rr2->resrec.name))
 					AddRecordToResponseList(nrpp, rr2, rr);
 		}
@@ -2999,7 +3017,7 @@ mDNSlocal void SendResponses(mDNS *const m)
 				if (RRTypeIsAddressType(r2->resrec.rrtype) &&			// For all address records (A/AAAA) ...
 					ResourceRecordIsValidAnswer(r2) &&					// ... which are valid for answer ...
 					rr->LastMCTime - r2->LastMCTime >= 0 &&				// ... which we have not sent recently ...
-					rr->resrec.rdnamehash == r2->resrec.namehash &&		// ... whose name is the name of the SRV target
+					rr->resrec.rdatahash == r2->resrec.namehash &&		// ... whose name is the name of the SRV target
 					SameDomainName(&rr->resrec.rdata->u.srv.target, r2->resrec.name) &&
 					(rr->ImmedAnswer == mDNSInterfaceMark || rr->ImmedAnswer == r2->resrec.InterfaceID))
 					r2->ImmedAdditional = r2->resrec.InterfaceID;		// ... then mark this address record for sending too
@@ -3401,7 +3419,7 @@ mDNSlocal void ReconfirmAntecedents(mDNS *const m, DNSQuestion *q)
 	CacheRecord *rr;
 	domainname *target;
 	FORALL_CACHERECORDS(slot, cg, rr)
-		if ((target = GetRRDomainNameTarget(&rr->resrec)) && rr->resrec.rdnamehash == q->qnamehash && SameDomainName(target, &q->qname))
+		if ((target = GetRRDomainNameTarget(&rr->resrec)) && rr->resrec.rdatahash == q->qnamehash && SameDomainName(target, &q->qname))
 			mDNS_Reconfirm_internal(m, rr, kDefaultReconfirmTimeForNoAnswer);
 	}
 
@@ -3750,7 +3768,7 @@ mDNSlocal void SendQueries(mDNS *const m)
 				m->omsg.h.numAuthorities, m->omsg.h.numAuthorities == 1 ? "" : "s", intf->InterfaceID);
 			if (intf->IPv4Available) mDNSSendDNSMessage(m, &m->omsg, queryptr, intf->InterfaceID, &AllDNSLinkGroup_v4, MulticastDNSPort, -1, mDNSNULL);
 			if (intf->IPv6Available) mDNSSendDNSMessage(m, &m->omsg, queryptr, intf->InterfaceID, &AllDNSLinkGroup_v6, MulticastDNSPort, -1, mDNSNULL);
-			if (!m->SuppressSending) m->SuppressSending = NonZeroTime(m->timenow + mDNSPlatformOneSecond/10);
+			if (!m->SuppressSending) m->SuppressSending = NonZeroTime(m->timenow + (mDNSPlatformOneSecond+9)/10);
 			if (++pktcount >= 1000)
 				{ LogMsg("SendQueries exceeded loop limit %d: giving up", pktcount); break; }
 			// There might be more records left in the known answer list, or more questions to send
@@ -3816,6 +3834,7 @@ mDNSlocal void AnswerQuestionWithResourceRecord(mDNS *const m, DNSQuestion *q, C
 			{
 			q->LastQTime      = m->timenow;
 			q->LastQTxTime    = m->timenow;
+			q->RecentAnswerPkts = 0;
 			q->ThisQInterval  = MaxQuestionInterval;
 			q->RequestUnicast = mDNSfalse;
 			}
@@ -4252,7 +4271,7 @@ mDNSlocal CacheEntity *GetCacheEntity(mDNS *const m, const CacheGroup *const Pre
 		m->rrcache_free = e->next;
 		if (++m->rrcache_totalused >= m->rrcache_report)
 			{
-			LogOperation("RR Cache now using %ld objects", m->rrcache_totalused);
+			debugf("RR Cache now using %ld objects", m->rrcache_totalused);
 			if (m->rrcache_report < 100) m->rrcache_report += 10;
 			else                         m->rrcache_report += 100;
 			}
@@ -5063,7 +5082,7 @@ mDNSlocal mDNSu8 *ProcessQuery(mDNS *const m, const DNSMessage *const query, con
 		// on platforms where the native clock rate is less than fifty ticks per second,
 		// we still guarantee that the final calculated delay is at least one platform tick.
 		// We want to make sure we don't ever allow the delay to be zero ticks,
-		// because if that happens we'll fail the Rendezvous Conformance Test.
+		// because if that happens we'll fail the Bonjour Conformance Test.
 		// Our final computed delay is 20-120ms for normal delayed replies,
 		// or 400-500ms in the case of multi-packet known-answer lists.
 		m->SuppressSending = m->timenow + (delayresponse + (mDNSs32)mDNSRandom((mDNSu32)mDNSPlatformOneSecond*5) + 49) / 50;
@@ -5283,8 +5302,8 @@ mDNSlocal void mDNSCoreReceiveResponse(mDNS *const m,
 				// else, the packet RR has different type or different rdata -- check to see if this is a conflict
 				else if (m->rec.r.resrec.rroriginalttl > 0 && PacketRRConflict(m, rr, &m->rec.r))
 					{
-					debugf("mDNSCoreReceiveResponse: Our Record: %08lX %08lX %s", rr->     resrec.rdatahash, rr->     resrec.rdnamehash, ARDisplayString(m, rr));
-					debugf("mDNSCoreReceiveResponse: Pkt Record: %08lX %08lX %s", m->rec.r.resrec.rdatahash, m->rec.r.resrec.rdnamehash, CRDisplayString(m, &m->rec.r));
+					debugf("mDNSCoreReceiveResponse: Our Record: %08lX %s", rr->     resrec.rdatahash, ARDisplayString(m, rr));
+					debugf("mDNSCoreReceiveResponse: Pkt Record: %08lX %s", m->rec.r.resrec.rdatahash, CRDisplayString(m, &m->rec.r));
 
 					// If this record is marked DependentOn another record for conflict detection purposes,
 					// then *that* record has to be bumped back to probing state to resolve the conflict
@@ -5366,13 +5385,25 @@ mDNSlocal void mDNSCoreReceiveResponse(mDNS *const m,
 							}
 						}
 
-					if (m->rec.r.resrec.rroriginalttl > 0)
+					if (!mDNSPlatformMemSame(m->rec.r.resrec.rdata->u.data, rr->resrec.rdata->u.data, m->rec.r.resrec.rdlength))
+						{
+						// If the rdata of the packet record differs in name capitalization from the record in our cache
+						// then mDNSPlatformMemSame will detect this. In this case, throw the old record away, so that clients get
+						// a 'remove' event for the record with the old capitalization, and then an 'add' event for the new one.
+						rr->resrec.rroriginalttl = 0;
+						rr->UnansweredQueries = MaxUnansweredQueries;
+						SetNextCacheCheckTime(m, rr);
+						// DO NOT break out here -- we want to continue as if we never found it
+						}
+					else if (m->rec.r.resrec.rroriginalttl > 0)
 						{
 						rr->resrec.rroriginalttl = m->rec.r.resrec.rroriginalttl;
 						rr->UnansweredQueries = 0;
 						rr->MPUnansweredQ     = 0;
 						rr->MPUnansweredKA    = 0;
 						rr->MPExpectingKA     = mDNSfalse;
+						SetNextCacheCheckTime(m, rr);
+						break;
 						}
 					else
 						{
@@ -5383,9 +5414,9 @@ mDNSlocal void mDNSCoreReceiveResponse(mDNS *const m,
 						// lifetime (800ms and 900ms from now) which is a pointless waste of network bandwidth.
 						rr->resrec.rroriginalttl = 1;
 						rr->UnansweredQueries = MaxUnansweredQueries;
+						SetNextCacheCheckTime(m, rr);
+						break;
 						}
-					SetNextCacheCheckTime(m, rr);
-					break;
 					}
 				}
 
@@ -6717,7 +6748,9 @@ mDNSexport mStatus mDNS_RegisterService(mDNS *const m, ServiceRecordSet *sr,
 		{
 		mStatus status;
 		mDNS_Lock(m);
-		// Some (or perhaps all) versions of BIND named (name daemon) don't allow updates with zero-length rdata.
+		// BIND named (name daemon) doesn't allow TXT records with zero-length rdata. This is strictly speaking correct,
+		// since RFC 1035 specifies a TXT record as "One or more <character-string>s", not "Zero or more <character-string>s".
+		// Since some legacy apps try to create zero-length TXT records, we'll silently correct it here.
 		// (We have to duplicate this check here because uDNS_RegisterService() bypasses the usual mDNS_Register_internal() bottleneck)
 		if (!sr->RR_TXT.resrec.rdlength) { sr->RR_TXT.resrec.rdlength = 1; sr->RR_TXT.resrec.rdata->u.txt.c[0] = 0; }
 		status = uDNS_RegisterService(m, sr);
@@ -6757,7 +6790,9 @@ mDNSexport mStatus mDNS_AddRecordToService(mDNS *const m, ServiceRecordSet *sr,
 	if (!(sr->RR_SRV.resrec.InterfaceID == mDNSInterface_LocalOnly || IsLocalDomain(sr->RR_SRV.resrec.name)))
 		{
 		mDNS_Lock(m);
-		// Some (or perhaps all) versions of BIND named (name daemon) don't allow updates with zero-length rdata.
+		// BIND named (name daemon) doesn't allow TXT records with zero-length rdata. This is strictly speaking correct,
+		// since RFC 1035 specifies a TXT record as "One or more <character-string>s", not "Zero or more <character-string>s".
+		// Since some legacy apps try to create zero-length TXT records, we'll silently correct it here.
 		// (We have to duplicate this check here because uDNS_AddRecordToService() bypasses the usual mDNS_Register_internal() bottleneck)
 		if (extra->r.resrec.rrtype == kDNSType_TXT && extra->r.resrec.rdlength == 0)
 			{ extra->r.resrec.rdlength = 1; extra->r.resrec.rdata->u.txt.c[0] = 0; }
@@ -6958,7 +6993,7 @@ mDNSlocal void mDNS_GrowCache_internal(mDNS *const m, CacheEntity *storage, mDNS
 	if (storage && numrecords)
 		{
 		mDNSu32 i;
-		LogOperation("Adding cache storage for %d more records (%d bytes)", numrecords, numrecords*sizeof(CacheEntity));
+		debugf("Adding cache storage for %d more records (%d bytes)", numrecords, numrecords*sizeof(CacheEntity));
 		for (i=0; i<numrecords; i++) storage[i].next = &storage[i+1];
 		storage[numrecords-1].next = m->rrcache_free;
 		m->rrcache_free = storage;
