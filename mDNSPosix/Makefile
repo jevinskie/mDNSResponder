@@ -24,6 +24,39 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # $Log: Makefile,v $
+# Revision 1.66  2006/01/06 01:06:17  cheshire
+# <rdar://problem/3978979> Compile library and client programs in one pass
+#
+# Revision 1.65  2005/12/21 21:15:57  cheshire
+# Add missing dependency: Identify.c textually imports mDNS.c
+#
+# Revision 1.64  2005/10/25 23:55:47  cheshire
+# Add tiger to list of target platforms
+#
+# Revision 1.63  2005/10/11 21:30:44  cheshire
+# Add "-Wunreachable-code" (commented out for now)
+#
+# Revision 1.62  2005/06/30 21:46:55  cheshire
+# <rdar://problem/4167287> Solaris should use unix domain sockets, not loopback
+#
+# Revision 1.61  2005/06/30 20:46:05  cheshire
+# Added Makefile rule to build threadsafe object files where necessary using "-D_REENTRANT".
+#
+# Revision 1.60  2005/06/30 10:42:38  cheshire
+# Turn on "-Werror" and "-O" for better error reporting
+#
+# Revision 1.59  2005/04/14 21:07:10  rpantos
+# Bug #: 4089257, Clean build broken for Java support on POSIX
+# Submitted by: Roger Pantos
+# Reviewed by: Kiren Sekar
+#
+# Revision 1.58  2005/04/08 21:37:57  ksekar
+# <rdar://problem/3792767> get_ifi_info doesn't return IPv6 interfaces on Linux
+#
+# Revision 1.57  2005/03/17 04:02:28  cheshire
+# <rdar://problem/3986419> mDNSResponder won't compile with gcc4 on Tiger
+# Changed Makefile to link using gcc instead of libtool
+#
 # Revision 1.56  2005/02/02 02:25:21  cheshire
 # <rdar://problem/3980388> /var/run/mDNSResponder should be /var/run/mdnsd on Linux
 #
@@ -221,7 +254,6 @@ RM = rm
 LN = ln -s -f
 CFLAGS_COMMON = -I. -I$(COREDIR) -I$(SHAREDDIR) -W -Wall -DPID_FILE=\"/var/run/mdnsd.pid\" -DMDNS_UDS_SERVERPATH=\"/var/run/mdnsd\"
 LIBFLAGS =
-DNSEXT_FLAGS = -D_REENTRANT -g -Wall -lpthread
 LDSUFFIX = so
 JAVACFLAGS_OS = -fPIC -shared -ldns_sd
 
@@ -233,7 +265,10 @@ OBJDIR = objects/debug
 BUILDDIR = build/debug
 STRIP = echo 
 else
-CFLAGS_DEBUG = -O0 -DMDNS_DEBUGMSGS=0 
+# We use -Os for two reasons:
+# 1. We want to make small binaries, suitable for putting into hardware devices
+# 2. Some of the code analysis warnings only work when some form of optimization is enabled
+CFLAGS_DEBUG = -Os -DMDNS_DEBUGMSGS=0 
 OBJDIR = objects/prod
 BUILDDIR = build/prod
 STRIP = strip -S 
@@ -242,7 +277,7 @@ endif
 # Configure per-OS peculiarities
 ifeq ($(os),solaris)
 CFLAGS_OS = -DNOT_HAVE_DAEMON -DNOT_HAVE_SA_LEN -DNOT_HAVE_SOCKLEN_T -DNOT_HAVE_IF_NAMETOINDEX \
-	 -DLOG_PERROR=0 -D_XPG4_2 -D__EXTENSIONS__ -DHAVE_BROKEN_RECVIF_NAME -DUSE_TCP_LOOPBACK
+	 -DLOG_PERROR=0 -D_XPG4_2 -D__EXTENSIONS__ -DHAVE_BROKEN_RECVIF_NAME
 CC = gcc
 LD = gcc -shared
 LIBFLAGS = -lsocket -lnsl -lresolv
@@ -253,7 +288,7 @@ endif
 else
 
 ifeq ($(os),linux)
-CFLAGS_OS = -DNOT_HAVE_SA_LEN -DUSES_NETLINK
+CFLAGS_OS = -DNOT_HAVE_SA_LEN -DUSES_NETLINK -DHAVE_LINUX
 JAVACFLAGS_OS += -I$(JDK)/include/linux
 OPTIONALTARG = nss_mdns
 OPTINSTALL   = InstalledNSS
@@ -281,7 +316,7 @@ LDCONFIG = ldconfig
 else
 
 ifeq ($(os),jaguar)
-CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp -DNOT_HAVE_SOCKLEN_T
+CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp -Werror -DNOT_HAVE_SOCKLEN_T
 LD = libtool -dynamic
 LIBFLAGS = -lSystem
 LDSUFFIX = dylib
@@ -290,7 +325,7 @@ JAVACFLAGS_OS = -dynamiclib -I/System/Library/Frameworks/JavaVM.framework/Header
 else
 
 ifeq ($(os),panther)
-CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp #-pedantic
+CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp -Werror
 LD = libtool -dynamic
 LIBFLAGS = -lSystem
 LDSUFFIX = dylib
@@ -299,9 +334,9 @@ JAVACFLAGS_OS = -dynamiclib -I/System/Library/Frameworks/JavaVM.framework/Header
 else
 
 ifeq ($(os),tiger)
-CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp -Wdeclaration-after-statement
+CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp -Werror -Wdeclaration-after-statement #-Wunreachable-code
 CC = @gcc-4.0
-LD = libtool -dynamic
+LD = $(CC) -dynamiclib
 LIBFLAGS = -lSystem
 LDSUFFIX = dylib
 JDK = /System/Library/Frameworks/JavaVM.framework/Home
@@ -309,7 +344,7 @@ JAVACFLAGS_OS = -dynamiclib -I/System/Library/Frameworks/JavaVM.framework/Header
 else
 
 $(error ERROR: Must specify target OS on command-line, e.g. "make os=tiger [target]".\
-Supported operating systems include: jaguar, panther, linux, netbsd, freebsd, openbsd, solaris) 
+Supported operating systems include: jaguar, panther, tiger, linux, netbsd, freebsd, openbsd, solaris) 
 endif
 endif
 endif
@@ -370,9 +405,9 @@ CFLAGS = $(CFLAGS_COMMON) $(CFLAGS_OS) $(CFLAGS_DEBUG)
 
 #############################################################################
 
-all: setup Daemon libdns_sd Client Responder ProxyResponder Identify NetMonitor dnsextd $(OPTIONALTARG)
+all: setup Daemon libdns_sd Clients SAClient SAResponder SAProxyResponder Identify NetMonitor dnsextd $(OPTIONALTARG)
 
-install: setup InstalledDaemon InstalledLib InstalledStartup InstalledManPages $(OPTINSTALL)
+install: setup InstalledDaemon InstalledStartup InstalledLib InstalledManPages InstalledClients $(OPTINSTALL)
 
 # 'setup' sets up the build directory structure the way we want
 setup:
@@ -383,8 +418,9 @@ setup:
 
 # clean removes targets and objects
 clean:
-	if test -d $(OBJDIR)   ; then rm -r $(OBJDIR)   ; fi
-	if test -d $(BUILDDIR) ; then rm -r $(BUILDDIR) ; fi
+	@if test -d $(OBJDIR)   ; then rm -r $(OBJDIR)   ; fi
+	@if test -d $(BUILDDIR) ; then rm -r $(BUILDDIR) ; fi
+	@$(MAKE) -C ../Clients clean
 
 #############################################################################
 
@@ -410,6 +446,12 @@ $(BUILDDIR)/libdns_sd.$(LDSUFFIX): $(CLIENTLIBOBJS)
 	@$(LD) $(LIBFLAGS) -o $@ $+
 	@$(STRIP) $@
 
+Clients: setup libdns_sd ../Clients/build/dns-sd
+	@echo "Clients done"
+
+../Clients/build/dns-sd:
+	@$(MAKE) -C ../Clients
+
 # nss_mdns target builds the Name Service Switch module
 nss_mdns: setup $(BUILDDIR)/$(NSSLIBFILE)
 	@echo "Name Service Switch module done"
@@ -430,13 +472,18 @@ InstalledLib: $(INSTBASE)/lib/libdns_sd.$(LDSUFFIX).$(LIBVERS) $(INSTBASE)/inclu
 InstalledStartup: $(STARTUPSCRIPTDIR)/$(STARTUPSCRIPTNAME)
 	@echo $+ " installed"
 
-InstalledNSS: $(NSSINSTPATH)/$(NSSLINKNAME) /etc/nss_mdns.conf $(MANPATH)/man5/nss_mdns.conf.5 $(MANPATH)/man8/libnss_mdns.8
-	@echo $+ " installed"
-
 InstalledManPages: $(MANPATH)/man8/mdnsd.8
 	@echo $+ " installed"
 
+InstalledClients: $(INSTBASE)/bin/dns-sd
+	@echo $+ " installed"
+
+InstalledNSS: $(NSSINSTPATH)/$(NSSLINKNAME) /etc/nss_mdns.conf $(MANPATH)/man5/nss_mdns.conf.5 $(MANPATH)/man8/libnss_mdns.8
+	@echo $+ " installed"
+
+# Note: If daemon already installed, we make sure it's stopped before overwriting it
 $(INSTBASE)/sbin/mdnsd: $(BUILDDIR)/mdnsd
+	@if test -x $@; then $(STARTUPSCRIPTDIR)/$(STARTUPSCRIPTNAME) stop; fi
 	$(CP) $< $@
 
 $(INSTBASE)/lib/libdns_sd.$(LDSUFFIX).$(LIBVERS): $(BUILDDIR)/libdns_sd.$(LDSUFFIX)
@@ -450,9 +497,12 @@ endif
 $(INSTBASE)/include/dns_sd.h: $(SHAREDDIR)/dns_sd.h
 	$(CP) $< $@
 
-$(STARTUPSCRIPTDIR)/$(STARTUPSCRIPTNAME): mdnsd.sh $(STARTUPSCRIPTDIR)
+# We make this target dependent on $(INSTBASE)/sbin/mdnsd because we need to ensure
+# that the daemon is installed *before* we try to execute the command to start it.
+$(STARTUPSCRIPTDIR)/$(STARTUPSCRIPTNAME): mdnsd.sh $(STARTUPSCRIPTDIR) $(INSTBASE)/sbin/mdnsd
 	$(CP) $< $@
 	chmod ugo+x $@
+	$@ start
 ifdef RUNLEVELSCRIPTSDIR
 ifeq ($(wildcard $(RUNLEVELSCRIPTSDIR)/runlevels/default), $(RUNLEVELSCRIPTSDIR)/runlevels/default)
 	$(LN) $@ $(RUNLEVELSCRIPTSDIR)/runlevels/default/mdns
@@ -465,6 +515,21 @@ else
 	$(LN) $@ $(RUNLEVELSCRIPTSDIR)/rc6.d/K16mdns
 endif
 endif
+
+$(MANPATH)/man5/%.5: %.5
+	cp $< $@
+	chmod 444 $@
+
+$(MANPATH)/man8/%.8: %.8
+	cp $< $@
+	chmod 444 $@
+
+$(MANPATH)/man8/mdnsd.8: $(SHAREDDIR)/mDNSResponder.8
+	cp $< $@
+	chmod 444 $@
+
+$(INSTBASE)/bin/dns-sd: ../Clients/build/dns-sd
+	$(CP) $< $@
 
 $(NSSINSTPATH)/$(NSSLINKNAME): $(NSSINSTPATH)/$(NSSLIBFILE)
 	$(LN) $< $@
@@ -482,18 +547,6 @@ $(NSSINSTPATH)/$(NSSLIBFILE): $(BUILDDIR)/$(NSSLIBFILE)
 	cp -f /etc/nsswitch.conf /etc/nsswitch.conf.pre-mdns
 	sed -e '/mdns/!s/^\(hosts:.*\)dns\(.*\)/\1mdns dns\2/' /etc/nsswitch.conf.pre-mdns > /etc/nsswitch.conf
 
-$(MANPATH)/man5/%.5: %.5
-	cp $< $@
-	chmod 444 $@
-
-$(MANPATH)/man8/%.8: %.8
-	cp $< $@
-	chmod 444 $@
-
-$(MANPATH)/man8/mdnsd.8: $(SHAREDDIR)/mDNSResponder.8
-	cp $< $@
-	chmod 444 $@
-
 #############################################################################
 
 # The following targets build Java wrappers for the dns-sd.h API.
@@ -509,8 +562,8 @@ Java: setup $(BUILDDIR)/dns_sd.jar $(BUILDDIR)/libjdns_sd.$(LDSUFFIX)
 
 JAVASRC	= $(SHAREDDIR)/Java
 JARCONTENTS =	$(OBJDIR)/com/apple/dnssd/DNSSDService.class \
-				$(OBJDIR)/com/apple/dnssd/DNSRecord.class \
 				$(OBJDIR)/com/apple/dnssd/DNSSDException.class \
+				$(OBJDIR)/com/apple/dnssd/DNSRecord.class \
 				$(OBJDIR)/com/apple/dnssd/TXTRecord.class \
 				$(OBJDIR)/com/apple/dnssd/DNSSDRegistration.class \
 				$(OBJDIR)/com/apple/dnssd/BaseListener.class \
@@ -521,11 +574,11 @@ JARCONTENTS =	$(OBJDIR)/com/apple/dnssd/DNSSDService.class \
 				$(OBJDIR)/com/apple/dnssd/DomainListener.class \
 				$(OBJDIR)/com/apple/dnssd/DNSSD.class
 
-$(BUILDDIR)/dns_sd.jar: $(JARCONTENTS)
+$(BUILDDIR)/dns_sd.jar: $(JARCONTENTS) setup
 	$(JAR) -cf $@ -C $(OBJDIR) com
 
-$(BUILDDIR)/libjdns_sd.$(LDSUFFIX): $(JAVASRC)/JNISupport.c $(OBJDIR)/DNSSD.java.h
-	$(CC) -o $@ $< $(JAVACFLAGS) -I$(OBJDIR)
+$(BUILDDIR)/libjdns_sd.$(LDSUFFIX): $(JAVASRC)/JNISupport.c $(OBJDIR)/DNSSD.java.h setup libdns_sd
+	$(CC) -o $@ $< $(JAVACFLAGS) -I$(OBJDIR) -L$(BUILDDIR)
 
 $(OBJDIR)/com/apple/dnssd/%.class:	$(JAVASRC)/%.java
 	$(JAVAC) -d $(OBJDIR) -classpath $(OBJDIR) $<
@@ -544,7 +597,7 @@ $(OBJDIR)/DNSSD.java.h: $(OBJDIR)/com/apple/dnssd/DNSSD.class
 
 # The following target builds documentation for the Java wrappers.
 
-JavaDoc: setup Java
+JavaDoc: Java setup
 	$(JAVADOC) $(JAVASRC)/*.java -classpath $(OBJDIR) -d $(BUILDDIR) -public
 
 #############################################################################
@@ -554,13 +607,13 @@ SPECIALOBJ = $(OBJDIR)/mDNSPosix.c.o $(OBJDIR)/mDNSUNP.c.o $(OBJDIR)/mDNSDebug.c
 COMMONOBJ  = $(SPECIALOBJ) $(OBJDIR)/mDNS.c.o
 APPOBJ     = $(COMMONOBJ) $(OBJDIR)/ExampleClientApp.c.o
 
-Client: setup $(BUILDDIR)/mDNSClientPosix
+SAClient: setup $(BUILDDIR)/mDNSClientPosix
 	@echo "Embedded Standalone Client done"
 
-Responder: setup $(BUILDDIR)/mDNSResponderPosix
+SAResponder: setup $(BUILDDIR)/mDNSResponderPosix
 	@echo "Embedded Standalone Responder done"
 
-ProxyResponder: setup $(BUILDDIR)/mDNSProxyResponderPosix
+SAProxyResponder: setup $(BUILDDIR)/mDNSProxyResponderPosix
 	@echo "Embedded Standalone ProxyResponder done"
 
 Identify: setup $(BUILDDIR)/mDNSIdentify
@@ -584,11 +637,13 @@ $(BUILDDIR)/mDNSProxyResponderPosix: $(COMMONOBJ)  $(OBJDIR)/ProxyResponder.c.o
 $(BUILDDIR)/mDNSIdentify:            $(SPECIALOBJ) $(OBJDIR)/Identify.c.o
 	$(CC) $+ -o $@ $(LIBFLAGS)
 
+$(OBJDIR)/Identify.c.o:              $(COREDIR)/mDNS.c # Note: Identify.c textually imports mDNS.c
+
 $(BUILDDIR)/mDNSNetMonitor:          $(SPECIALOBJ) $(OBJDIR)/NetMonitor.c.o
 	$(CC) $+ -o $@ $(LIBFLAGS)
 
-$(BUILDDIR)/dnsextd:                 $(SPECIALOBJ) $(OBJDIR)/dnsextd.c.o
-	$(CC) $+ -o $@ $(LIBFLAGS) $(DNSEXT_FLAGS)
+$(BUILDDIR)/dnsextd:                 $(SPECIALOBJ) $(OBJDIR)/dnsextd.c.threadsafe.o
+	$(CC) $+ -o $@ $(LIBFLAGS) -lpthread
 
 #############################################################################
 
@@ -601,6 +656,9 @@ $(OBJDIR)/%.c.o:	$(COREDIR)/%.c
 
 $(OBJDIR)/%.c.o:	$(SHAREDDIR)/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OBJDIR)/%.c.threadsafe.o:	%.c
+	$(CC) $(CFLAGS) -D_REENTRANT -c -o $@ $<
 
 $(OBJDIR)/%.c.so.o:	%.c
 	$(CC) $(CFLAGS) -c -fPIC -o $@ $<

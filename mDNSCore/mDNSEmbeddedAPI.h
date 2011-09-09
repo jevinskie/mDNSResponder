@@ -60,6 +60,9 @@
     Change History (most recent first):
 
 $Log: mDNSEmbeddedAPI.h,v $
+Revision 1.288  2005/12/21 03:24:58  cheshire
+<rdar://problem/4388858> Code changes required to compile on EFI
+
 Revision 1.287  2005/10/20 00:10:33  cheshire
 <rdar://problem/4290265> Add check to avoid crashing NAT gateways that have buggy DNS relay code
 
@@ -998,7 +1001,17 @@ Merge in license terms from Quinn's copy, in preparation for Darwin release
 #ifndef __mDNSClientAPI_h
 #define __mDNSClientAPI_h
 
+#if defined(EFI32) || defined(EFI64)
+// EFI doesn't have stdarg.h
+#include "Tiano.h"
+#define va_list			VA_LIST
+#define va_start(a, b)	VA_START(a, b)
+#define va_end(a)		VA_END(a)
+#define va_arg(a, b)	VA_ARG(a, b)
+#else
 #include <stdarg.h>		// stdarg.h is required for for va_list support for the mDNS_vsnprintf declaration
+#endif
+
 #include "mDNSDebug.h"
 
 #ifdef __cplusplus

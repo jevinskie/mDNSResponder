@@ -3,14 +3,14 @@
  * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
- * 
+ *
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
  * compliance with the License. Please obtain a copy of the License at
  * http://www.opensource.apple.com/apsl/ and read it before using this
  * file.
- * 
+ *
  * The Original Code and all software distributed under the License are
  * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
  * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
@@ -18,12 +18,27 @@
  * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
  * Please see the License for the specific language governing rights and
  * limitations under the License.
- * 
+ *
  * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: mDNSMacOSX.c,v $
+Revision 1.323  2006/01/05 21:45:27  cheshire
+<rdar://problem/4400118> Fix uninitialized structure member in IPv6 code
+
+Revision 1.322  2006/01/05 21:41:50  cheshire
+<rdar://problem/4108164> Reword "mach_absolute_time went backwards" dialog
+
+Revision 1.321  2006/01/05 21:35:06  cheshire
+Add (commented out) trigger value for testing "mach_absolute_time went backwards" notice
+
+Revision 1.320  2005/12/03 01:39:28  cheshire
+<rdar://problem/4363411> Improve diagnostic message to indicate that message will not appear to customers
+
+Revision 1.319  2005/12/02 00:02:15  cheshire
+Include recvmsg return value in error message
+
 Revision 1.318  2005/10/20 00:10:34  cheshire
 <rdar://problem/4290265> Add check to avoid crashing NAT gateways that have buggy DNS relay code
 
@@ -1116,7 +1131,7 @@ mDNSlocal void RemoveDefRegDomain(domainname *d)
 	debugf("Requested removal of default registration domain %##s not in contained in list", d->c); 
 	}
 
-mDNSexport void NotifyOfElusiveBug(const char *title, mDNSu32 radarid, const char *msg)
+mDNSexport void NotifyOfElusiveBug(const char *title, const char *msg)	// Both strings are UTF-8 text
 	{
 	static int notifyCount = 0;
 	if (notifyCount) return;
@@ -1138,11 +1153,15 @@ mDNSexport void NotifyOfElusiveBug(const char *title, mDNSu32 radarid, const cha
 		}
 	#endif
 
-	// Send a notification to the user to contact coreos-networking
+	LogMsg("%s", title);
+	LogMsg("%s", msg);
+	// Display a notification to the user
 	notifyCount++;
-	CFStringRef alertHeader  = CFStringCreateWithCString(NULL, title, kCFStringEncodingUTF8);
-	CFStringRef alertFormat  = CFSTR("Congratulations, you've reproduced an elusive bug. Please contact the owner of <rdar://problem/%d>. %s");
-	CFStringRef alertMessage = CFStringCreateWithFormat(NULL, NULL, alertFormat, radarid, msg);
+	static const char footer[] = "(Note: This message only appears on machines with 17.x.x.x IP addresses — i.e. at Apple — not on customer machines.)";
+	CFStringRef alertHeader  = CFStringCreateWithCString(NULL, title,  kCFStringEncodingUTF8);
+	CFStringRef alertBody    = CFStringCreateWithCString(NULL, msg,    kCFStringEncodingUTF8);
+	CFStringRef alertFooter  = CFStringCreateWithCString(NULL, footer, kCFStringEncodingUTF8);
+	CFStringRef alertMessage = CFStringCreateWithFormat(NULL, NULL, CFSTR("%@\r\r%@"), alertBody, alertFooter);
 	CFUserNotificationDisplayNotice(0.0, kCFUserNotificationStopAlertLevel, NULL, NULL, NULL, alertHeader, alertMessage, NULL);
 	}
 
@@ -1342,8 +1361,8 @@ mDNSlocal ssize_t myrecvfrom(const int s, void *const buffer, const size_t max,
 		}
 	if (msg.msg_controllen < (int)sizeof(struct cmsghdr))
 		{
-		if (numLogMessages++ < 100) LogMsg("mDNSMacOSX.c: recvmsg(%d) msg.msg_controllen %d < sizeof(struct cmsghdr) %lu",
-			s, msg.msg_controllen, sizeof(struct cmsghdr));
+		if (numLogMessages++ < 100) LogMsg("mDNSMacOSX.c: recvmsg(%d) returned %d msg.msg_controllen %d < sizeof(struct cmsghdr) %lu",
+			s, n, msg.msg_controllen, sizeof(struct cmsghdr));
 		return(-1);
 		}
 	if (msg.msg_flags & MSG_CTRUNC)
@@ -1518,8 +1537,10 @@ mDNSlocal void myCFSocketCallBack(const CFSocketRef cfs, const CFSocketCallBackT
 			LogMsg("myCFSocketCallBack recvfrom skt %d error %d errno %d (%s) select %d (%spackets waiting) so_error %d so_nread %d fionread %d count %d",
 				s1, err, save_errno, strerror(save_errno), selectresult, FD_ISSET(s1, &readfds) ? "" : "*NO* ", so_error, so_nread, fionread, count);
 		if (numLogMessages > 5)
-			NotifyOfElusiveBug("Flaw in Kernel (select/recvfrom mismatch)", 3375328,
-				"Alternatively, you can send email to radar-3387020@group.apple.com. "
+			NotifyOfElusiveBug("Flaw in Kernel (select/recvfrom mismatch)",
+				"Congratulations, you've reproduced an elusive bug.\r"
+				"Please contact the current assignee of <rdar://problem/3375328>.\r"
+				"Alternatively, you can send email to radar-3387020@group.apple.com. (Note number is different.)\r"
 				"If possible, please leave your machine undisturbed so that someone can come to investigate the problem.");
 
 		sleep(1);		// After logging this error, rate limit so we don't flood syslog
@@ -1981,7 +2002,7 @@ mDNSlocal mStatus SetupSocket(mDNS *const m, CFSocketSet *cp, mDNSBool mcast, co
 		listening_sockaddr6.sin6_family      = AF_INET6;
 		listening_sockaddr6.sin6_port        = port.NotAnInteger;
 		listening_sockaddr6.sin6_flowinfo    = 0;
-//		listening_sockaddr6.sin6_addr = IN6ADDR_ANY_INIT; // Want to receive multicasts AND unicasts on this socket
+		listening_sockaddr6.sin6_addr        = in6addr_any; // Want to receive multicasts AND unicasts on this socket
 		listening_sockaddr6.sin6_scope_id    = 0;
 		err = bind(skt, (struct sockaddr *) &listening_sockaddr6, sizeof(listening_sockaddr6));
 		if (err) { errstr = "bind"; goto fail; }
@@ -1999,8 +2020,10 @@ mDNSlocal mStatus SetupSocket(mDNS *const m, CFSocketSet *cp, mDNSBool mcast, co
 fail:
 	LogMsg("%s error %ld errno %d (%s)", errstr, err, errno, strerror(errno));
 	if (!strcmp(errstr, "bind") && errno == EADDRINUSE)
-		NotifyOfElusiveBug("Setsockopt SO_REUSEPORT failed", 3814904,
-			"Alternatively, you can send email to radar-3387020@group.apple.com. "
+		NotifyOfElusiveBug("Setsockopt SO_REUSEPORT failed",
+			"Congratulations, you've reproduced an elusive bug.\r"
+			"Please contact the current assignee of <rdar://problem/3814904>.\r"
+			"Alternatively, you can send email to radar-3387020@group.apple.com. (Note number is different.)\r"
 			"If possible, please leave your machine undisturbed so that someone can come to investigate the problem.");
 	close(skt);
 	return(err);
@@ -3643,6 +3666,7 @@ mDNSexport mDNSs32 mDNSPlatformRawTime(void)
 	if (clockdivisor == 0) { LogMsg("mDNSPlatformRawTime called before mDNSPlatformTimeInit"); return(0); }
 
 	static uint64_t last_mach_absolute_time = 0;
+	//static uint64_t last_mach_absolute_time = 0x8000000000000000LL;	// Use this value for testing the alert display
 	uint64_t this_mach_absolute_time = mach_absolute_time();
 	if ((int64_t)this_mach_absolute_time - (int64_t)last_mach_absolute_time < 0)
 		{
@@ -3650,9 +3674,14 @@ mDNSexport mDNSs32 mDNSPlatformRawTime(void)
 		LogMsg("mDNSPlatformRawTime: this_mach_absolute_time %08X%08X", this_mach_absolute_time);
 		// Update last_mach_absolute_time *before* calling NotifyOfElusiveBug()
 		last_mach_absolute_time = this_mach_absolute_time;
-		// Only show "mach_absolute_time went backwards" notice on 10.4 (build 8xyyy) or later
+		// Only show "mach_absolute_time went backwards" notice on 10.4 (build 8xyyy) or later.
+		// (This bug happens all the time on 10.3, and we know that's not going to be fixed.)
 		if (mDNSMacOSXSystemBuildNumber(NULL) >= 8)
-			NotifyOfElusiveBug("mach_absolute_time went backwards!", 3438376, "");
+			NotifyOfElusiveBug("mach_absolute_time went backwards!",
+				"This error occurs from time to time, often on newly released hardware, "
+				"and usually the exact cause is different in each instance.\r\r"
+				"Please file a new Radar bug report with the title “mach_absolute_time went backwards” "
+				"and assign it to Radar Component “Kernel” Version “X”.");
 		}
 	last_mach_absolute_time = this_mach_absolute_time;
 

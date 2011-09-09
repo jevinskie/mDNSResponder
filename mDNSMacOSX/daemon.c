@@ -36,8 +36,20 @@
     Change History (most recent first):
 
 $Log: daemon.c,v $
-Revision 1.255.2.1  2005/07/22 21:45:04  ksekar
+Revision 1.260  2005/11/07 01:51:58  cheshire
+<rdar://problem/4331591> Include list of configured DNS servers in SIGINFO output
+
+Revision 1.259  2005/07/22 21:50:55  ksekar
 Fix GCC 4.0/Intel compiler warnings
+
+Revision 1.258  2005/07/04 22:40:26  cheshire
+Additional debugging code to help catch memory corruption
+
+Revision 1.257  2005/03/28 19:28:55  cheshire
+Fix minor typos in LogOperation() messages
+
+Revision 1.256  2005/03/17 22:01:22  cheshire
+Tidy up alignment of lines to make code more readable
 
 Revision 1.255  2005/03/09 00:48:43  cheshire
 <rdar://problem/4015157> QU packets getting sent too early on wake from sleep
@@ -749,59 +761,104 @@ static DNSServiceRegistration      *DNSServiceRegistrationList      = NULL;
 
 char _malloc_options[] = "AXZ";
 
+mDNSexport void LogMemCorruption(const char *format, ...)
+	{
+	char buffer[512];
+	va_list ptr;
+	va_start(ptr,format);
+	buffer[mDNS_vsnprintf((char *)buffer, sizeof(buffer), format, ptr)] = 0;
+	va_end(ptr);
+	LogMsg("!!!! %s !!!!", buffer);
+	NotifyOfElusiveBug("Memory Corruption", 0, buffer);
+	}
+
 mDNSlocal void validatelists(mDNS *const m)
 	{
+	// Check Mach client lists
+	
 	DNSServiceDomainEnumeration *e;
-	DNSServiceBrowser           *b;
-	DNSServiceResolver          *l;
-	DNSServiceRegistration      *r;
-	AuthRecord                  *rr;
-	CacheGroup                  *cg;
-	CacheRecord                 *cr;
-	DNSQuestion                 *q;
-	mDNSu32 slot;
-	NetworkInterfaceInfoOSX     *i;
-
 	for (e = DNSServiceDomainEnumerationList; e; e=e->next)
 		if (e->ClientMachPort == 0 || e->ClientMachPort == (mach_port_t)~0)
-			LogMsg("!!!! DNSServiceDomainEnumerationList: %p is garbage (%X) !!!!", e, e->ClientMachPort);
+			LogMemCorruption("DNSServiceDomainEnumerationList: %p is garbage (%X)", e, e->ClientMachPort);
 
+	DNSServiceBrowser           *b;
 	for (b = DNSServiceBrowserList; b; b=b->next)
 		if (b->ClientMachPort == 0 || b->ClientMachPort == (mach_port_t)~0)
-			LogMsg("!!!! DNSServiceBrowserList: %p is garbage (%X) !!!!", b, b->ClientMachPort);
+			LogMemCorruption("DNSServiceBrowserList: %p is garbage (%X)", b, b->ClientMachPort);
 
+	DNSServiceResolver          *l;
 	for (l = DNSServiceResolverList; l; l=l->next)
 		if (l->ClientMachPort == 0 || l->ClientMachPort == (mach_port_t)~0)
-			LogMsg("!!!! DNSServiceResolverList: %p is garbage (%X) !!!!", l, l->ClientMachPort);
+			LogMemCorruption("DNSServiceResolverList: %p is garbage (%X)", l, l->ClientMachPort);
 
+	DNSServiceRegistration      *r;
 	for (r = DNSServiceRegistrationList; r; r=r->next)
 		if (r->ClientMachPort == 0 || r->ClientMachPort == (mach_port_t)~0)
-			LogMsg("!!!! DNSServiceRegistrationList: %p is garbage (%X) !!!!", r, r->ClientMachPort);
+			LogMemCorruption("DNSServiceRegistrationList: %p is garbage (%X)", r, r->ClientMachPort);
 
+	// Check UDS client lists
+	uds_validatelists();
+
+	// Check core mDNS lists
+	AuthRecord                  *rr;
 	for (rr = m->ResourceRecords; rr; rr=rr->next)
 		{
 		if (rr->resrec.RecordType == 0 || rr->resrec.RecordType == 0xFF)
-			LogMsg("!!!! ResourceRecords list: %p is garbage (%X) !!!!", rr, rr->resrec.RecordType);
+			LogMemCorruption("ResourceRecords list: %p is garbage (%X)", rr, rr->resrec.RecordType);
 		if (rr->resrec.name != &rr->namestorage)
-			LogMsg("!!!! ResourceRecords list: %p name %p does not point to namestorage %p %##s",
+			LogMemCorruption("ResourceRecords list: %p name %p does not point to namestorage %p %##s",
 				rr, rr->resrec.name->c, rr->namestorage.c, rr->namestorage.c);
 		}
 
 	for (rr = m->DuplicateRecords; rr; rr=rr->next)
 		if (rr->resrec.RecordType == 0 || rr->resrec.RecordType == 0xFF)
-			LogMsg("!!!! DuplicateRecords list: %p is garbage (%X) !!!!", rr, rr->resrec.RecordType);
+			LogMemCorruption("DuplicateRecords list: %p is garbage (%X)", rr, rr->resrec.RecordType);
 
+	DNSQuestion                 *q;
 	for (q = m->Questions; q; q=q->next)
 		if (q->ThisQInterval == (mDNSs32)~0)
-			LogMsg("!!!! Questions list: %p is garbage (%lX) !!!!", q, q->ThisQInterval);
+			LogMemCorruption("Questions list: %p is garbage (%lX)", q, q->ThisQInterval);
 
+	CacheGroup                  *cg;
+	CacheRecord                 *cr;
+	mDNSu32 slot;
 	FORALL_CACHERECORDS(slot, cg, cr)
 		if (cr->resrec.RecordType == 0 || cr->resrec.RecordType == 0xFF)
-			LogMsg("!!!! Cache slot %lu: %p is garbage (%X) !!!!", slot, rr, rr->resrec.RecordType);
+			LogMemCorruption("Cache slot %lu: %p is garbage (%X)", slot, rr, rr->resrec.RecordType);
 
+	// Check platform-layer lists
+
+	NetworkInterfaceInfoOSX     *i;
 	for (i = m->p->InterfaceList; i; i = i->next)
 		if (!i->ifa_name)
-			LogMsg("!!!! InterfaceList: %p is garbage !!!!", i);
+			LogMemCorruption("InterfaceList: %p is garbage", i);
+
+	// Check uDNS lists
+
+	for (q = m->uDNS_info.ActiveQueries; q; q=q->next)
+		if (*(long*)q == (mDNSs32)~0)
+			LogMemCorruption("uDNS_info.ActiveQueries: %p is garbage (%lX)", q, *(long*)q);
+
+	ServiceRecordSet            *s;
+	for (s = m->uDNS_info.ServiceRegistrations; s; s=s->next)
+		if (s->next == (ServiceRecordSet*)~0)
+			LogMemCorruption("uDNS_info.ServiceRegistrations: %p is garbage (%lX)", s, s->next);
+
+	for (rr = m->uDNS_info.RecordRegistrations; rr; rr=rr->next)
+		{
+		if (rr->resrec.RecordType == 0 || rr->resrec.RecordType == 0xFF)
+			LogMemCorruption("uDNS_info.RecordRegistrations: %p is garbage (%X)", rr, rr->resrec.RecordType);
+		if (rr->resrec.name != &rr->namestorage)
+			LogMemCorruption("uDNS_info.RecordRegistrations: %p name %p does not point to namestorage %p %##s",
+				rr, rr->resrec.name->c, rr->namestorage.c, rr->namestorage.c);
+		}
+
+	NATTraversalInfo            *n;
+	for (n = m->uDNS_info.NATTraversals; n; n=n->next)
+		if (n->op > 2) LogMemCorruption("uDNS_info.NATTraversals: %p is garbage", n);
+
+	for (n = m->uDNS_info.LLQNatInfo; n; n=n->next)
+		if (n->op > 2) LogMemCorruption("uDNS_info.LLQNatInfo: %p is garbage", n);
 	}
 
 void *mallocL(char *msg, unsigned int size)
@@ -902,8 +959,8 @@ mDNSlocal void AbortClient(mach_port_t ClientMachPort, void *m)
 		while (qptr)
 			{
 			if (m && m != x)
-				LogMsg("%5d: DNSServiceBrowser(%##s) STOP; WARNING m %p != x %p", ClientMachPort, qptr->q.qname.c, m, x);
-			else LogOperation("%5d: DNSServiceBrowser(%##s) STOP", ClientMachPort, qptr->q.qname.c);
+				LogMsg("%5d: DNSServiceBrowse(%##s) STOP; WARNING m %p != x %p", ClientMachPort, qptr->q.qname.c, m, x);
+			else LogOperation("%5d: DNSServiceBrowse(%##s) STOP", ClientMachPort, qptr->q.qname.c);
 			mDNS_StopBrowse(&mDNSStorage, &qptr->q);
 			freePtr = qptr;
 			qptr = qptr->next;
@@ -925,8 +982,8 @@ mDNSlocal void AbortClient(mach_port_t ClientMachPort, void *m)
 		DNSServiceResolver *x = *l;
 		*l = (*l)->next;
 		if (m && m != x)
-			LogMsg("%5d: DNSServiceResolver(%##s) STOP; WARNING m %p != x %p", ClientMachPort, x->i.name.c, m, x);
-		else LogOperation("%5d: DNSServiceResolver(%##s) STOP", ClientMachPort, x->i.name.c);
+			LogMsg("%5d: DNSServiceResolve(%##s) STOP; WARNING m %p != x %p", ClientMachPort, x->i.name.c, m, x);
+		else LogOperation("%5d: DNSServiceResolve(%##s) STOP", ClientMachPort, x->i.name.c);
 		mDNS_StopResolveService(&mDNSStorage, &x->q);
 		freeL("DNSServiceResolver", x);
 		return;
@@ -976,19 +1033,21 @@ mDNSlocal void AbortClientWithLogMessage(mach_port_t c, char *reason, char *msg,
 	while (b && b->ClientMachPort != c) b = b->next;
 	while (l && l->ClientMachPort != c) l = l->next;
 	while (r && r->ClientMachPort != c) r = r->next;
-	if      (e)     LogMsg("%5d: DomainEnumeration(%##s) %s%s",                   c, e->dom.qname.c,            reason, msg);
+
+	if      (e) LogMsg("%5d: DomainEnumeration(%##s) %s%s",                   c, e->dom.qname.c,                reason, msg);
 	else if (b)
-		{
-		for (qptr = b->qlist; qptr; qptr = qptr->next)
-			        LogMsg("%5d: Browser(%##s) %s%s",                             c, qptr->q.qname.c,              reason, msg);
-		}
-	else if (l)     LogMsg("%5d: Resolver(%##s) %s%s",                            c, l->i.name.c,               reason, msg);
+			{
+			for (qptr = b->qlist; qptr; qptr = qptr->next)
+				LogMsg("%5d: Browser(%##s) %s%s",                             c, qptr->q.qname.c,               reason, msg);
+			}
+	else if (l) LogMsg("%5d: Resolver(%##s) %s%s",                            c, l->i.name.c,                   reason, msg);
 	else if (r)
-		{
-		ServiceInstance *si;
-		for (si = r->regs; si; si = si->next) LogMsg("%5d: Registration(%##s) %s%s", c, si->srs.RR_SRV.resrec.name->c, reason, msg);
-		}
-	else            LogMsg("%5d: (%s) %s, but no record of client can be found!", c,                            reason, msg);
+			{
+			ServiceInstance *si;
+			for (si = r->regs; si; si = si->next)
+				LogMsg("%5d: Registration(%##s) %s%s",                        c, si->srs.RR_SRV.resrec.name->c, reason, msg);
+			}
+	else        LogMsg("%5d: (%s) %s, but no record of client can be found!", c,                                reason, msg);
 
 	AbortClient(c, m);
 	}
@@ -1410,7 +1469,7 @@ mDNSexport kern_return_t provide_DNSServiceResolverResolve_rpc(mach_port_t unuse
 	DNSServiceResolverList = x;
 
 	// Do the operation
-	LogOperation("%5d: DNSServiceResolver(%##s) START", client, x->i.name.c);
+	LogOperation("%5d: DNSServiceResolve(%##s) START", client, x->i.name.c);
 	err = mDNS_StartResolveService(&mDNSStorage, &x->q, &x->i, FoundInstanceInfo, x);
 	if (err) { AbortClient(client, x); errormsg = "mDNS_StartResolveService"; goto fail; }
 
@@ -2283,6 +2342,7 @@ mDNSlocal void INFOCallback(void)
 	DNSServiceResolver          *l;
 	DNSServiceRegistration      *r;
 	NetworkInterfaceInfoOSX     *i;
+	DNSServer *s;
 
 	LogMsgIdent(mDNSResponderVersionString, "---- BEGIN STATE LOG ----");
 	
@@ -2323,6 +2383,9 @@ mDNSlocal void INFOCallback(void)
 				i->ifinfo.McastTxRx ? "TxRx" : "    ",
 				&i->ifinfo.ip);
 		}
+
+	for (s = mDNSStorage.uDNS_info.Servers; s; s = s->next)
+		LogMsgNoIdent("DNS Server %#a %##s", &s->addr, s->domain.c);
 
 	LogMsgIdent(mDNSResponderVersionString, "----  END STATE LOG  ----");
 	}

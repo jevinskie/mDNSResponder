@@ -23,6 +23,11 @@
     Change History (most recent first):
 
 $Log: uDNS.c,v $
+Revision 1.226  2005/12/20 02:46:33  cheshire
+<rdar://problem/4175520> mDNSPosix wide-area registration broken
+Check too strict -- we can still do wide-area registration (without NAT-PMP)
+without having to know our gateway address
+
 Revision 1.225  2005/10/21 22:51:17  cheshire
 <rdar://problem/4290265> Add check to avoid crashing NAT gateways that have buggy DNS relay code
 Refinement: Shorten "check-for-broken-dns-relay" to just "dnsbugtest"
@@ -1962,7 +1967,7 @@ mDNSexport void mDNS_SetPrimaryInterfaceInfo(mDNS *m, const mDNSAddr *v4addr, co
 	if (router) u->Router       = *router;  else u->Router.ip.v4.NotAnInteger = 0;
 	// setting router to zero indicates that nat mappings must be reestablished when router is reset
 	
-	if ((v4Changed || RouterChanged || v6Changed) && (v4addr && router))
+	if ((v4Changed || RouterChanged || v6Changed) && v4addr)
 		{
 		// don't update these unless we've got V4
 		UpdateHostnameRegistrations(m);

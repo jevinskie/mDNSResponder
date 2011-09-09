@@ -37,6 +37,19 @@
 	Change History (most recent first):
 
 $Log: mDNSPosix.c,v $
+Revision 1.75  2006/01/05 22:04:57  cheshire
+<rdar://problem/4399479> Log error message when send fails with "operation not permitted"
+
+Revision 1.74  2006/01/05 21:45:27  cheshire
+<rdar://problem/4400118> Fix uninitialized structure member in IPv6 code
+
+Revision 1.73  2005/10/11 21:31:46  cheshire
+<rdar://problem/4296177> Don't depend on IP_RECVTTL succeeding (not available on all platforms)
+
+Revision 1.72  2005/09/08 20:45:26  cheshire
+Default dot-local host name should be "Computer" not "Macintosh",
+since the machine this is running on is most likely NOT a Mac.
+
 Revision 1.71  2005/02/26 01:29:12  cheshire
 Ignore multicasts accidentally delivered to our unicast receiving socket
 
@@ -434,11 +447,15 @@ mDNSexport mStatus mDNSPlatformSendUDP(const mDNS *const m, const void *const ms
 	if      (err > 0) err = 0;
 	else if (err < 0)
 		{
+        // Don't report EHOSTDOWN (i.e. ARP failure), ENETDOWN, or no route to host for unicast destinations
+		if (!mDNSAddressIsAllDNSLinkGroup(dst))
+			if (errno == EHOSTDOWN || errno == ENETDOWN || errno == EHOSTUNREACH || errno == ENETUNREACH) return(mStatus_TransientErr);
+
 		if (thisIntf)
-			verbosedebugf("mDNSPlatformSendUDP got error %d (%s) sending packet to %#a on interface %#a/%s/%d",
+			LogMsg("mDNSPlatformSendUDP got error %d (%s) sending packet to %#a on interface %#a/%s/%d",
 						  errno, strerror(errno), dst, &thisIntf->coreIntf.ip, thisIntf->intfName, thisIntf->index);
 		else
-			verbosedebugf("mDNSPlatformSendUDP got error %d (%s) sending packet to %#a", errno, strerror(errno), dst);
+			LogMsg("mDNSPlatformSendUDP got error %d (%s) sending packet to %#a", errno, strerror(errno), dst);
 		}
 
 	return PosixErrorToStatus(err);
@@ -733,6 +750,7 @@ mDNSlocal int SetupSocket(struct sockaddr *intfAddr, mDNSIPPort port, int interf
 	static const int kOn = 1;
 	static const int kIntTwoFiveFive = 255;
 	static const unsigned char kByteTwoFiveFive = 255;
+	const mDNSBool JoinMulticastGroup = (port.NotAnInteger != 0);
 	
 	(void) interfaceIndex;	// This parameter unused on plaforms that don't have IPv6
 	assert(intfAddr != NULL);
@@ -790,13 +808,13 @@ mDNSlocal int SetupSocket(struct sockaddr *intfAddr, mDNSIPPort port, int interf
 	#if defined(IP_RECVTTL)									// Linux
 		if (err == 0)
 			{
-			err = setsockopt(*sktPtr, IPPROTO_IP, IP_RECVTTL, &kOn, sizeof(kOn));
-			if (err < 0) { err = errno; perror("setsockopt - IP_RECVTTL"); }
+			setsockopt(*sktPtr, IPPROTO_IP, IP_RECVTTL, &kOn, sizeof(kOn));
+			// We no longer depend on being able to get the received TTL, so don't worry if the option fails
 			}
 	#endif
 
 		// Add multicast group membership on this interface
-		if (err == 0 && port.NotAnInteger)
+		if (err == 0 && JoinMulticastGroup)
 			{
 			imr.imr_multiaddr.s_addr = AllDNSLinkGroupv4.NotAnInteger;
 			imr.imr_interface        = ((struct sockaddr_in*)intfAddr)->sin_addr;
@@ -805,7 +823,7 @@ mDNSlocal int SetupSocket(struct sockaddr *intfAddr, mDNSIPPort port, int interf
 			}
 
 		// Specify outgoing interface too
-		if (err == 0 && port.NotAnInteger)
+		if (err == 0 && JoinMulticastGroup)
 			{
 			err = setsockopt(*sktPtr, IPPROTO_IP, IP_MULTICAST_IF, &((struct sockaddr_in*)intfAddr)->sin_addr, sizeof(struct in_addr));
 			if (err < 0) { err = errno; perror("setsockopt - IP_MULTICAST_IF"); }
@@ -862,7 +880,7 @@ mDNSlocal int SetupSocket(struct sockaddr *intfAddr, mDNSIPPort port, int interf
 	#endif
 
 		// Add multicast group membership on this interface
-		if (err == 0 && port.NotAnInteger)
+		if (err == 0 && JoinMulticastGroup)
 			{
 			imr6.ipv6mr_multiaddr       = *(const struct in6_addr*)&AllDNSLinkGroupv6;
 			imr6.ipv6mr_interface       = interfaceIndex;
@@ -876,7 +894,7 @@ mDNSlocal int SetupSocket(struct sockaddr *intfAddr, mDNSIPPort port, int interf
 			}
 
 		// Specify outgoing interface too
-		if (err == 0 && port.NotAnInteger)
+		if (err == 0 && JoinMulticastGroup)
 			{
 			u_int	multicast_if = interfaceIndex;
 			err = setsockopt(*sktPtr, IPPROTO_IPV6, IPV6_MULTICAST_IF, &multicast_if, sizeof(multicast_if));
@@ -918,7 +936,7 @@ mDNSlocal int SetupSocket(struct sockaddr *intfAddr, mDNSIPPort port, int interf
 			bindAddr6.sin6_family      = AF_INET6;
 			bindAddr6.sin6_port        = port.NotAnInteger;
 			bindAddr6.sin6_flowinfo    = 0;
-//			bindAddr6.sin6_addr.s_addr = IN6ADDR_ANY_INIT; // Want to receive multicasts AND unicasts on this socket
+			bindAddr6.sin6_addr        = in6addr_any; // Want to receive multicasts AND unicasts on this socket
 			bindAddr6.sin6_scope_id    = 0;
 			err = bind(*sktPtr, (struct sockaddr *) &bindAddr6, sizeof(bindAddr6));
 			if (err < 0) { err = errno; perror("bind"); fflush(stderr); }
@@ -1345,12 +1363,12 @@ mDNSexport mStatus mDNSPlatformInit(mDNS *const m)
 	// Set up the nice label
 	m->nicelabel.c[0] = 0;
 	GetUserSpecifiedFriendlyComputerName(&m->nicelabel);
-	if (m->nicelabel.c[0] == 0) MakeDomainLabelFromLiteralString(&m->nicelabel, "Macintosh");
+	if (m->nicelabel.c[0] == 0) MakeDomainLabelFromLiteralString(&m->nicelabel, "Computer");
 
 	// Set up the RFC 1034-compliant label
 	m->hostlabel.c[0] = 0;
 	GetUserSpecifiedRFC1034ComputerName(&m->hostlabel);
-	if (m->hostlabel.c[0] == 0) MakeDomainLabelFromLiteralString(&m->hostlabel, "Macintosh");
+	if (m->hostlabel.c[0] == 0) MakeDomainLabelFromLiteralString(&m->hostlabel, "Computer");
 
 	mDNS_SetFQDN(m);
 

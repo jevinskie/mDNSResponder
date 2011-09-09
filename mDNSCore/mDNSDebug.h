@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: mDNSDebug.h,v $
+Revision 1.26  2005/07/04 22:40:26  cheshire
+Additional debugging code to help catch memory corruption
+
 Revision 1.25  2004/12/14 21:34:16  cheshire
 Add "#define ANSWER_REMOTE_HOSTNAME_QUERIES 0" and comment
 
@@ -154,6 +157,8 @@ extern void LogMsgNoIdent(const char *format, ...) IS_A_PRINTF_STYLE_FUNCTION(1,
 #if MACOSX_MDNS_MALLOC_DEBUGGING >= 1
 extern void *mallocL(char *msg, unsigned int size);
 extern void freeL(char *msg, void *x);
+extern void LogMemCorruption(const char *format, ...);
+extern void uds_validatelists(void);
 #else
 #define mallocL(X,Y) malloc(Y)
 #define freeL(X,Y) free(Y)
@@ -178,6 +183,8 @@ extern void freeL(char *msg, void *x);
 #else
 #define	LogOperation debugf
 #endif
+
+#define ForceAlerts 0
 
 #ifdef	__cplusplus
 	}
