@@ -37,6 +37,9 @@
     Change History (most recent first):
 
 $Log: Identify.c,v $
+Revision 1.34  2004/12/16 20:17:11  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.33  2004/11/30 22:37:00  cheshire
 Update copyright dates and add "Mode: C; tab-width: 4" headers
 
@@ -181,7 +184,7 @@ Add mDNSIdentify tool, used to discover what version of mDNSResponder a particul
 static mDNS mDNSStorage;       // mDNS core uses this to store its globals
 static mDNS_PlatformSupport PlatformStorage;  // Stores this platform's globals
 #define RR_CACHE_SIZE 500
-static CacheRecord gRRCache[RR_CACHE_SIZE];
+static CacheEntity gRRCache[RR_CACHE_SIZE];
 
 static volatile int StopNow;	// 0 means running, 1 means stop because we got an answer, 2 means stop because of Ctrl-C
 static volatile int NumAnswers, NumAddr, NumAAAA, NumHINFO;
@@ -233,7 +236,7 @@ static void NameCallback(mDNS *const m, DNSQuestion *question, const ResourceRec
 		{
 		ConvertDomainNameToCString(&answer->rdata->u.name, hostname);
 		StopNow = 1;
-		mprintf("%##s %s %##s\n", answer->name.c, DNSTypeName(answer->rrtype), answer->rdata->u.name.c);
+		mprintf("%##s %s %##s\n", answer->name->c, DNSTypeName(answer->rrtype), answer->rdata->u.name.c);
 		}
 	}
 
@@ -247,7 +250,7 @@ static void InfoCallback(mDNS *const m, DNSQuestion *question, const ResourceRec
 		if (!id.NotAnInteger) id = lastid;
 		NumAnswers++;
 		NumAddr++;
-		mprintf("%##s %s %.4a\n", answer->name.c, DNSTypeName(answer->rrtype), &answer->rdata->u.ipv4);
+		mprintf("%##s %s %.4a\n", answer->name->c, DNSTypeName(answer->rrtype), &answer->rdata->u.ipv4);
 		hostaddr.type = mDNSAddrType_IPv4;	// Prefer v4 target to v6 target, for now
 		hostaddr.ip.v4 = answer->rdata->u.ipv4;
 		}
@@ -256,7 +259,7 @@ static void InfoCallback(mDNS *const m, DNSQuestion *question, const ResourceRec
 		if (!id.NotAnInteger) id = lastid;
 		NumAnswers++;
 		NumAAAA++;
-		mprintf("%##s %s %.16a\n", answer->name.c, DNSTypeName(answer->rrtype), &answer->rdata->u.ipv6);
+		mprintf("%##s %s %.16a\n", answer->name->c, DNSTypeName(answer->rrtype), &answer->rdata->u.ipv6);
 		if (!hostaddr.type)	// Prefer v4 target to v6 target, for now
 			{
 			hostaddr.type = mDNSAddrType_IPv6;
@@ -291,7 +294,7 @@ static void ServicesCallback(mDNS *const m, DNSQuestion *question, const Resourc
 		{
 		NumAnswers++;
 		NumAddr++;
-		mprintf("%##s %s %##s\n", answer->name.c, DNSTypeName(answer->rrtype), answer->rdata->u.name.c);
+		mprintf("%##s %s %##s\n", answer->name->c, DNSTypeName(answer->rrtype), answer->rdata->u.name.c);
 		StopNow = 1;
 		}
 	}

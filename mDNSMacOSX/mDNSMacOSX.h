@@ -23,6 +23,10 @@
     Change History (most recent first):
 
 $Log: mDNSMacOSX.h,v $
+Revision 1.49  2004/12/17 23:37:47  cheshire
+<rdar://problem/3485365> Guard against repeating wireless dissociation/re-association
+(and other repetitive configuration changes)
+
 Revision 1.48  2004/12/07 01:31:31  cheshire
 mDNSMacOSXSystemBuildNumber() returns int, not mDNSBool
 
@@ -203,7 +207,6 @@ Defines mDNS_PlatformSupport_struct for OS X
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include "mDNSEmbeddedAPI.h"  // for domain name structure
-	
 
 typedef struct NetworkInterfaceInfoOSX_struct NetworkInterfaceInfoOSX;
 
@@ -225,6 +228,7 @@ struct NetworkInterfaceInfoOSX_struct
 	NetworkInterfaceInfoOSX *next;
 	mDNSu32                  Exists;			// 1 = currently exists in getifaddrs list; 0 = doesn't
 												// 2 = exists, but McastTxRx state changed
+	mDNSs32                  LastSeen;			// If Exists==0, last time this interface appeared in getifaddrs list
 	char                    *ifa_name;			// Memory for this is allocated using malloc
 	mDNSu32                  scope_id;			// interface index / IPv6 scope ID
 	mDNSEthAddr              BSSID;				// BSSID of 802.11 base station, if applicable

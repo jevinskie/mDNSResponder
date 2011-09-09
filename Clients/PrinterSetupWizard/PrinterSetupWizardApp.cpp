@@ -23,6 +23,13 @@
     Change History (most recent first):
     
 $Log: PrinterSetupWizardApp.cpp,v $
+Revision 1.5  2005/01/25 18:30:02  shersche
+Fix call to PathForResource() by passing in NULL as first parameter.
+
+Revision 1.4  2005/01/25 08:54:41  shersche
+<rdar://problem/3911084> Load resource DLLs at startup.
+Bug #: 3911084
+
 Revision 1.3  2004/07/13 21:24:23  rpantos
 Fix for <rdar://problem/3701120>.
 
@@ -40,10 +47,30 @@ First checked in
 #include "PrinterSetupWizardApp.h"
 #include "PrinterSetupWizardSheet.h"
 #include "DebugServices.h"
+#include "loclibrary.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
+
+// Stash away pointers to our resource DLLs
+
+static HINSTANCE g_nonLocalizedResources	= NULL;
+static HINSTANCE g_localizedResources		= NULL;
+
+
+HINSTANCE
+GetNonLocalizedResources()
+{
+	return g_nonLocalizedResources;
+}
+
+
+HINSTANCE
+GetLocalizedResources()
+{
+	return g_localizedResources;
+}
 
 
 // CPrinterSetupWizardApp
@@ -71,12 +98,42 @@ CPrinterSetupWizardApp theApp;
 
 BOOL CPrinterSetupWizardApp::InitInstance()
 {
+	CString		errorMessage;
+	CString		errorCaption;
+	wchar_t		resource[MAX_PATH];
+	int			res;
+	OSStatus	err = kNoErr;
+
 	//
 	// initialize the debugging framework
 	//
 	debug_initialize( kDebugOutputTypeWindowsDebugger, "PrinterSetupWizard", NULL );
 	debug_set_property( kDebugPropertyTagPrintLevel, kDebugLevelTrace );
 
+	// Before we load the resources, let's load the error string
+
+	errorMessage.LoadString( IDS_REINSTALL );
+	errorCaption.LoadString( IDS_REINSTALL_CAPTION );
+
+	// Load Resources
+
+	res = PathForResource( NULL, L"RendezvousPrinterWizard.dll", resource, MAX_PATH );
+	err = translate_errno( res != 0, kUnknownErr, kUnknownErr );
+	require_noerr( err, exit );
+
+	g_nonLocalizedResources = LoadLibrary( resource );
+	translate_errno( g_nonLocalizedResources, GetLastError(), kUnknownErr );
+	require_noerr( err, exit );
+
+	res = PathForResource( NULL, L"RendezvousPrinterWizardLocalized.dll", resource, MAX_PATH );
+	err = translate_errno( res != 0, kUnknownErr, kUnknownErr );
+	require_noerr( err, exit );
+
+	g_localizedResources = LoadLibrary( resource );
+	translate_errno( g_localizedResources, GetLastError(), kUnknownErr );
+	require_noerr( err, exit );
+		
+	AfxSetResourceHandle( g_localizedResources );
 
 	// InitCommonControls() is required on Windows XP if an application
 	// manifest specifies use of ComCtl32.dll version 6 or later to enable
@@ -87,28 +144,47 @@ BOOL CPrinterSetupWizardApp::InitInstance()
 
 	AfxEnableControlContainer();
 
-	CPrinterSetupWizardSheet dlg(IDS_CAPTION);
-
-	m_pMainWnd = &dlg;
-
-	try
 	{
-		INT_PTR nResponse = dlg.DoModal();
-	
-		if (nResponse == IDOK)
+		CPrinterSetupWizardSheet dlg(IDS_CAPTION);
+
+		m_pMainWnd = &dlg;
+
+		try
 		{
-			// TODO: Place code here to handle when the dialog is
-			//  dismissed with OK
+			INT_PTR nResponse = dlg.DoModal();
+		
+			if (nResponse == IDOK)
+			{
+				// TODO: Place code here to handle when the dialog is
+				//  dismissed with OK
+			}
+			else if (nResponse == IDCANCEL)
+			{
+				// TODO: Place code here to handle when the dialog is
+				//  dismissed with Cancel
+			}
 		}
-		else if (nResponse == IDCANCEL)
+		catch (CPrinterSetupWizardSheet::WizardException & exc)
 		{
-			// TODO: Place code here to handle when the dialog is
-			//  dismissed with Cancel
+			MessageBox(NULL, exc.text, exc.caption, MB_OK|MB_ICONEXCLAMATION);
 		}
 	}
-	catch (CPrinterSetupWizardSheet::WizardException & exc)
+
+exit:
+
+	if ( err )
 	{
-		MessageBox(NULL, exc.text, exc.caption, MB_OK|MB_ICONEXCLAMATION);
+		MessageBox( NULL, errorMessage, errorCaption, MB_ICONERROR | MB_OK );
+	}
+
+	if ( g_nonLocalizedResources )
+	{
+		FreeLibrary( g_nonLocalizedResources );
+	}
+
+	if ( g_localizedResources )
+	{
+		FreeLibrary( g_localizedResources );
 	}
 
 	// Since the dialog has been closed, return FALSE so that we exit the

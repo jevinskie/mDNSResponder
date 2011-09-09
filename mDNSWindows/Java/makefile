@@ -20,6 +20,9 @@
 # @APPLE_LICENSE_HEADER_END@
 #
 # $Log: makefile,v $
+# Revision 1.4  2004/12/16 22:38:00  shersche
+# Compile DNSSDException.java first to avoid build errors, copy output to appropriate "buildroot" folder
+#
 # Revision 1.3  2004/11/23 08:13:07  shersche
 # Link to the iphlpapi.lib for GetAdaptersInfo
 #
@@ -88,7 +91,7 @@ JAVACFLAGS = $(CFLAGS) $(JAVACFLAGS_OS)
 
 #############################################################################
 
-all: setup Java
+all: setup Java postbuild
 
 # 'setup' sets up the build directory structure the way we want
 setup:
@@ -96,6 +99,20 @@ setup:
 	@if not exist build			mkdir build
 	@if not exist $(OBJDIR)		mkdir $(OBJDIR)
 	@if not exist $(BUILDDIR)	mkdir $(BUILDDIR)
+
+!if DEFINED(DNSSD_BUILD_ROOT)
+!if $(DEBUG) == 1
+postbuild:
+	copy $(BUILDDIR)\dns_sd.jar $(DNSSD_BUILD_ROOT)\Debug\Root\"Program Files"\bin
+	copy $(BUILDDIR)\jdns_sd.dll $(DNSSD_BUILD_ROOT)\Debug\Root\"Program Files"\bin
+!else
+postbuild:
+	copy $(BUILDDIR)\dns_sd.jar $(DNSSD_BUILD_ROOT)\Release\Root\"Program Files"\bin
+	copy $(BUILDDIR)\jdns_sd.dll $(DNSSD_BUILD_ROOT)\Release\Root\"Program Files"\bin
+!endif
+!else
+postbuild:
+!endif
 
 # clean removes targets and objects
 clean:
@@ -106,13 +123,13 @@ clean:
 
 # The following targets build Java wrappers for the dns-sd.h API.
 
-Java: setup $(BUILDDIR)\dns_sd.jar $(BUILDDIR)\jdns_sd.dll
+Java: setup $(BUILDDIR)\dns_sd.jar $(BUILDDIR)\jdns_sd.dll postbuild
 	@echo "Java wrappers done"
 
 JAVASRC	= $(SHAREDDIR)\Java
 JARCONTENTS =	$(OBJDIR)\com\apple\dnssd\DNSSDService.class \
-				$(OBJDIR)\com\apple\dnssd\DNSRecord.class \
 				$(OBJDIR)\com\apple\dnssd\DNSSDException.class \
+				$(OBJDIR)\com\apple\dnssd\DNSRecord.class \
 				$(OBJDIR)\com\apple\dnssd\TXTRecord.class \
 				$(OBJDIR)\com\apple\dnssd\DNSSDRegistration.class \
 				$(OBJDIR)\com\apple\dnssd\BaseListener.class \

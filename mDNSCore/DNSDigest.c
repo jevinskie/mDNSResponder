@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: DNSDigest.c,v $
+Revision 1.13  2004/12/16 20:12:59  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.12  2004/12/03 07:20:50  ksekar
 <rdar://problem/3674208> Wide-Area: Registration of large TXT record fails
 
@@ -1374,7 +1377,7 @@ mDNSexport mDNSu8 *DNSDigest_SignMessage(DNSMessage *msg, mDNSu8 **end, mDNSu16 
 	mDNS_SetupResourceRecord(&tsig, mDNSNULL, 0, kDNSType_TSIG, 0, kDNSRecordTypeKnownUnique, mDNSNULL, mDNSNULL);
 
 	// key name
-	AssignDomainName(tsig.resrec.name, info->keyname);
+	AssignDomainName(tsig.resrec.name, &info->keyname);
 	MD5_Update(&c, info->keyname.c, DomainNameLength(&info->keyname));
 
 	// class
@@ -1387,7 +1390,7 @@ mDNSexport mDNSu8 *DNSDigest_SignMessage(DNSMessage *msg, mDNSu8 **end, mDNSu16 
 	MD5_Update(&c, (mDNSu8 *)&tsig.resrec.rroriginalttl, sizeof(tsig.resrec.rroriginalttl));
 	
 	// alg name
-	AssignDomainName(tsig.resrec.rdata->u.name, HMAC_MD5_AlgName);
+	AssignDomainName(&tsig.resrec.rdata->u.name, &HMAC_MD5_AlgName);
 	len = DomainNameLength(&HMAC_MD5_AlgName);
 	rdata = tsig.resrec.rdata->u.data + len;
 	MD5_Update(&c, HMAC_MD5_AlgName.c, len);

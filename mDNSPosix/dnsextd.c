@@ -24,6 +24,27 @@
     Change History (most recent first):
 
 $Log: dnsextd.c,v $
+Revision 1.30  2005/01/27 22:57:56  cheshire
+Fix compile errors on gcc4
+
+Revision 1.29  2004/12/22 00:13:50  ksekar
+<rdar://problem/3873993> Change version, port, and polling interval for LLQ
+
+Revision 1.28  2004/12/17 00:30:00  ksekar
+<rdar://problem/3924045> dnsextd memory leak
+
+Revision 1.27  2004/12/17 00:27:32  ksekar
+Ignore SIGPIPE
+
+Revision 1.26  2004/12/17 00:21:33  ksekar
+Fixes for new CacheRecord structure with indirect name pointer
+
+Revision 1.25  2004/12/16 20:13:02  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
+Revision 1.24  2004/12/14 17:09:06  ksekar
+fixed incorrect usage instructions
+
 Revision 1.23  2004/12/06 20:24:31  ksekar
 <rdar://problem/3907303> dnsextd leaks sockets
 
@@ -136,7 +157,7 @@ Revision 1.1  2004/08/11 00:43:26  ksekar
 
 #define LOOPBACK "127.0.0.1"
 #define NS_PORT 53
-#define DAEMON_PORT 5355                // default, may be overridden via command line argument
+#define DAEMON_PORT 5352                // default, may be overridden via command line argument
 #define LISTENQ 128                     // tcp connection backlog
 #define RECV_BUFLEN 9000                
 #define LEASETABLE_INIT_NBUCKETS 256    // initial hashtable size (doubles as table fills)
@@ -181,6 +202,7 @@ typedef struct RRTableElem
     struct sockaddr_in cli;   // client's source address
     long expire;              // expiration time, in seconds since epoch
     domainname zone;          // from zone field of update message
+    domainname name;          // name of the record
     CacheRecord rr;           // last field in struct allows for allocation of oversized RRs
 	} RRTableElem;
 
@@ -283,7 +305,7 @@ mDNSlocal void PrintLog(const char *buffer)
 // Verbose Logging (conditional on -v option)
 mDNSlocal void VLog(const char *format, ...)
 	{
-   	unsigned char buffer[512];
+   	char buffer[512];
 	va_list ptr;
 
 	if (!verbose) return;
@@ -296,7 +318,7 @@ mDNSlocal void VLog(const char *format, ...)
 // Unconditional Logging
 mDNSlocal void Log(const char *format, ...)
 	{
-   	unsigned char buffer[512];
+   	char buffer[512];
 	va_list ptr;
 
 	va_start(ptr,format);
@@ -426,7 +448,7 @@ mDNSlocal PktMsg *ReadTCPMsg(int sd, PktMsg *storage)
 	int nread, allocsize;
 	mDNSu16 msglen = 0;	
 	PktMsg *pkt = NULL;
-	int srclen;
+	unsigned int srclen;
 	
 	nread = my_recv(sd, &msglen, sizeof(msglen));
 	if (nread < 0) { LogErr("TCPRequestForkFn", "recv"); goto error; }
@@ -525,8 +547,10 @@ mDNSlocal mDNSBool SuccessfulUpdateTransaction(PktMsg *request, PktMsg *reply)
 	return mDNSfalse;
 	}
 
-// Allocate an appropriately sized CacheRecord and copy data from original
-mDNSlocal CacheRecord *CopyCacheRecord(CacheRecord *orig)
+// Allocate an appropriately sized CacheRecord and copy data from original.
+// Name pointer in CacheRecord object is set to point to the name specified
+//
+mDNSlocal CacheRecord *CopyCacheRecord(const CacheRecord *orig, domainname *name)
 	{
 	CacheRecord *cr;
 	size_t size = sizeof(*cr);
@@ -535,6 +559,8 @@ mDNSlocal CacheRecord *CopyCacheRecord(CacheRecord *orig)
 	if (!cr) { LogErr("CopyCacheRecord", "malloc"); return NULL; }
 	memcpy(cr, orig, size);
 	cr->resrec.rdata = (RData*)&cr->rdatastorage;
+	cr->resrec.name = name;
+	
 	return cr;
 	}
 
@@ -605,7 +631,7 @@ mDNSlocal void PrintLeaseTable(DaemonInfo *d)
 // delete all RRS of a given name/type
 mDNSlocal mDNSu8 *putRRSetDeletion(DNSMessage *msg, mDNSu8 *ptr, mDNSu8 *limit,  ResourceRecord *rr)
 	{
-	ptr = putDomainNameAsLabels(msg, ptr, limit, &rr->name);
+	ptr = putDomainNameAsLabels(msg, ptr, limit, rr->name);
 	if (!ptr || ptr + 10 >= limit) return NULL;  // out of space
 	ptr[0] = (mDNSu8)(rr->rrtype  >> 8);
 	ptr[1] = (mDNSu8)(rr->rrtype  &  0xFF);
@@ -630,8 +656,8 @@ mDNSlocal mDNSu8 *PutUpdateSRV(DaemonInfo *d, PktMsg *pkt, mDNSu8 *ptr, char *re
 	if (!gethostname(hostname, 1024) < 0 || MakeDomainNameFromDNSNameString(&rr.resrec.rdata->u.srv.target, hostname))
 		rr.resrec.rdata->u.srv.target.c[0] = '\0';
 	
-	MakeDomainNameFromDNSNameString(&rr.resrec.name, regtype);
-	strcpy(rr.resrec.name.c + strlen(rr.resrec.name.c), d->zone.c);
+	MakeDomainNameFromDNSNameString(rr.resrec.name, regtype);
+	AppendDomainName(rr.resrec.name, &d->zone);
 	VLog("%s  %s", registration ? "Registering SRV record" : "Deleting existing RRSet",
 		 GetRRDisplayString_rdb(&rr.resrec, &rr.resrec.rdata->u, buf));
 	if (registration) ptr = PutResourceRecord(&pkt->msg, ptr, &pkt->msg.h.mDNS_numUpdates, &rr.resrec);
@@ -715,7 +741,7 @@ mDNSlocal int SetUpdateSRV(DaemonInfo *d)
 mDNSlocal int ReadAuthKey(int argc, char *argv[], DaemonInfo *d)
 	{
 	uDNS_AuthInfo *auth = NULL;
-	char keybuf[512];
+	unsigned char keybuf[512];
 	mDNSs32 keylen;
 	
 	auth = malloc(sizeof(*auth));
@@ -748,7 +774,7 @@ mDNSlocal int SetPort(DaemonInfo *d, char *PortAsString)
 	
 mDNSlocal void PrintUsage(void)
 	{
-	fprintf(stderr, "Usage: dnsextd -z <zone> [-vf] [ -s server ] [-k zone keyname secret] ...\n"
+	fprintf(stderr, "Usage: dnsextd -z <zone> [-vf] [ -s server ] [-k keyname secret] ...\n"
 			"Use \"dnsextd -h\" for help\n");
 	}
 
@@ -822,7 +848,7 @@ mDNSlocal int ProcessArgs(int argc, char *argv[], DaemonInfo *d)
 		}
 		
 	if (!d->zone.c[0]) goto arg_error;  // zone is the only required argument
-	if (d->AuthInfo) AssignDomainName(d->AuthInfo->zone, d->zone); // if we have a shared secret, use it for the entire zone
+	if (d->AuthInfo) AssignDomainName(&d->AuthInfo->zone, &d->zone); // if we have a shared secret, use it for the entire zone
 	return 0;
 	
 	arg_error:
@@ -1040,9 +1066,11 @@ mDNSlocal void UpdateLeaseTable(PktMsg *pkt, DaemonInfo *d, mDNSs32 lease)
 			if (!new) { LogErr("UpdateLeaseTable", "malloc"); goto cleanup; }
 			memcpy(&new->rr, &lcr.r, sizeof(CacheRecord) + lcr.r.resrec.rdlength - InlineCacheRDSize);
 			new->rr.resrec.rdata = (RData *)&new->rr.rdatastorage;
+			AssignDomainName(&new->name, lcr.r.resrec.name);
+			new->rr.resrec.name = &new->name;
 			new->expire = time.tv_sec + (unsigned)lease;
 			new->cli.sin_addr = pkt->src.sin_addr;
-			strcpy(new->zone.c, zone.qname.c);
+			AssignDomainName(&new->zone, &zone.qname);
 			new->next = d->table[bucket];
 			d->table[bucket] = new;
 			d->nelems++;
@@ -1122,9 +1150,7 @@ mDNSlocal PktMsg *HandleRequest(PktMsg *pkt, DaemonInfo *d)
 mDNSlocal void FormatLLQOpt(AuthRecord *opt, int opcode, mDNSu8 *id, mDNSs32 lease)
 	{
 	bzero(opt, sizeof(*opt));
-	opt->resrec.rdata = &opt->rdatastorage;
-	opt->resrec.RecordType = kDNSRecordTypeKnownUnique; // to suppress warnings from other layers
-	opt->resrec.rrtype = kDNSType_OPT;
+	mDNS_SetupResourceRecord(opt, mDNSNULL, mDNSInterface_Any, kDNSType_OPT, kStandardTTL, kDNSRecordTypeKnownUnique, mDNSNULL, mDNSNULL);
 	opt->resrec.rdlength = LLQ_OPT_SIZE;
 	opt->resrec.rdestimate = LLQ_OPT_SIZE;
 	opt->resrec.rdata->u.opt.opt = kDNSOpt_LLQ;
@@ -1244,14 +1270,14 @@ mDNSlocal CacheRecord *AnswerQuestion(DaemonInfo *d, LLQEntry *e, int sd)
 		//if (!rr) { LogErr("AnswerQuestion", "malloc"); goto end; }
 		ansptr = GetLargeResourceRecord(NULL, &reply->msg, ansptr, end, 0, kDNSRecordTypePacketAns, &lcr);
 		if (!ansptr) { Log("AnswerQuestions: GetLargeResourceRecord returned NULL"); goto end; }
-		if (lcr.r.resrec.rrtype != e->qtype || lcr.r.resrec.rrclass != kDNSClass_IN || !SameDomainName(&lcr.r.resrec.name, &e->qname))
+		if (lcr.r.resrec.rrtype != e->qtype || lcr.r.resrec.rrclass != kDNSClass_IN || !SameDomainName(lcr.r.resrec.name, &e->qname))
 			{
 			Log("AnswerQuestion: response %##s type #d does not answer question %##s type #d.  Discarding",
-				  lcr.r.resrec.name.c, lcr.r.resrec.rrtype, e->qname.c, e->qtype);
+				  lcr.r.resrec.name->c, lcr.r.resrec.rrtype, e->qname.c, e->qtype);
 			}
 		else
 			{
-			CacheRecord *cr = CopyCacheRecord(&lcr.r);
+			CacheRecord *cr = CopyCacheRecord(&lcr.r, &e->qname);
 			if (!cr) { Log("Error: AnswerQuestion - CopyCacheRecord returned NULL"); goto end; }						   
 			cr->next = AnswerList;
 			AnswerList = cr;
@@ -1296,7 +1322,7 @@ mDNSlocal void UpdateAnswerList(DaemonInfo *d, LLQEntry *e, CacheRecord *answers
 		if (!ka)
 			{
 			// answer is not in KA list
-			CacheRecord *cr = CopyCacheRecord(na);
+			CacheRecord *cr = CopyCacheRecord(na, &e->qname);
 			if (!cr) { Log("Error: UpdateAnswerList - CopyCacheRecord returned NULL"); return; }
 			cr->resrec.rroriginalttl = 1; // 1 means add
 			cr->next = e->KnownAnswers;
@@ -1400,8 +1426,9 @@ mDNSlocal void GenLLQEvents(DaemonInfo *d)
 				}
 			else
 				{
-				CacheRecord *answers = AnswerQuestion(d, e, sd);
+				CacheRecord *tmp, *answers = AnswerQuestion(d, e, sd);
 				UpdateAnswerList(d, e, answers);
+				while (answers) { tmp = answers; answers = answers->next; free(tmp); }				
 				e = e->next;
 				}
 			}		
@@ -1421,7 +1448,7 @@ mDNSlocal void *LLQEventMonitor(void *DInfoPtr)
 	mDNSs32 serial = 0;
 	mDNSBool SerialInitialized = mDNSfalse;
 	int sd;
-     LargeCacheRecord lcr;
+    LargeCacheRecord lcr;
 	ResourceRecord *rr = &lcr.r.resrec;
 	int i, sleeptime = 0;
 	domainname zone;
@@ -1430,7 +1457,7 @@ mDNSlocal void *LLQEventMonitor(void *DInfoPtr)
 	// create question
 	id.NotAnInteger = 0;
 	InitializeDNSMessage(&q.msg.h, id, flags);
-	AssignDomainName(zone, d->zone);
+	AssignDomainName(&zone, &d->zone);
 	end = putQuestion(&q.msg, end, end + AbsoluteMaxDNSMessageData, &zone, kDNSType_SOA, kDNSClass_IN);
 	if (!end) { Log("Error: LLQEventMonitor - putQuestion returned NULL"); return NULL; }
 	q.len = (int)(end - (mDNSu8 *)&q.msg);
@@ -1456,7 +1483,7 @@ mDNSlocal void *LLQEventMonitor(void *DInfoPtr)
 			{
 			ptr = GetLargeResourceRecord(NULL, &reply.msg, ptr, end, 0, kDNSRecordTypePacketAns, &lcr);
 			if (!ptr) { Log("Error: LLQEventMonitor - GetLargeResourceRecord  returned NULL"); continue; }
-			if (rr->rrtype != kDNSType_SOA || rr->rrclass != kDNSClass_IN || !SameDomainName(&rr->name, &zone)) continue;
+			if (rr->rrtype != kDNSType_SOA || rr->rrclass != kDNSClass_IN || !SameDomainName(rr->name, &zone)) continue;
 			if (!SerialInitialized)
 				{
 				// first time through loop
@@ -1494,7 +1521,7 @@ mDNSlocal LLQEntry *NewLLQ(DaemonInfo *d, struct sockaddr_in cli, domainname *qn
 	
 	// initialize structure
 	e->cli = cli;
-	AssignDomainName(e->qname, *qname);
+	AssignDomainName(&e->qname, qname);
 	e->qtype = qtype;
 	memset(e->id, 0, 8);
 	e->state = RequestReceived;
@@ -1801,7 +1828,7 @@ mDNSlocal int RecvUDPRequest(int sd, DaemonInfo *d)
 	{
 	UDPRequestArgs *req;
 	pthread_t tid;
-	int clisize = sizeof(req->cliaddr);
+	unsigned int clisize = sizeof(req->cliaddr);
 	
 	req = malloc(sizeof(UDPRequestArgs));
 	if (!req) { LogErr("RecvUDPRequest", "malloc"); return -1; }
@@ -1868,7 +1895,7 @@ mDNSlocal int RecvTCPRequest(int sd, DaemonInfo *d)
 	{
 	TCPRequestArgs *req;
 	pthread_t tid;
-	int clilen = sizeof(req->cliaddr);
+	unsigned int clilen = sizeof(req->cliaddr);
 	
 	req = malloc(sizeof(TCPRequestArgs));
 	if (!req) { LogErr("RecvTCPRequest", "malloc"); return -1; }
@@ -1957,6 +1984,7 @@ int main(int argc, char *argv[])
 	if (signal(SIGTERM,     HndlSignal) == SIG_ERR) perror("Can't catch SIGTERM");
 	if (signal(INFO_SIGNAL, HndlSignal) == SIG_ERR) perror("Can't catch SIGINFO");
 	if (signal(SIGINT,      HndlSignal) == SIG_ERR) perror("Can't catch SIGINT");
+	if (signal(SIGPIPE,     SIG_IGN  )  == SIG_ERR) perror("Can't ignore SIGPIPE");
 	
 	if (ProcessArgs(argc, argv, &d) < 0) exit(1);
 

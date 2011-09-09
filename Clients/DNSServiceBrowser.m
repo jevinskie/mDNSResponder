@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: DNSServiceBrowser.m,v $
+Revision 1.30  2005/01/27 17:46:16  cheshire
+Added comment
+
 Revision 1.29  2004/06/04 20:58:36  cheshire
 Move DNSServiceBrowser from mDNSMacOSX directory to Clients directory
 
@@ -780,7 +783,7 @@ static void	QueryRecordReply( DNSServiceRef DNSServiceRef, DNSServiceFlags flags
 /* Remove service from runloop, deallocate service and associated resources */
 {
 	if ( fSocketRef != nil) {
-		CFSocketInvalidate( fSocketRef);
+		CFSocketInvalidate( fSocketRef);		// Note: Also closes the underlying socket
 		CFRelease( fSocketRef);
 	}
 

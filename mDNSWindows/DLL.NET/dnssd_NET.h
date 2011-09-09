@@ -40,6 +40,9 @@
     Change History (most recent first):
 
 $Log: dnssd_NET.h,v $
+Revision 1.7  2004/12/16 19:56:12  cheshire
+Update comments
+
 Revision 1.6  2004/09/20 22:47:06  cheshire
 Add cautionary comment
 
@@ -115,7 +118,7 @@ namespace Apple
 				* by renaming the service.  NoAutoRename overrides this behavior - with this
 				* flag set, name conflicts will result in a callback.  The NoAutorename flag
 				* is only valid if a name is explicitly specified when registering a service
-				* (ie the default name is not used.)
+				* (i.e. the default name is not used.)
 				*/
 
 			Shared				=	16,

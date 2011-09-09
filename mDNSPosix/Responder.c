@@ -24,6 +24,9 @@
     Change History (most recent first):
 
 $Log: Responder.c,v $
+Revision 1.28  2005/01/11 01:55:26  ksekar
+Fix compile errors in Posix debug build
+
 Revision 1.27  2004/12/01 04:28:43  cheshire
 <rdar://problem/3872803> Darwin patches for Solaris and Suse
 Use version of daemon() provided in mDNSUNP.c instead of local copy
@@ -461,13 +464,13 @@ static void RegistrationCallback(mDNS *const m, ServiceRecordSet *const thisRegi
     switch (status) {
 
         case mStatus_NoError:      
-            debugf("Callback: %##s Name Registered",   thisRegistration->RR_SRV.resrec.name.c); 
+            debugf("Callback: %##s Name Registered",   thisRegistration->RR_SRV.resrec.name->c); 
             // Do nothing; our name was successfully registered.  We may 
             // get more call backs in the future.
             break;
 
         case mStatus_NameConflict: 
-            debugf("Callback: %##s Name Conflict",     thisRegistration->RR_SRV.resrec.name.c); 
+            debugf("Callback: %##s Name Conflict",     thisRegistration->RR_SRV.resrec.name->c); 
 
             // In the event of a conflict, this sample RegistrationCallback 
             // just calls mDNS_RenameAndReregisterService to automatically 
@@ -485,7 +488,7 @@ static void RegistrationCallback(mDNS *const m, ServiceRecordSet *const thisRegi
             break;
 
         case mStatus_MemFree:      
-            debugf("Callback: %##s Memory Free",       thisRegistration->RR_SRV.resrec.name.c); 
+            debugf("Callback: %##s Memory Free",       thisRegistration->RR_SRV.resrec.name->c); 
             
             // When debugging is enabled, make sure that thisRegistration 
             // is not on our gServiceList.
@@ -505,7 +508,7 @@ static void RegistrationCallback(mDNS *const m, ServiceRecordSet *const thisRegi
             break;
 
         default:                   
-            debugf("Callback: %##s Unknown Status %ld", thisRegistration->RR_SRV.resrec.name.c, status); 
+            debugf("Callback: %##s Unknown Status %ld", thisRegistration->RR_SRV.resrec.name->c, status); 
             break;
     }
 }

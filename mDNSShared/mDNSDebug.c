@@ -29,6 +29,9 @@
     Change History (most recent first):
 
 $Log: mDNSDebug.c,v $
+Revision 1.6  2005/01/27 22:57:56  cheshire
+Fix compile errors on gcc4
+
 Revision 1.5  2004/09/17 01:08:55  cheshire
 Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
   The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
@@ -119,7 +122,7 @@ mDNSlocal void WriteLogMsg(const char *ident, const char *buffer, int logoptflag
 // Log message with default "mDNSResponder" ident string at the start
 mDNSexport void LogMsg(const char *format, ...)
 	{
-	unsigned char buffer[512];
+	char buffer[512];
 	va_list ptr;
 	va_start(ptr,format);
 	buffer[mDNS_vsnprintf((char *)buffer, sizeof(buffer), format, ptr)] = 0;
@@ -130,7 +133,7 @@ mDNSexport void LogMsg(const char *format, ...)
 // Log message with specified ident string at the start
 mDNSexport void LogMsgIdent(const char *ident, const char *format, ...)
 	{
-	unsigned char buffer[512];
+	char buffer[512];
 	va_list ptr;
 	va_start(ptr,format);
 	buffer[mDNS_vsnprintf((char *)buffer, sizeof(buffer), format, ptr)] = 0;
@@ -141,7 +144,7 @@ mDNSexport void LogMsgIdent(const char *ident, const char *format, ...)
 // Log message with no ident string at the start
 mDNSexport void LogMsgNoIdent(const char *format, ...)
 	{
-	unsigned char buffer[512];
+	char buffer[512];
 	va_list ptr;
 	va_start(ptr,format);
 	buffer[mDNS_vsnprintf((char *)buffer, sizeof(buffer), format, ptr)] = 0;

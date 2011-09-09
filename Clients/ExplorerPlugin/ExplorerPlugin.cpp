@@ -23,6 +23,10 @@
     Change History (most recent first):
     
 $Log: ExplorerPlugin.cpp,v $
+Revision 1.6  2005/01/25 17:56:45  shersche
+<rdar://problem/3911084> Load resource DLLs, get icons and bitmaps from resource DLLs
+Bug #: 3911084
+
 Revision 1.5  2004/09/15 10:33:54  shersche
 <rdar://problem/3721611> Install XP toolbar button (8 bit mask) if running on XP platform, otherwise install 1 bit mask toolbar button
 Bug #: 3721611
@@ -65,6 +69,8 @@ Explorer Plugin to browse for DNS-SD advertised Web and FTP servers from within 
 #include	"ClassFactory.h"
 #include	"Resource.h"
 
+#include	"loclibrary.h"
+
 // MFC Debugging
 
 #ifdef _DEBUG
@@ -95,6 +101,24 @@ DEBUG_LOCAL void		MFCDLLThreadDetach( HINSTANCE inInstance );
 
 DEBUG_LOCAL OSStatus	RegisterServer( HINSTANCE inInstance, CLSID inCLSID, LPCTSTR inName );
 DEBUG_LOCAL OSStatus	RegisterCOMCategory( CLSID inCLSID, CATID inCategoryID, BOOL inRegister );
+
+// Stash away pointers to our resource DLLs
+
+static HINSTANCE g_nonLocalizedResources	= NULL;
+static CString	 g_nonLocalizedResourcesName;
+static HINSTANCE g_localizedResources		= NULL;
+
+HINSTANCE
+GetNonLocalizedResources()
+{
+	return g_nonLocalizedResources;
+}
+
+HINSTANCE
+GetLocalizedResources()
+{
+	return g_localizedResources;
+}
 
 #if 0
 #pragma mark == Globals ==
@@ -266,10 +290,12 @@ exit:
 
 DEBUG_LOCAL OSStatus	MFCDLLProcessAttach( HINSTANCE inInstance )
 {
+	wchar_t					resource[MAX_PATH];
 	OSStatus				err;
 	_AFX_THREAD_STATE *		threadState;
 	AFX_MODULE_STATE *		previousModuleState;
 	BOOL					ok;
+	int						res;
 	CWinApp *				app;
 	
 	app = NULL;
@@ -286,6 +312,34 @@ DEBUG_LOCAL OSStatus	MFCDLLProcessAttach( HINSTANCE inInstance )
 	app = AfxGetApp();
 	require_action( ok, exit, err = kNotInitializedErr );
 	
+	// Before we load the resources, let's load the error string
+
+	// errorMessage.LoadString( IDS_REINSTALL );
+	// errorCaption.LoadString( IDS_REINSTALL_CAPTION );
+
+	// Load Resources
+
+	res = PathForResource( inInstance, L"ExplorerPluginResources.dll", resource, MAX_PATH );
+
+	err = translate_errno( res != 0, kUnknownErr, kUnknownErr );
+	require_noerr( err, exit );
+
+	g_nonLocalizedResources = LoadLibrary( resource );
+	translate_errno( g_nonLocalizedResources, GetLastError(), kUnknownErr );
+	require_noerr( err, exit );
+
+	g_nonLocalizedResourcesName = resource;
+
+	res = PathForResource( inInstance, L"ExplorerPluginLocalized.dll", resource, MAX_PATH );
+	err = translate_errno( res != 0, kUnknownErr, kUnknownErr );
+	require_noerr( err, exit );
+
+	g_localizedResources = LoadLibrary( resource );
+	translate_errno( g_localizedResources, GetLastError(), kUnknownErr );
+	require_noerr( err, exit );
+
+	AfxSetResourceHandle( g_localizedResources );
+
 	ok = app->InitInstance();
 	require_action( ok, exit, err = kUnknownErr );
 	
@@ -478,21 +532,21 @@ DEBUG_LOCAL OSStatus	RegisterServer( HINSTANCE inInstance, CLSID inCLSID, LPCTST
 		 ( versionInfo.dwMajorVersion == 5 ) &&
 	     ( versionInfo.dwMinorVersion >= 1 ) )
 	{
-		wsprintf( data, L"%s,%d", moduleName, IDI_BUTTON_XP );
+		wsprintf( data, L"%s,%d", (LPCTSTR) g_nonLocalizedResourcesName, IDI_BUTTON_XP );
 		size = (DWORD)( ( lstrlen( data ) + 1 ) * sizeof( TCHAR ) );
 		RegSetValueEx( key, L"Icon", 0, REG_SZ, (LPBYTE) data, size);
 
-		wsprintf( data, L"%s,%d", moduleName, IDI_BUTTON_XP );
+		wsprintf( data, L"%s,%d", (LPCTSTR) g_nonLocalizedResourcesName, IDI_BUTTON_XP );
 		size = (DWORD)( ( lstrlen( data ) + 1 ) * sizeof( TCHAR ) );
 		RegSetValueEx( key, L"HotIcon", 0, REG_SZ, (LPBYTE) data, size);
 	}
 	else
 	{
-		wsprintf( data, L"%s,%d", moduleName, IDI_BUTTON_2K );
+		wsprintf( data, L"%s,%d", (LPCTSTR) g_nonLocalizedResourcesName, IDI_BUTTON_2K );
 		size = (DWORD)( ( lstrlen( data ) + 1 ) * sizeof( TCHAR ) );
 		RegSetValueEx( key, L"Icon", 0, REG_SZ, (LPBYTE) data, size);
 
-		wsprintf( data, L"%s,%d", moduleName, IDI_BUTTON_2K );
+		wsprintf( data, L"%s,%d", (LPCTSTR) g_nonLocalizedResourcesName, IDI_BUTTON_2K );
 		size = (DWORD)( ( lstrlen( data ) + 1 ) * sizeof( TCHAR ) );
 		RegSetValueEx( key, L"HotIcon", 0, REG_SZ, (LPBYTE) data, size);
 	}

@@ -4,6 +4,7 @@
 #include "stdafx.h"
 #include "ExplorerPlugin.h"
 #include "About.h"
+#include <DebugServices.h>
 
 
 // CAbout dialog
@@ -34,6 +35,23 @@ END_MESSAGE_MAP()
 
 
 // CAbout message handlers
+BOOL
+CAbout::OnInitDialog()
+{
+	BOOL b = CDialog::OnInitDialog();
+
+	CStatic * control = (CStatic*) GetDlgItem( IDC_ABOUT_BACKGROUND );
+	check( control );
+
+	if ( control )
+	{
+		control->SetBitmap( ::LoadBitmap( GetNonLocalizedResources(), MAKEINTRESOURCE( IDB_ABOUT ) ) );
+	}
+
+	return b;
+}
+
+
 HBRUSH CAbout::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 { 
 	switch (nCtlColor)

@@ -27,6 +27,10 @@
 	Change History (most recent first):
 
 $Log: mDNSVxWorks.c,v $
+Revision 1.27  2004/12/17 23:37:49  cheshire
+<rdar://problem/3485365> Guard against repeating wireless dissociation/re-association
+(and other repetitive configuration changes)
+
 Revision 1.26  2004/10/28 02:00:35  cheshire
 <rdar://problem/3841770> Call pipeDevDelete when disposing of commandPipe
 
@@ -1100,7 +1104,7 @@ mDNSlocal mStatus	SetupInterface( mDNS * const inMDNS, const struct ifaddrs *inA
 	item->hostSet.Advertise               = inMDNS->AdvertiseLocalAddresses;
 	item->hostSet.McastTxRx               = mDNStrue;
 
-	err = mDNS_RegisterInterface( inMDNS, &item->hostSet );
+	err = mDNS_RegisterInterface( inMDNS, &item->hostSet, 0 );
 	require_noerr( err, exit );
 	item->hostRegistered = mDNStrue;
 	

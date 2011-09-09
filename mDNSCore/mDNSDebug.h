@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: mDNSDebug.h,v $
+Revision 1.25  2004/12/14 21:34:16  cheshire
+Add "#define ANSWER_REMOTE_HOSTNAME_QUERIES 0" and comment
+
 Revision 1.24  2004/09/16 01:58:21  cheshire
 Fix compiler warnings
 
@@ -140,6 +143,9 @@ extern int	mDNS_DebugMode;	// If non-zero, LogMsg() writes to stderr instead of 
 extern void LogMsg(const char *format, ...) IS_A_PRINTF_STYLE_FUNCTION(1,2);
 extern void LogMsgIdent(const char *ident, const char *format, ...) IS_A_PRINTF_STYLE_FUNCTION(2,3);
 extern void LogMsgNoIdent(const char *format, ...) IS_A_PRINTF_STYLE_FUNCTION(1,2);
+
+// Set this symbol to 1 to answer remote queries for our Address, reverse mapping PTR, and HINFO records
+#define ANSWER_REMOTE_HOSTNAME_QUERIES 0
 
 // Set this symbol to 1 to do extra debug checks on malloc() and free()
 // Set this symbol to 2 to write a log message for every malloc() and free()

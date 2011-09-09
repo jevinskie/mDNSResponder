@@ -23,6 +23,13 @@
     Change History (most recent first):
 
 $Log: mDNSMacOS9.c,v $
+Revision 1.43  2004/12/17 23:37:49  cheshire
+<rdar://problem/3485365> Guard against repeating wireless dissociation/re-association
+(and other repetitive configuration changes)
+
+Revision 1.42  2004/12/16 20:43:39  cheshire
+interfaceinfo.fMask should be interfaceinfo.fNetmask
+
 Revision 1.41  2004/10/16 00:17:00  cheshire
 <rdar://problem/3770558> Replace IP TTL 255 check with local subnet source address check
 
@@ -368,7 +375,7 @@ mDNSlocal pascal void mDNSNotifier(void *contextPtr, OTEventCode code, OTResult 
 			m->p->interface.ip  .type               = mDNSAddrType_IPv4;
 			m->p->interface.ip  .ip.v4.NotAnInteger = interfaceinfo.fAddress;
 			m->p->interface.mask.type               = mDNSAddrType_IPv4;
-			m->p->interface.mask.ip.v4.NotAnInteger = interfaceinfo.fMask;
+			m->p->interface.mask.ip.v4.NotAnInteger = interfaceinfo.fNetmask;
 			m->p->interface.ifname[0]               = 0;
 			m->p->interface.Advertise               = m->AdvertiseLocalAddresses;
 			m->p->interface.McastTxRx               = mDNStrue;
@@ -396,7 +403,7 @@ mDNSlocal pascal void mDNSNotifier(void *contextPtr, OTEventCode code, OTResult 
 				case mOT_Bind:			OTBind(m->p->ep, (TBind*)&mDNSbindReq, NULL); break;
 				case mOT_Ready:         mDNSinitComplete(m, mStatus_NoError);
 										// Can't do mDNS_RegisterInterface until *after* mDNSinitComplete has set m->mDNSPlatformStatus to mStatus_NoError
-										mDNS_RegisterInterface(m, &m->p->interface);
+										mDNS_RegisterInterface(m, &m->p->interface, 0);
 										break;
 				default:                LogMsg("Unexpected m->p->mOTstate %d", m->p->mOTstate-1);
 				}

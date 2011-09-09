@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: DNSServices.c,v $
+Revision 1.32  2004/12/16 20:13:02  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.31  2004/10/19 21:33:23  cheshire
 <rdar://problem/3844991> Cannot resolve non-local registrations using the mach API
 Added flag 'kDNSServiceFlagsForceMulticast'. Passing through an interface id for a unicast name
@@ -1278,7 +1281,7 @@ DNSStatus
 	objectPtr->callback 			= inCallBack;
 	objectPtr->callbackContext 		= inCallBackContext;
 	objectPtr->owner				= inOwner;
-	AssignDomainName( objectPtr->info.name, fullName );
+	AssignDomainName( &objectPtr->info.name, &fullName );
 	objectPtr->info.InterfaceID 	= mDNSInterface_Any;
 	
 	// Save off the resolve info so the callback can get it.
@@ -2430,13 +2433,13 @@ DNSStatus
 	mDNS_SetupResourceRecord( &object->RR_PTR, mDNSNULL, interfaceID, kDNSType_PTR, 60, kDNSRecordTypeKnownUnique, 
 							  DNSHostRegistrationPrivateCallBack, object );
 	
-	AssignDomainName( object->RR_A.resrec.name, name );
+	AssignDomainName( &object->RR_A.resrec.name, &name );
 	
 	mDNS_snprintf( buffer, sizeof( buffer ), "%d.%d.%d.%d.in-addr.arpa.", ip.b[ 3 ], ip.b[ 2 ], ip.b[ 1 ], ip.b[ 0 ] );
 	MakeDomainNameFromDNSNameString( &object->RR_PTR.resrec.name, buffer );
 	
 	object->RR_A.resrec.rdata->u.ipv4 = ip;
-	AssignDomainName( object->RR_PTR.resrec.rdata->u.name, object->RR_A.resrec.name );
+	AssignDomainName( &object->RR_PTR.resrec.rdata->u.name, &object->RR_A.resrec.name );
 	
 	// Add the object to the list.
 	
@@ -2607,7 +2610,7 @@ mDNSlocal void	DNSHostRegistrationPrivateCallBack( mDNS * const inMDNS, AuthReco
 			name.c[ 0 ] = 0;
 			AppendDomainLabel( &name, &object->name );
 			AppendDomainLabel( &name, &object->domain );
-			AssignDomainName( object->RR_PTR.resrec.name, name );
+			AssignDomainName( &object->RR_PTR.resrec.name, &name );
 			
 			err = mDNS_Register( gMDNSPtr, &object->RR_A );
 			check_noerr( err );

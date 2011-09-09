@@ -27,6 +27,9 @@
     Change History (most recent first):
 
 $Log: dnssd_ipc.h,v $
+Revision 1.18  2005/01/27 22:57:56  cheshire
+Fix compile errors on gcc4
+
 Revision 1.17  2004/11/23 03:39:47  cheshire
 Let interface name/index mapping capability live directly in JNISupport.c,
 instead of having to call through to the daemon via IPC to get this information.
@@ -217,7 +220,7 @@ uint16_t get_short(char **ptr);
 int put_string(const char *str, char **ptr);
 int get_string(char **ptr, char *buffer, int buflen);
 
-void put_rdata(const int rdlen, const char *rdata, char **ptr);
+void put_rdata(const int rdlen, const unsigned char *rdata, char **ptr);
 char *get_rdata(char **ptr, int rdlen);  // return value is rdata pointed to by *ptr -
                                          // rdata is not copied from buffer.
 

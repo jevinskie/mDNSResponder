@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: FourthPage.cpp,v $
+Revision 1.5  2005/01/06 08:17:08  shersche
+Display the selected protocol ("Raw", "LPR", "IPP") rather than the port name
+
 Revision 1.4  2004/07/13 20:15:04  shersche
 <rdar://problem/3726363> Load large font name from resource
 Bug #: 3726363
@@ -77,7 +80,7 @@ void CFourthPage::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_PRINTER_NAME, m_printerNameCtrl);
 	DDX_Control(pDX, IDC_PRINTER_MANUFACTURER, m_printerManufacturerCtrl);
 	DDX_Control(pDX, IDC_PRINTER_MODEL, m_printerModelCtrl);
-	DDX_Control(pDX, IDC_PRINTER_PORT, m_printerPortCtrl);
+	DDX_Control(pDX, IDC_PRINTER_PROTOCOL, m_printerProtocolCtrl);
 	DDX_Control(pDX, IDC_PRINTER_DEFAULT, m_printerDefault);
 }
 
@@ -124,7 +127,10 @@ CFourthPage::OnSetActive()
 	m_printerNameCtrl.SetWindowText( printer->actualName );
 	m_printerManufacturerCtrl.SetWindowText ( printer->manufacturer );
 	m_printerModelCtrl.SetWindowText ( printer->model );
-	m_printerPortCtrl.SetWindowText ( printer->portName );
+
+	Service * service = printer->services.front();
+	require_quiet( service, exit );
+	m_printerProtocolCtrl.SetWindowText ( service->protocol );
 
 	if (printer->deflt)
 	{

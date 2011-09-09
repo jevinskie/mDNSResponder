@@ -23,6 +23,21 @@
     Change History (most recent first):
 
 $Log: WinVersRes.h,v $
+Revision 1.22  2005/01/25 17:15:52  shersche
+Bump to 1.0.0.51. Add legal copyright string.
+
+Revision 1.21  2005/01/11 07:09:32  shersche
+Bump to version 1.0.0.51
+
+Revision 1.20  2004/12/17 01:23:24  shersche
+Bump version to 1.0.0.50
+
+Revision 1.19  2004/12/16 08:09:47  shersche
+Revert version number back to 1.0.0.22
+
+Revision 1.18  2004/12/16 02:48:10  shersche
+Bump version number to 1.1.0.0
+
 Revision 1.17  2004/10/20 15:37:46  shersche
 Bump to Windows-trial-21
 
@@ -82,9 +97,12 @@ First checked in.
 #define MASTER_PROD_NAME	"Rendezvous"
 
 // Define the product version for mDNSResponder on Windows
-#define MASTER_PROD_VERS		1,0,0,21
-#define MASTER_PROD_VERS_STR	"1,0,0,21"
-#define MASTER_PROD_VERS_STR2	"1.0.0.21"
-#define MASTER_PROD_VERS_STR3 "Explorer Plugin 1.0.0.21"
+#define MASTER_PROD_VERS		1,0,0,52
+#define MASTER_PROD_VERS_STR	"1,0,0,52"
+#define MASTER_PROD_VERS_STR2	"1.0.0.52"
+#define MASTER_PROD_VERS_STR3 "Explorer Plugin 1.0.0.52"
+
+// Define the legal copyright
+#define MASTER_LEGAL_COPYRIGHT "Copyright (C) 2003-2005 Apple Computer, Inc."
 
 #endif // WINRESVERS_H

@@ -24,6 +24,9 @@
     Change History (most recent first):
 
 $Log: PlatformCommon.h,v $
+Revision 1.3  2005/01/19 19:19:21  ksekar
+<rdar://problem/3960191> Need a way to turn off domain discovery
+
 Revision 1.2  2004/12/01 03:30:29  cheshire
 <rdar://problem/3889346> Add Unicast DNS support to mDNSPosix
 
@@ -33,4 +36,4 @@ Move ReadDDNSSettingsFromConfFile() from mDNSMacOSX.c to PlatformCommon.c
  */
 
 extern void FindDefaultRouteIP(mDNSAddr *a);
-extern void ReadDDNSSettingsFromConfFile(mDNS *const m, const char *const filename, domainname *const hostname, domainname *const domain);
+extern void ReadDDNSSettingsFromConfFile(mDNS *const m, const char *const filename, domainname *const hostname, domainname *const domain, mDNSBool *DomainDiscoveryDisabled);

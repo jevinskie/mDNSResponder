@@ -73,7 +73,7 @@ BEGIN
             VALUE "FileDescription", "dnssd Dynamic Link Library"
             VALUE "FileVersion", MASTER_PROD_VERS_STR
             VALUE "InternalName", "dnssd"
-            VALUE "LegalCopyright", "Copyright (C) 2004"
+            VALUE "LegalCopyright", MASTER_LEGAL_COPYRIGHT
             VALUE "OriginalFilename", "dnssd.dll"
             VALUE "ProductName", MASTER_PROD_NAME
             VALUE "ProductVersion", MASTER_PROD_VERS_STR

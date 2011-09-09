@@ -8,6 +8,7 @@
 // Generated from the TEXTINCLUDE 2 resource.
 //
 #include "afxres.h"
+#include "WinVersRes.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -53,8 +54,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,5
- PRODUCTVERSION 1,0,0,5
+ FILEVERSION MASTER_PROD_VERS
+ PRODUCTVERSION MASTER_PROD_VERS
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -71,12 +72,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Apple Computer, Inc."
             VALUE "FileDescription", "NSPTool Application"
-            VALUE "FileVersion", "1, 0, 0, 5"
+            VALUE "FileVersion", MASTER_PROD_VERS_STR
             VALUE "InternalName", "NSPTool"
-            VALUE "LegalCopyright", "Copyright (C) 2004"
+            VALUE "LegalCopyright", MASTER_LEGAL_COPYRIGHT
             VALUE "OriginalFilename", "NSPTool.exe"
-            VALUE "ProductName", " NSPTool Application"
-            VALUE "ProductVersion", "1, 0, 0, 5"
+            VALUE "ProductName", MASTER_PROD_NAME
+            VALUE "ProductVersion", MASTER_PROD_VERS_STR
         END
     END
     BLOCK "VarFileInfo"

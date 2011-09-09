@@ -27,6 +27,9 @@
 	Change History (most recent first):
 
 $Log: dnssd_ipc.c,v $
+Revision 1.15  2005/01/27 22:57:56  cheshire
+Fix compile errors on gcc4
+
 Revision 1.14  2004/10/06 02:22:20  cheshire
 Changed MacRoman copyright symbol (should have been UTF-8 in any case :-) to ASCII-compatible "(c)"
 
@@ -103,7 +106,7 @@ int get_string(char **ptr, char *buffer, int buflen)
 	return overrun;
 	}
 
-void put_rdata(const int rdlen, const char *rdata, char **ptr)
+void put_rdata(const int rdlen, const unsigned char *rdata, char **ptr)
 	{
 	memcpy(*ptr, rdata, rdlen);
 	*ptr += rdlen;

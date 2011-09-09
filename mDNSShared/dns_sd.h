@@ -100,7 +100,7 @@ enum
      * by renaming the service.  NoAutoRename overrides this behavior - with this
      * flag set, name conflicts will result in a callback.  The NoAutorename flag
      * is only valid if a name is explicitly specified when registering a service
-     * (ie the default name is not used.)
+     * (i.e. the default name is not used.)
      */
 
     kDNSServiceFlagsShared              = 0x10,
@@ -225,7 +225,7 @@ enum
     kDNSServiceErr_NoAuth              = -65555,
     kDNSServiceErr_NoSuchKey           = -65556,
     kDNSServiceErr_NATTraversal        = -65557,
-    kDNSServiceErr_DblNAT              = -65558,
+    kDNSServiceErr_DoubleNAT           = -65558,
     kDNSServiceErr_BadTime             = -65559
     /* mDNS Error codes are in the range
      * FFFE FF00 (-65792) to FFFE FFFF (-65537) */
@@ -298,23 +298,16 @@ enum
  * 
  * If the client passes kDNSServiceInterfaceIndexLocalOnly when registering
  * a service, then that service will be found *only* by other local clients
- * on the same machine that pass kDNSServiceInterfaceIndexLocalOnly when browsing.
+ * on the same machine that are browsing using kDNSServiceInterfaceIndexLocalOnly
+ * or kDNSServiceInterfaceIndexAny.
  * If a client has a 'private' service, accessible only to other processes
  * running on the same machine, this allows the client to advertise that service
  * in a way such that it does not inadvertently appear in service lists on
  * all the other machines on the network.
- * Note that to discover these special non-public services, the browsing
- * client also has to explicitly use kDNSServiceInterfaceIndexLocalOnly in its
- * DNSServiceBrowse() call. These special non-public services are not reported to
- * other clients on the same machine using interface index 0 or other index values.
  * 
  * If the client passes kDNSServiceInterfaceIndexLocalOnly when browsing
- * then it will find only records registered on that same local machine.
- * Note that this is *not* exactly symmetrical with the registering case:
- * Services advertised using LocalOnly are ONLY discovered by clients browsing
- * on LocalOnly; in contrast, clients browsing on LocalOnly find ALL services
- * advertised by this machine, not only those advertised on LocalOnly.
- * Clients explicitly wishing to discover only LocalOnly services can
+ * then it will find *all* records registered on that same local machine.
+ * Clients explicitly wishing to discover *only* LocalOnly services can
  * accomplish this by inspecting the interfaceIndex of each service reported
  * to their DNSServiceBrowseReply() callback function, and discarding those
  * where the interface index is not kDNSServiceInterfaceIndexLocalOnly.

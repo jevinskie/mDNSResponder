@@ -75,7 +75,7 @@ BEGIN
             VALUE "FileDescription", "mdnsNSP Dynamic Link Library"
             VALUE "FileVersion", MASTER_PROD_VERS_STR
             VALUE "InternalName", "mdnsNSP"
-            VALUE "LegalCopyright", "Copyright (C) 2004"
+            VALUE "LegalCopyright", MASTER_LEGAL_COPYRIGHT
             VALUE "OriginalFilename", "mdnsNSP.dll"
             VALUE "ProductName", MASTER_PROD_NAME
             VALUE "ProductVersion", MASTER_PROD_VERS_STR

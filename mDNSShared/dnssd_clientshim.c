@@ -31,6 +31,9 @@
 	Change History (most recent first):
 
 $Log: dnssd_clientshim.c,v $
+Revision 1.8  2004/12/16 20:47:34  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.7  2004/12/10 04:08:43  cheshire
 Added comments about autoname and autorename
 
@@ -211,7 +214,7 @@ mDNSlocal void RegCallback(mDNS *const m, ServiceRecordSet *const sr, mStatus re
 	char namestr[MAX_DOMAIN_LABEL+1];		// Unescaped name: up to 63 bytes plus C-string terminating NULL.
 	char typestr[MAX_ESCAPED_DOMAIN_NAME];
 	char domstr [MAX_ESCAPED_DOMAIN_NAME];
-    if (!DeconstructServiceName(&sr->RR_SRV.resrec.name, &name, &type, &dom)) return;
+    if (!DeconstructServiceName(sr->RR_SRV.resrec.name, &name, &type, &dom)) return;
     if (!ConvertDomainLabelToCString_unescaped(&name, namestr)) return;
     if (!ConvertDomainNameToCString(&type, typestr)) return;
     if (!ConvertDomainNameToCString(&dom, domstr)) return;
@@ -402,7 +405,7 @@ mDNSlocal void FoundInstance(mDNS *const m, DNSQuestion *question, const Resourc
 	if (!DeconstructServiceName(&answer->rdata->u.name, &name, &type, &domain))
 		{
 		LogMsg("FoundInstance: %##s PTR %##s received from network is not valid DNS-SD service pointer",
-			answer->name.c, answer->rdata->u.name.c);
+			answer->name->c, answer->rdata->u.name.c);
 		return;
 		}
 
@@ -487,7 +490,7 @@ mDNSlocal void FoundServiceInfo(mDNS *const m, DNSQuestion *question, const Reso
 		if (x->SRV && x->TXT && x->callback)
 			{
 			char fullname[MAX_ESCAPED_DOMAIN_NAME], targethost[MAX_ESCAPED_DOMAIN_NAME];
-		    ConvertDomainNameToCString(&answer->name, fullname);
+		    ConvertDomainNameToCString(answer->name, fullname);
 		    ConvertDomainNameToCString(&x->SRV->rdata->u.srv.target, targethost);
 			x->callback((DNSServiceRef)x, 0, 0, kDNSServiceErr_NoError, fullname, targethost,
 				x->SRV->rdata->u.srv.port.NotAnInteger, x->TXT->rdlength, (char*)x->TXT->rdata->u.txt.c, x->context);
@@ -536,7 +539,7 @@ DNSServiceErrorType DNSServiceResolve
 	x->qSRV.ThisQInterval       = -1;		// So that DNSServiceResolveDispose() knows whether to cancel this question
 	x->qSRV.InterfaceID         = mDNSInterface_Any;
 	x->qSRV.Target              = zeroAddr;
-	AssignDomainName(x->qSRV.qname, srv);
+	AssignDomainName(&x->qSRV.qname, &srv);
 	x->qSRV.qtype               = kDNSType_SRV;
 	x->qSRV.qclass              = kDNSClass_IN;
 	x->qSRV.LongLived           = mDNSfalse;
@@ -548,7 +551,7 @@ DNSServiceErrorType DNSServiceResolve
 	x->qTXT.ThisQInterval       = -1;		// So that DNSServiceResolveDispose() knows whether to cancel this question
 	x->qTXT.InterfaceID         = mDNSInterface_Any;
 	x->qTXT.Target              = zeroAddr;
-	AssignDomainName(x->qTXT.qname, srv);
+	AssignDomainName(&x->qTXT.qname, &srv);
 	x->qTXT.qtype               = kDNSType_TXT;
 	x->qTXT.qclass              = kDNSClass_IN;
 	x->qTXT.LongLived           = mDNSfalse;
@@ -634,7 +637,7 @@ mDNSlocal void DNSServiceQueryRecordResponse(mDNS *const m, DNSQuestion *questio
 	mDNS_DirectOP_QueryRecord *x = (mDNS_DirectOP_QueryRecord*)question->QuestionContext;
 	char fullname[MAX_ESCAPED_DOMAIN_NAME];
 	(void)m;	// Unused
-	ConvertDomainNameToCString(&answer->name, fullname);
+	ConvertDomainNameToCString(answer->name, fullname);
 	x->callback((DNSServiceRef)x, AddRecord ? kDNSServiceFlagsAdd : (DNSServiceFlags)0, 0, kDNSServiceErr_NoError,
 		fullname, answer->rrtype, answer->rrclass, answer->rdlength, answer->rdata->u.data, answer->rroriginalttl, x->context);
 	}

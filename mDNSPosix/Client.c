@@ -24,6 +24,9 @@
     Change History (most recent first):
 
 $Log: Client.c,v $
+Revision 1.15  2004/12/16 20:17:11  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.14  2004/11/30 22:37:00  cheshire
 Update copyright dates and add "Mode: C; tab-width: 4" headers
 
@@ -91,7 +94,7 @@ First checkin
 static mDNS mDNSStorage;       // mDNS core uses this to store its globals
 static mDNS_PlatformSupport PlatformStorage;  // Stores this platform's globals
 #define RR_CACHE_SIZE 500
-static CacheRecord gRRCache[RR_CACHE_SIZE];
+static CacheEntity gRRCache[RR_CACHE_SIZE];
 
 static const char *gProgramName = "mDNSResponderPosix";
 

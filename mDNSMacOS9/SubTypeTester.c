@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: SubTypeTester.c,v $
+Revision 1.6  2004/12/16 20:49:35  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.5  2004/09/17 01:08:50  cheshire
 Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
   The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
@@ -111,7 +114,7 @@ mDNSlocal void RegisterService(mDNS *m, ServiceRecordSet *recordset,
 		mDNSInterface_Any,							// Interface ID
 		Callback, mDNSNULL);						// Callback and context
 
-	ConvertDomainNameToCString(&recordset->RR_SRV.resrec.name, buffer);
+	ConvertDomainNameToCString(recordset->RR_SRV.resrec.name, buffer);
 	printf("Made Service Records for %s\n", buffer);
 	}
 
@@ -162,8 +165,8 @@ mDNSlocal OSStatus mDNSResponderSetAvail(mDNS *m, AuthRecord *rr, ServiceRecordS
 	// 3. Set target of subtype PTR record to point to our SRV record (exactly the same as the main service PTR record)
 	// 4. And register it
 	mDNS_SetupResourceRecord(rr, mDNSNULL, mDNSInterface_Any, kDNSType_PTR, 2*3600, kDNSRecordTypeShared, AvailCallback, &availRec2Active);
-	MakeDomainNameFromDNSNameString(&rr->resrec.name, "a._sub._raop._tcp.local.");
-	AssignDomainName(rr->resrec.rdata->u.name, sr->RR_SRV.resrec.name);
+	MakeDomainNameFromDNSNameString(rr->resrec.name, "a._sub._raop._tcp.local.");
+	AssignDomainName(&rr->resrec.rdata->u.name, sr->RR_SRV.resrec.name);
 	return(mDNS_Register(m, rr));
 	}
 

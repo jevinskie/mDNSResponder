@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: Mac\040OS\040Test\040Responder.c,v $
+Revision 1.24  2004/12/16 20:49:34  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.23  2004/09/17 01:08:50  cheshire
 Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
   The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
@@ -80,10 +83,10 @@ mDNSlocal void Callback(mDNS *const m, ServiceRecordSet *const sr, mStatus resul
 	{
 	switch (result)
 		{
-		case mStatus_NoError:      debugf("Callback: %##s Name Registered",   sr->RR_SRV.resrec.name.c); break;
-		case mStatus_NameConflict: debugf("Callback: %##s Name Conflict",     sr->RR_SRV.resrec.name.c); break;
-		case mStatus_MemFree:      debugf("Callback: %##s Memory Free",       sr->RR_SRV.resrec.name.c); break;
-		default:                   debugf("Callback: %##s Unknown Result %d", sr->RR_SRV.resrec.name.c, result); break;
+		case mStatus_NoError:      debugf("Callback: %##s Name Registered",   sr->RR_SRV.resrec.name->c); break;
+		case mStatus_NameConflict: debugf("Callback: %##s Name Conflict",     sr->RR_SRV.resrec.name->c); break;
+		case mStatus_MemFree:      debugf("Callback: %##s Memory Free",       sr->RR_SRV.resrec.name->c); break;
+		default:                   debugf("Callback: %##s Unknown Result %d", sr->RR_SRV.resrec.name->c, result); break;
 		}
 
 	if (result == mStatus_NameConflict) mDNS_RenameAndReregisterService(m, sr, mDNSNULL);
@@ -119,7 +122,7 @@ mDNSlocal void RegisterService(mDNS *m, ServiceRecordSet *recordset,
 		mDNSInterface_Any,							// Interface ID
 		Callback, mDNSNULL);						// Callback and context
 
-	ConvertDomainNameToCString(&recordset->RR_SRV.resrec.name, buffer);
+	ConvertDomainNameToCString(recordset->RR_SRV.resrec.name, buffer);
 	printf("Made Service Records for %s\n", buffer);
 	}
 

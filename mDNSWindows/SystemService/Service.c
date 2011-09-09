@@ -23,6 +23,12 @@
     Change History (most recent first):
     
 $Log: Service.c,v $
+Revision 1.24  2005/01/27 20:02:43  cheshire
+udsSupportRemoveFDFromEventLoop() needs to close the SocketRef as well
+
+Revision 1.23  2005/01/25 08:14:15  shersche
+Change CacheRecord to CacheEntity
+
 Revision 1.22  2004/12/10 13:18:40  cheshire
 Create no-op function RecordUpdatedNiceLabel(), required by uds_daemon.c
 
@@ -155,7 +161,7 @@ mDNSResponder Windows Service. Provides global Rendezvous support with an IPC in
 #define	kDNSServiceCacheEntryCountDefault	512
 
 #define RR_CACHE_SIZE 500
-static CacheRecord gRRCache[RR_CACHE_SIZE];
+static CacheEntity gRRCache[RR_CACHE_SIZE];
 #if 0
 #pragma mark == Structures ==
 #endif
@@ -1451,7 +1457,7 @@ exit:
 
 
 mStatus
-udsSupportRemoveFDFromEventLoop( SocketRef fd)
+udsSupportRemoveFDFromEventLoop( SocketRef fd)		// Note: This also CLOSES the socket
 {
 	Win32EventSource	*	source;
 	mStatus					err = mStatus_NoError;
@@ -1481,6 +1487,8 @@ udsSupportRemoveFDFromEventLoop( SocketRef fd)
 	// done with the list
 	//
 	EventSourceUnlock();
+	
+	closesocket(fd);
 
 	return err;
 }

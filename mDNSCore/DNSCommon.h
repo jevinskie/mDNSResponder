@@ -23,6 +23,12 @@
     Change History (most recent first):
 
 $Log: DNSCommon.h,v $
+Revision 1.30  2005/01/19 03:12:44  cheshire
+Move LocalRecordReady() macro from mDNS.c to DNSCommon.h
+
+Revision 1.29  2004/12/15 02:11:22  ksekar
+<rdar://problem/3917317> Don't check for Dynamic DNS hostname uniqueness
+
 Revision 1.28  2004/12/06 21:15:22  ksekar
 <rdar://problem/3884386> mDNSResponder crashed in CheckServiceRegistrations
 
@@ -236,6 +242,7 @@ extern mDNSu16 GetRDLength(const ResourceRecord *const rr, mDNSBool estimate);
 	((RR)->rrtype == kDNSType_SRV                                  ) ? &(RR)->rdata->u.srv.target : mDNSNULL )
 
 extern mDNSBool ValidateRData(const mDNSu16 rrtype, const mDNSu16 rdlength, const RData *const rd);
+#define LocalRecordReady(X) ((X)->resrec.RecordType != kDNSRecordTypeUnique && (X)->resrec.RecordType != kDNSRecordTypeDeregistering)
 
 
 // ***************************************************************************
@@ -274,6 +281,8 @@ extern mDNSu8 *putZone(DNSMessage *const msg, mDNSu8 *ptr, mDNSu8 *limit, const 
 extern mDNSu8 *putPrereqNameNotInUse(domainname *name, DNSMessage *msg, mDNSu8 *ptr, mDNSu8 *end);
 
 extern mDNSu8 *putDeletionRecord(DNSMessage *msg, mDNSu8 *ptr, ResourceRecord *rr);
+
+extern  mDNSu8 *putDeleteRRSet(DNSMessage *msg, mDNSu8 *ptr, const domainname *name, mDNSu16 rrtype);
 
 extern mDNSu8 *putDeleteAllRRSets(DNSMessage *msg, mDNSu8 *ptr, const domainname *name);
 	
@@ -332,7 +341,7 @@ extern mStatus mDNSSendDNSMessage(const mDNS *const m, DNSMessage *const msg, mD
 
 extern void mDNS_Lock(mDNS *const m);
 extern void mDNS_Unlock(mDNS *const m);
-	
+
 #ifdef	__cplusplus
 	}
 #endif

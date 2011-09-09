@@ -23,6 +23,12 @@
     Change History (most recent first):
 
 $Log: uDNS.h,v $
+Revision 1.29  2005/01/11 22:50:53  ksekar
+Fixed constant naming (was using kLLQ_DefLease for update leases)
+
+Revision 1.28  2004/12/22 00:13:49  ksekar
+<rdar://problem/3873993> Change version, port, and polling interval for LLQ
+
 Revision 1.27  2004/11/23 04:06:50  cheshire
 Get rid of floating point constant -- in a small embedded device, bringing in all
 the floating point libraries just to halve an integer value is a bit too heavyweight.
@@ -126,10 +132,11 @@ Revision 1.1  2003/12/13 03:05:27  ksekar
 #define MIN_UCAST_PERIODIC_EXEC (5 * mDNSPlatformOneSecond) 	
 #define INIT_UCAST_POLL_INTERVAL mDNSPlatformOneSecond      // this interval is used after send failures on network transitions
 	                                                        // which typically heal quickly, so we start agressively and exponentially back off
-#define MAX_UCAST_POLL_INTERVAL (15 * 60 * mDNSPlatformOneSecond)
+#define MAX_UCAST_POLL_INTERVAL (60 * 60 * mDNSPlatformOneSecond)
 #define RESPONSE_WINDOW (60 * mDNSPlatformOneSecond)        // require server responses within one minute of request
 #define UPDATE_PORT_NAME "_dns-update._udp."
 #define LLQ_PORT_NAME "_dns-llq._udp"
+#define DEFAULT_UPDATE_LEASE 7200
 	
 // Entry points into unicast-specific routines
 

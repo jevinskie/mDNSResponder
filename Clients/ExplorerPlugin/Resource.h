@@ -1,32 +1,37 @@
-//{{NO_DEPENDENCIES}}
-// Microsoft Visual C++ generated include file.
-// Used by ExplorerPlugin.rc
-//
-#define IDS_NAME                        106
-#define IDS_WEB_SITES                   107
-#define IDS_FTP_SITES                   108
-#define IDS_PRINTERS                    109
-#define IDS_MDNSRESPONDER_NOT_AVAILABLE 110
-#define IDB_LOGO                        115
-#define IDI_BUTTON_2K                   115
-#define IDD_ABOUT                       118
-#define IDI_BUTTON_XP                   118
-#define IDB_ABOUT                       119
-#define IDR_CONTEXT_MENU                120
-#define IDD_LOGIN                       145
-#define IDC_COMPONENT                   1001
-#define IDC_LEGAL                       1002
-#define IDC_LOGIN_USERNAME_TEXT         1182
-#define IDC_LOGIN_PASSWORD_TEXT         1183
-#define ID_Menu                         40001
+/*
+ * Copyright (c) 2003-2004 Apple Computer, Inc. All rights reserved.
+ *
+ * @APPLE_LICENSE_HEADER_START@
+ * 
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
+ * 
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
+ * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
 
-// Next default values for new objects
-// 
-#ifdef APSTUDIO_INVOKED
-#ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        119
-#define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1001
-#define _APS_NEXT_SYMED_VALUE           101
-#endif
-#endif
+    Change History (most recent first):
+    
+ */
+
+// Include the core resources
+
+#include "resource_dll.h"
+
+// Include the non-localizable resources
+
+#include "resource_res.h"
+
+// Include the localizable resources
+
+#include "resource_loc_res.h"

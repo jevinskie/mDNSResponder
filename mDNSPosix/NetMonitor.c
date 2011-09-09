@@ -37,6 +37,9 @@
     Change History (most recent first):
 
 $Log: NetMonitor.c,v $
+Revision 1.71  2004/12/16 20:17:11  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.70  2004/12/04 02:13:20  cheshire
 Pass proper record type in GetLargeResourceRecord() calls
 
@@ -489,14 +492,14 @@ mDNSlocal void RecordHostInfo(HostEntry *entry, const ResourceRecord *const pktr
 			{
 			// Should really check that the rdata in the address record matches the source address of this packet
 			entry->NumQueries = 0;
-			AssignDomainName(entry->hostname, pktrr->name);
+			AssignDomainName(&entry->hostname, pktrr->name);
 			}
 
 		if (pktrr->rrtype == kDNSType_PTR)
-			if (SameDomainName(&entry->revname, &pktrr->name))
+			if (SameDomainName(&entry->revname, pktrr->name))
 				{
 				entry->NumQueries = 0;
-				AssignDomainName(entry->hostname, pktrr->rdata->u.name);
+				AssignDomainName(&entry->hostname, &pktrr->rdata->u.name);
 				}
 		}
 	else if (pktrr->rrtype == kDNSType_HINFO)
@@ -507,7 +510,7 @@ mDNSlocal void RecordHostInfo(HostEntry *entry, const ResourceRecord *const pktr
 		mDNSu8 *sw = hw + 1 + (mDNSu32)hw[0];
 		if (sw + 1 + sw[0] <= rdend)
 			{
-			AssignDomainName(entry->hostname, pktrr->name);
+			AssignDomainName(&entry->hostname, pktrr->name);
 			mDNSPlatformMemCopy(hw, entry->HIHardware.c, 1 + (mDNSu32)hw[0]);
 			mDNSPlatformMemCopy(sw, entry->HISoftware.c, 1 + (mDNSu32)sw[0]);
 			}
@@ -731,7 +734,7 @@ mDNSlocal void DisplayResourceRecord(const mDNSAddr *const srcaddr, const char *
 
 	RDataBody *rd = &pktrr->rdata->u;
 	mDNSu8 *rdend = (mDNSu8 *)rd + pktrr->rdlength;
-	int n = mprintf("%#-16a %-5s %-5s%5lu %##s -> ", srcaddr, op, DNSTypeName(pktrr->rrtype), pktrr->rroriginalttl, pktrr->name.c);
+	int n = mprintf("%#-16a %-5s %-5s%5lu %##s -> ", srcaddr, op, DNSTypeName(pktrr->rrtype), pktrr->rroriginalttl, pktrr->name->c);
 
 	switch(pktrr->rrtype)
 		{
@@ -864,7 +867,7 @@ mDNSlocal void DisplayQuery(mDNS *const m, const DNSMessage *const msg, const mD
 		// the same as a single query, to more accurately reflect the burden on the network
 		// (A query with a six-packet KA list is *at least* six times the burden on the network as a single-packet query.)
 		if (msg->h.numQuestions == 0 && i == 0)
-			recordstat(entry, &pkt.r.resrec.name, OP_query, pkt.r.resrec.rrtype);
+			recordstat(entry, pkt.r.resrec.name, OP_query, pkt.r.resrec.rrtype);
 		}
 
 	for (i=0; i<msg->h.numAuthorities; i++)
@@ -909,14 +912,14 @@ mDNSlocal void DisplayResponse(mDNS *const m, const DNSMessage *const msg, const
 			{
 			NumAnswers++;
 			DisplayResourceRecord(srcaddr, (pkt.r.resrec.RecordType & kDNSRecordTypePacketUniqueMask) ? "(AN)" : "(AN+)", &pkt.r.resrec);
-			if (msg->h.id.NotAnInteger != 0xFFFF) recordstat(entry, &pkt.r.resrec.name, OP_answer, pkt.r.resrec.rrtype);
+			if (msg->h.id.NotAnInteger != 0xFFFF) recordstat(entry, pkt.r.resrec.name, OP_answer, pkt.r.resrec.rrtype);
 			if (entry) RecordHostInfo(entry, &pkt.r.resrec);
 			}
 		else
 			{
 			NumGoodbyes++;
 			DisplayResourceRecord(srcaddr, "(DE)", &pkt.r.resrec);
-			recordstat(entry, &pkt.r.resrec.name, OP_goodbye, pkt.r.resrec.rrtype);
+			recordstat(entry, pkt.r.resrec.name, OP_goodbye, pkt.r.resrec.rrtype);
 			}
 		}
 
@@ -926,7 +929,7 @@ mDNSlocal void DisplayResponse(mDNS *const m, const DNSMessage *const msg, const
 		ptr = GetLargeResourceRecord(m, msg, ptr, end, InterfaceID, kDNSRecordTypePacketAuth, &pkt);
 		if (!ptr) { DisplayError(srcaddr, ep, end, "AUTHORITY"); return; }
 		mprintf("%#-16a (?)  **** ERROR: SHOULD NOT HAVE AUTHORITY IN mDNS RESPONSE **** %-5s %##s\n",
-			srcaddr, DNSTypeName(pkt.r.resrec.rrtype), pkt.r.resrec.name.c);
+			srcaddr, DNSTypeName(pkt.r.resrec.rrtype), pkt.r.resrec.name->c);
 		}
 
 	for (i=0; i<msg->h.numAdditionals; i++)

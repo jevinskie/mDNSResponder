@@ -12,8 +12,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="Debug"
-			IntermediateDirectory="Debug"
+			OutputDirectory=".\Debug"
+			IntermediateDirectory=".\Debug"
 			ConfigurationType="1"
 			UseOfMFC="1"
 			CharacterSet="2">
@@ -21,7 +21,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories=".;../../mDNSWindows;../../mDNSShared;C:\WINDDK\2600.1106\inc;C:\WINDDK\2600.1106\inc\wxp"
-				PreprocessorDefinitions="WIN32;_WINDOWS;_DEBUGS;DEBUG=1;WINVER=0x0400;UNICODE;_UNICODE"
+				PreprocessorDefinitions="WIN32;_WINDOWS;_DEBUGS;DEBUG=1;WINVER=0x0501;UNICODE;_UNICODE"
 				StringPooling="TRUE"
 				MinimalRebuild="TRUE"
 				BasicRuntimeChecks="3"
@@ -42,6 +42,7 @@
 				OutputFile="$(OutDir)/RendezvousPrinterWizard.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile="$(IntDir)/$(ProjectName).pdb"
 				SubSystem="2"
 				EntryPointSymbol="wWinMainCRTStartup"
 				TargetMachine="1"/>
@@ -67,8 +68,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="Release"
-			IntermediateDirectory="Release"
+			OutputDirectory=".\Release\Root\Program Files"
+			IntermediateDirectory=".\Release"
 			ConfigurationType="1"
 			UseOfMFC="1"
 			CharacterSet="2">
@@ -78,7 +79,7 @@
 				InlineFunctionExpansion="1"
 				OmitFramePointers="TRUE"
 				AdditionalIncludeDirectories=".;../../mDNSWindows;../../mDNSShared;C:\WINDDK\2600.1106\inc;C:\WINDDK\2600.1106\inc\wxp"
-				PreprocessorDefinitions="WIN32;_WINDOWS;NDEBUG;WINVER=0x0400;UNICODE;_UNICODE"
+				PreprocessorDefinitions="WIN32;_WINDOWS;NDEBUG;WINVER=0x0501;UNICODE;_UNICODE"
 				StringPooling="TRUE"
 				MinimalRebuild="FALSE"
 				RuntimeLibrary="0"
@@ -97,6 +98,7 @@
 				OutputFile="$(OutDir)/RendezvousPrinterWizard.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile="$(IntDir)/$(ProjectName).pdb"
 				SubSystem="2"
 				OptimizeReferences="0"
 				EnableCOMDATFolding="0"
@@ -174,9 +176,6 @@
 				RelativePath="PrinterSetupWizardSheet.h">
 			</File>
 			<File
-				RelativePath="Resource.h">
-			</File>
-			<File
 				RelativePath="SecondPage.h">
 			</File>
 			<File
@@ -189,6 +188,12 @@
 				RelativePath=".\UtilTypes.h">
 			</File>
 			<File
+				RelativePath="resource.h">
+			</File>
+			<File
+				RelativePath="resource_exe.h">
+			</File>
+			<File
 				RelativePath="stdafx.h">
 			</File>
 		</Filter>
@@ -196,25 +201,13 @@
 			Name="Resource Files"
 			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;jpg;jpeg;jpe;manifest">
 			<File
-				RelativePath=".\res\Info.ico">
+				RelativePath="res\Info.ico">
 			</File>
 			<File
-				RelativePath=".\res\NetworkPrinter.ico">
+				RelativePath="res\NetworkPrinter.ico">
 			</File>
 			<File
-				RelativePath=".\res\Print.ico">
-			</File>
-			<File
-				RelativePath=".\res\Printer.bmp">
-			</File>
-			<File
-				RelativePath=".\res\Printer.ico">
-			</File>
-			<File
-				RelativePath=".\res\Printer2.ico">
-			</File>
-			<File
-				RelativePath="res\PrinterSetupWizard.ico">
+				RelativePath="res\Print.ico">
 			</File>
 			<File
 				RelativePath="res\PrinterSetupWizard.manifest">
@@ -223,10 +216,7 @@
 				RelativePath="PrinterSetupWizard.rc">
 			</File>
 			<File
-				RelativePath="res\PrinterSetupWizard.rc2">
-			</File>
-			<File
-				RelativePath=".\res\about.bmp">
+				RelativePath="res\about.bmp">
 			</File>
 			<File
 				RelativePath="res\banner_icon.bmp">
@@ -255,6 +245,21 @@
 			</File>
 			<File
 				RelativePath="..\..\mDNSShared\dns_sd.h">
+			</File>
+			<File
+				RelativePath="..\..\mDNSWindows\isocode.h">
+			</File>
+			<File
+				RelativePath="..\..\mDNSWindows\loclibrary.c">
+				<FileConfiguration
+					Name="Debug|Win32">
+					<Tool
+						Name="VCCLCompilerTool"
+						DisableSpecificWarnings="4201"/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\..\mDNSWindows\loclibrary.h">
 			</File>
 		</Filter>
 		<File

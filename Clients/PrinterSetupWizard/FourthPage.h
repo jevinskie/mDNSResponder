@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: FourthPage.h,v $
+Revision 1.2  2005/01/06 08:17:08  shersche
+Display the selected protocol ("Raw", "LPR", "IPP") rather than the port name
+
 Revision 1.1  2004/06/18 04:36:57  rpantos
 First checked in
 
@@ -66,6 +69,6 @@ private:
 	CStatic m_printerNameCtrl;
 	CStatic m_printerManufacturerCtrl;
 	CStatic m_printerModelCtrl;
-	CStatic m_printerPortCtrl;
+	CStatic m_printerProtocolCtrl;
 	CStatic m_printerDefault;
 };

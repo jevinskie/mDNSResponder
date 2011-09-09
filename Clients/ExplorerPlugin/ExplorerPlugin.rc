@@ -1,6 +1,6 @@
 // Microsoft Visual C++ generated resource script.
 //
-#include "Resource.h"
+#include "resource_dll.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -30,7 +30,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 
 1 TEXTINCLUDE 
 BEGIN
-    "Resource.h\0"
+    "resource_dll.h\0"
 END
 
 2 TEXTINCLUDE 
@@ -84,7 +84,7 @@ BEGIN
             VALUE "FileDescription", "DNSServices Explorer Bar"
             VALUE "FileVersion", MASTER_PROD_VERS_STR
             VALUE "InternalName", "ExplorerPlugin.dll"
-            VALUE "LegalCopyright", "Copyright (C) 2003-2004 Apple Computer, Inc."
+            VALUE "LegalCopyright", MASTER_LEGAL_COPYRIGHT
             VALUE "OriginalFilename", "ExplorerPlugin.dll"
             VALUE "ProductName", MASTER_PROD_NAME
             VALUE "ProductVersion", MASTER_PROD_VERS_STR
@@ -94,111 +94,6 @@ BEGIN
     BEGIN
         VALUE "Translation", 0x409, 1200
     END
-END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Dialog
-//
-
-IDD_LOGIN DIALOGEX 0, 0, 180, 89
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
-CAPTION "Login"
-FONT 8, "MS Shell Dlg", 0, 0, 0x0
-BEGIN
-    LTEXT           "Enter a username and password. Leave blank to use the default username and/or password.",
-                    IDC_STATIC,8,8,156,16,NOT WS_GROUP
-    RTEXT           "Username:",IDC_STATIC,10,34,36,8,NOT WS_GROUP
-    EDITTEXT        IDC_LOGIN_USERNAME_TEXT,50,32,118,12,ES_AUTOHSCROLL
-    RTEXT           "Password:",IDC_STATIC,10,50,36,8,NOT WS_GROUP
-    EDITTEXT        IDC_LOGIN_PASSWORD_TEXT,50,48,118,12,ES_PASSWORD | 
-                    ES_AUTOHSCROLL
-    DEFPUSHBUTTON   "OK",IDOK,129,70,44,14
-    PUSHBUTTON      "Cancel",IDCANCEL,77,70,44,14
-END
-
-IDD_ABOUT DIALOGEX 0, 0, 219, 87
-STYLE DS_SETFONT | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-EXSTYLE WS_EX_RTLREADING | WS_EX_LEFTSCROLLBAR
-CAPTION "About Rendezvous"
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
-BEGIN
-    CONTROL         119,IDC_STATIC,"Static",SS_BITMAP | SS_REALSIZEIMAGE,0,0,
-                    220,86
-    CONTROL         MASTER_PROD_VERS_STR3,IDC_COMPONENT,"Static",
-                    SS_SIMPLE | WS_GROUP,92,10,122,8
-    LTEXT           "Copyright (c) 2004 Apple Computer, Inc. All rights reserved. Apple and the Apple logo are trademarks of Apple Computer, Inc., registered in the U.S. and other countries.",
-                    IDC_LEGAL,92,31,123,50,0,WS_EX_RTLREADING
-END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// DESIGNINFO
-//
-
-#ifdef APSTUDIO_INVOKED
-GUIDELINES DESIGNINFO 
-BEGIN
-    IDD_LOGIN, DIALOG
-    BEGIN
-        BOTTOMMARGIN, 62
-    END
-
-    IDD_ABOUT, DIALOG
-    BEGIN
-        BOTTOMMARGIN, 132
-    END
-END
-#endif    // APSTUDIO_INVOKED
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Bitmap
-//
-
-IDB_LOGO                BITMAP                  "res\\logo.bmp"
-IDB_ABOUT               BITMAP                  "res\\about.bmp"
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Icon
-//
-
-// Icon with lowest ID value placed first to ensure application icon
-// remains consistent on all systems.
-IDI_BUTTON_2K           ICON                    "res\\button-2k.ico"
-IDI_BUTTON_XP           ICON                    "res\\button-xp.ico"
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Menu
-//
-
-IDR_CONTEXT_MENU MENU 
-BEGIN
-    POPUP "ContextMenu"
-    BEGIN
-        MENUITEM "About Rendezvous...",         ID_Menu
-        MENUITEM SEPARATOR
-    END
-END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// String Table
-//
-
-STRINGTABLE 
-BEGIN
-    IDS_NAME                "Rendezvous"
-    IDS_WEB_SITES           "Web Sites"
-    IDS_FTP_SITES           "FTP Sites"
-    IDS_PRINTERS            "Printers"
-    IDS_MDNSRESPONDER_NOT_AVAILABLE "Rendezvous Service Not Available"
 END
 
 #endif    // English (U.S.) resources

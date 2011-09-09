@@ -24,6 +24,9 @@
     Change History (most recent first):
 
 $Log: PlatformCommon.c,v $
+Revision 1.4  2005/01/19 19:19:21  ksekar
+<rdar://problem/3960191> Need a way to turn off domain discovery
+
 Revision 1.3  2004/12/13 17:46:52  cheshire
 Use sizeof(buf) instead of fixed constant 1024
 
@@ -67,10 +70,10 @@ mDNSexport void FindDefaultRouteIP(mDNSAddr *a)
 	a->ip.v4.NotAnInteger = addr.sin_addr.s_addr;
 	}
 
-// dst must be at least MAX_ESCAPED_DOMAIN_NAME bytes, and option must be less than 20 bytes in length
+// dst must be at least MAX_ESCAPED_DOMAIN_NAME bytes, and option must be less than 32 bytes in length
 mDNSlocal mDNSBool GetConfigOption(char *dst, const char *option, FILE *f)
 	{
-	char buf[20+1+MAX_ESCAPED_DOMAIN_NAME];	// Option name, one space, option value
+	char buf[32+1+MAX_ESCAPED_DOMAIN_NAME];	// Option name, one space, option value
 	unsigned int len = strlen(option);
 	if (len + 1 + MAX_ESCAPED_DOMAIN_NAME > sizeof(buf)-1) { LogMsg("GetConfigOption: option %s too long", option); return mDNSfalse; }
 	fseek(f, 0, SEEK_SET);  // set position to beginning of stream
@@ -89,23 +92,24 @@ mDNSlocal mDNSBool GetConfigOption(char *dst, const char *option, FILE *f)
 	return mDNSfalse;
 	}
 
-mDNSexport void ReadDDNSSettingsFromConfFile(mDNS *const m, const char *const filename, domainname *const hostname, domainname *const domain)
+mDNSexport void ReadDDNSSettingsFromConfFile(mDNS *const m, const char *const filename, domainname *const hostname, domainname *const domain, mDNSBool *DomainDiscoveryDisabled)
 	{
-	char zone  [MAX_ESCAPED_DOMAIN_NAME];
-	char fqdn  [MAX_ESCAPED_DOMAIN_NAME];
+	char buf   [MAX_ESCAPED_DOMAIN_NAME];
 	char secret[MAX_ESCAPED_DOMAIN_NAME] = "";
 	int slen;
 	mStatus err;
 	FILE *f = fopen(filename, "r");
 
-    hostname->c[0] = 0;
-    domain->c[0] = 0;
+    if (hostname)                 hostname->c[0] = 0;
+    if (domain)                   domain->c[0] = 0;
+	if (DomainDiscoveryDisabled) *DomainDiscoveryDisabled = mDNSfalse;
 
 	if (f)
 		{
-		if (GetConfigOption(fqdn, "hostname", f) && !MakeDomainNameFromDNSNameString(hostname, fqdn)) goto badf;
-		if (GetConfigOption(zone, "zone", f) && !MakeDomainNameFromDNSNameString(domain, zone)) goto badf;
-		GetConfigOption(secret, "secret-64", f);  // failure means no authentication	   
+		if (DomainDiscoveryDisabled && GetConfigOption(buf, "DomainDiscoveryDisabled", f) && !strcasecmp(buf, "true")) *DomainDiscoveryDisabled = mDNStrue;
+		if (hostname && GetConfigOption(buf, "hostname", f) && !MakeDomainNameFromDNSNameString(hostname, buf)) goto badf;
+		if (domain && GetConfigOption(buf, "zone", f) && !MakeDomainNameFromDNSNameString(domain, buf)) goto badf;
+		GetConfigOption(secret, "secret-64", f);  // failure means no authentication	   		
 		fclose(f);
 		f = NULL;
 		}
@@ -115,7 +119,7 @@ mDNSexport void ReadDDNSSettingsFromConfFile(mDNS *const m, const char *const fi
 		return;
 		}
 
-	if (secret[0])
+	if (domain && domain->c[0] && secret[0])
 		{
 		// for now we assume keyname = service reg domain and we use same key for service and hostname registration
 		slen = strlen(secret);

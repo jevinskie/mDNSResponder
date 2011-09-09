@@ -23,6 +23,34 @@
     Change History (most recent first):
 
 $Log: DNSCommon.c,v $
+Revision 1.83  2005/01/27 22:57:55  cheshire
+Fix compile errors on gcc4
+
+Revision 1.82  2005/01/19 03:27:03  cheshire
+<rdar://problem/3961051> CPU Spin in mDNSResponder
+GetNextScheduledEvent() needs to check LocalRecordReady()
+
+Revision 1.81  2004/12/18 03:13:45  cheshire
+<rdar://problem/3751638> kDNSServiceInterfaceIndexLocalOnly should return all local records
+
+Revision 1.80  2004/12/16 21:46:43  cheshire
+Add DNSTypeName case for kDNSType_SOA
+
+Revision 1.79  2004/12/16 21:38:37  cheshire
+Add DNSTypeName case for kDNSType_NS
+
+Revision 1.78  2004/12/16 21:27:37  ksekar
+Fixed build failures when compiled with verbose debugging messages
+
+Revision 1.77  2004/12/16 20:12:59  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
+Revision 1.76  2004/12/16 08:05:29  shersche
+Remove extranenous semicolons that cause compilation errors on Windows
+
+Revision 1.75  2004/12/15 02:11:22  ksekar
+<rdar://problem/3917317> Don't check for Dynamic DNS hostname uniqueness
+
 Revision 1.74  2004/12/09 22:49:15  ksekar
 <rdar://problem/3913653> Wide-Area Goodbyes broken
 
@@ -299,7 +327,7 @@ mDNSexport DNameListElem *mDNS_CopyDNameList(const DNameListElem *orig)
 		{
 		newelem = (DNameListElem*)mDNSPlatformMemAllocate(sizeof(DNameListElem));
 		if (!newelem) { LogMsg("ERROR: malloc"); return mDNSNULL; }
-		AssignDomainName(newelem->name, ptr->name);
+		AssignDomainName(&newelem->name, &ptr->name);
 		newelem->next = copy;
 		copy = newelem;
 		}
@@ -352,10 +380,10 @@ mDNSexport mDNSInterfaceID GetNextActiveInterfaceID(const NetworkInterfaceInfo *
 mDNSexport mDNSu32 NumCacheRecordsForInterfaceID(const mDNS *const m, mDNSInterfaceID id)
 	{
 	mDNSu32 slot, used = 0;
+	CacheGroup *cg;
 	CacheRecord *rr;
-	for (slot = 0; slot < CACHE_HASH_SLOTS; slot++)
-		for (rr = m->rrcache_hash[slot]; rr; rr=rr->next)
-			if (rr->resrec.InterfaceID == id) used++;
+	FORALL_CACHERECORDS(slot, cg, rr)
+		if (rr->resrec.InterfaceID == id) used++;
 	return(used);
 	}
 
@@ -364,7 +392,9 @@ mDNSexport char *DNSTypeName(mDNSu16 rrtype)
 	switch (rrtype)
 		{
 		case kDNSType_A:    return("Addr");
+		case kDNSType_NS:   return("NS");
 		case kDNSType_CNAME:return("CNAME");
+		case kDNSType_SOA:  return("SOA");
 		case kDNSType_NULL: return("NULL");
 		case kDNSType_PTR:  return("PTR");
 		case kDNSType_HINFO:return("HINFO");
@@ -383,7 +413,7 @@ mDNSexport char *DNSTypeName(mDNSu16 rrtype)
 mDNSexport char *GetRRDisplayString_rdb(const ResourceRecord *rr, RDataBody *rd, char *buffer)
 	{
 	char *ptr = buffer;
-	mDNSu32 length = mDNS_snprintf(buffer, 79, "%4d %##s %s ", rr->rdlength, rr->name.c, DNSTypeName(rr->rrtype));
+	mDNSu32 length = mDNS_snprintf(buffer, 79, "%4d %##s %s ", rr->rdlength, rr->name->c, DNSTypeName(rr->rrtype));
 	switch (rr->rrtype)
 		{
 		case kDNSType_A:	mDNS_snprintf(buffer+length, 79-length, "%.4a", &rd->ipv4);          break;
@@ -1029,26 +1059,26 @@ mDNSexport mDNSBool SameResourceRecord(ResourceRecord *r1, ResourceRecord *r2)
 	{
 	return (r1->namehash == r2->namehash &&
 			r1->rrtype == r2->rrtype && 
-			SameDomainName(&r1->name, &r2->name) &&
+			SameDomainName(r1->name, r2->name) &&
 			SameRData(r1, r2));
 	}
 
 mDNSexport mDNSBool ResourceRecordAnswersQuestion(const ResourceRecord *const rr, const DNSQuestion *const q)
 	{
 	if (rr->InterfaceID &&
-		q ->InterfaceID &&
+		q ->InterfaceID && q->InterfaceID != mDNSInterface_LocalOnly &&
 		rr->InterfaceID != q->InterfaceID) return(mDNSfalse);
 
 	// RR type CNAME matches any query type. QTYPE ANY matches any RR type. QCLASS ANY matches any RR class.
 	if (rr->rrtype != kDNSType_CNAME && rr->rrtype  != q->qtype  && q->qtype  != kDNSQType_ANY ) return(mDNSfalse);
 	if (                                rr->rrclass != q->qclass && q->qclass != kDNSQClass_ANY) return(mDNSfalse);
-	return(rr->namehash == q->qnamehash && SameDomainName(&rr->name, &q->qname));
+	return(rr->namehash == q->qnamehash && SameDomainName(rr->name, &q->qname));
 	}
 
 mDNSexport mDNSu16 GetRDLength(const ResourceRecord *const rr, mDNSBool estimate)
 	{
 	const RDataBody *rd = &rr->rdata->u;
-	const domainname *const name = estimate ? &rr->name : mDNSNULL;
+	const domainname *const name = estimate ? rr->name : mDNSNULL;
 	switch (rr->rrtype)
 		{
 		case kDNSType_A:	return(sizeof(rd->ipv4));
@@ -1259,7 +1289,7 @@ mDNSlocal mDNSu8 *putOptRData(mDNSu8 *ptr, const mDNSu8 *limit, ResourceRecord *
 		{
 		// check if space for opt/optlen
 		if (ptr + (2 * sizeof(mDNSu16)) > limit) goto space_err;
-		(mDNSu8 *)opt = rr->rdata->u.data + nput;
+		opt = (rdataOpt *)(rr->rdata->u.data + nput);
 		ptr = putVal16(ptr, opt->opt);
 		ptr = putVal16(ptr, opt->optlen);
 		nput += 2 * sizeof(mDNSu16);
@@ -1400,11 +1430,11 @@ mDNSexport mDNSu8 *PutResourceRecordTTLWithLimit(DNSMessage *const msg, mDNSu8 *
 
 	if (rr->RecordType == kDNSRecordTypeUnregistered)
 		{
-		LogMsg("PutResourceRecord ERROR! Attempt to put kDNSRecordTypeUnregistered %##s (%s)", rr->name.c, DNSTypeName(rr->rrtype));
+		LogMsg("PutResourceRecord ERROR! Attempt to put kDNSRecordTypeUnregistered %##s (%s)", rr->name->c, DNSTypeName(rr->rrtype));
 		return(ptr);
 		}
 
-	ptr = putDomainNameAsLabels(msg, ptr, limit, &rr->name);
+	ptr = putDomainNameAsLabels(msg, ptr, limit, rr->name);
 	if (!ptr || ptr + 10 >= limit) return(mDNSNULL);	// If we're out-of-space, return mDNSNULL
 	ptr[0] = (mDNSu8)(rr->rrtype  >> 8);
 	ptr[1] = (mDNSu8)(rr->rrtype  &  0xFF);
@@ -1415,7 +1445,7 @@ mDNSexport mDNSu8 *PutResourceRecordTTLWithLimit(DNSMessage *const msg, mDNSu8 *
 	ptr[6] = (mDNSu8)((ttl >>  8) &  0xFF);
 	ptr[7] = (mDNSu8)( ttl        &  0xFF);
 	endofrdata = putRData(msg, ptr+10, limit, rr);
-	if (!endofrdata) { verbosedebugf("Ran out of space in PutResourceRecord for %##s (%s)", rr->name.c, DNSTypeName(rr->rrtype)); return(mDNSNULL); }
+	if (!endofrdata) { verbosedebugf("Ran out of space in PutResourceRecord for %##s (%s)", rr->name->c, DNSTypeName(rr->rrtype)); return(mDNSNULL); }
 
 	// Go back and fill in the actual number of data bytes we wrote
 	// (actualLength can be less than rdlength when domain name compression is used)
@@ -1424,7 +1454,7 @@ mDNSexport mDNSu8 *PutResourceRecordTTLWithLimit(DNSMessage *const msg, mDNSu8 *
 	ptr[9] = (mDNSu8)(actualLength &  0xFF);
 
 	if (count) (*count)++;
-	else LogMsg("PutResourceRecordTTL: ERROR: No target count to update for %##s (%s)", rr->name.c, DNSTypeName(rr->rrtype));
+	else LogMsg("PutResourceRecordTTL: ERROR: No target count to update for %##s (%s)", rr->name->c, DNSTypeName(rr->rrtype));
 	return(endofrdata);
 	}
 
@@ -1438,7 +1468,7 @@ mDNSexport mDNSu8 *PutResourceRecordCappedTTL(DNSMessage *const msg, mDNSu8 *ptr
 mDNSexport mDNSu8 *putEmptyResourceRecord(DNSMessage *const msg, mDNSu8 *ptr, const mDNSu8 *const limit,
 	mDNSu16 *count, const AuthRecord *rr)
 	{
-	ptr = putDomainNameAsLabels(msg, ptr, limit, &rr->resrec.name);
+	ptr = putDomainNameAsLabels(msg, ptr, limit, rr->resrec.name);
 	if (!ptr || ptr + 10 > limit) return(mDNSNULL);		// If we're out-of-space, return mDNSNULL
 	ptr[0] = (mDNSu8)(rr->resrec.rrtype  >> 8);				// Put type
 	ptr[1] = (mDNSu8)(rr->resrec.rrtype  &  0xFF);
@@ -1481,7 +1511,8 @@ mDNSexport mDNSu8 *putPrereqNameNotInUse(domainname *name, DNSMessage *msg, mDNS
 	AuthRecord prereq;
 
 	mDNSPlatformMemZero(&prereq, sizeof(AuthRecord));
-	AssignDomainName(prereq.resrec.name, *name);
+	mDNS_SetupResourceRecord(&prereq, mDNSNULL, mDNSInterface_Any, kDNSQType_ANY, kStandardTTL, 0, mDNSNULL, mDNSNULL);
+	AssignDomainName(prereq.resrec.name, name);
 	prereq.resrec.rrtype = kDNSQType_ANY;
 	prereq.resrec.rrclass = kDNSClass_NONE;
 	ptr = putEmptyResourceRecord(msg, ptr, end, &msg->h.mDNS_numPrereqs, &prereq);
@@ -1501,10 +1532,28 @@ mDNSexport mDNSu8 *putDeletionRecord(DNSMessage *msg, mDNSu8 *ptr, ResourceRecor
 	return ptr;
 	}
 
+mDNSexport mDNSu8 *putDeleteRRSet(DNSMessage *msg, mDNSu8 *ptr, const domainname *name, mDNSu16 rrtype)
+	{
+	const mDNSu8 *limit = msg->data + AbsoluteMaxDNSMessageData;
+	mDNSu16 class = kDNSQClass_ANY;
+	
+	ptr = putDomainNameAsLabels(msg, ptr, limit, name);
+	if (!ptr || ptr + 10 >= limit) return mDNSNULL;	// If we're out-of-space, return mDNSNULL
+	ptr[0] = (mDNSu8)(rrtype  >> 8);
+	ptr[1] = (mDNSu8)(rrtype  &  0xFF);
+	ptr[2] = (mDNSu8)(class >> 8);
+	ptr[3] = (mDNSu8)(class &  0xFF);
+	ptr[4] = ptr[5] = ptr[6] = ptr[7] = 0; // zero ttl
+	ptr[8] = ptr[9] = 0; // zero rdlength/rdata
+
+	msg->h.mDNS_numUpdates++;
+	return ptr + 10;
+	}
+
 // for dynamic updates
 mDNSexport mDNSu8 *putDeleteAllRRSets(DNSMessage *msg, mDNSu8 *ptr, const domainname *name)
 	{
-	const mDNSu8 *limit = msg->data + AbsoluteMaxDNSMessageData;;
+	const mDNSu8 *limit = msg->data + AbsoluteMaxDNSMessageData;
 	mDNSu16 class = kDNSQClass_ANY;
 	mDNSu16 rrtype = kDNSQType_ANY;
 	
@@ -1529,7 +1578,7 @@ mDNSexport mDNSu8 *putUpdateLease(DNSMessage *msg, mDNSu8 *end, mDNSu32 lease)
 	rdataOpt *optRD;
 
 	mDNSPlatformMemZero(&rr, sizeof(AuthRecord));
-	opt->rdata = &rr.rdatastorage;
+	mDNS_SetupResourceRecord(&rr, mDNSNULL, mDNSInterface_Any, kDNSType_OPT, kStandardTTL, 0, mDNSNULL, mDNSNULL);
 	
 	opt->RecordType = kDNSRecordTypeKnownUnique;  // to avoid warnings in other layers
 	opt->rrtype = kDNSType_OPT;
@@ -1688,6 +1737,7 @@ mDNSexport const mDNSu8 *GetLargeResourceRecord(mDNS *const m, const DNSMessage 
 
 	rr->next              = mDNSNULL;
 	rr->resrec.RecordType = RecordType;
+	rr->resrec.name       = &largecr->namestorage;
 
 	rr->NextInKAList      = mDNSNULL;
 	rr->TimeRcvd          = m ? m->timenow : 0;
@@ -1704,7 +1754,7 @@ mDNSexport const mDNSu8 *GetLargeResourceRecord(mDNS *const m, const DNSMessage 
 	rr->NextInCFList      = mDNSNULL;
 
 	rr->resrec.InterfaceID       = InterfaceID;
-	ptr = getDomainName(msg, ptr, end, &rr->resrec.name);
+	ptr = getDomainName(msg, ptr, end, rr->resrec.name);
 	if (!ptr) { debugf("GetResourceRecord: Malformed RR name"); return(mDNSNULL); }
 
 	if (ptr + 10 > end) { debugf("GetResourceRecord: Malformed RR -- no type/class/ttl/len!"); return(mDNSNULL); }
@@ -1726,7 +1776,7 @@ mDNSexport const mDNSu8 *GetLargeResourceRecord(mDNS *const m, const DNSMessage 
 	rr->resrec.rdata = (RData*)&rr->rdatastorage;
 	rr->resrec.rdata->MaxRDLength = MaximumRDSize;
 
-	if (!RecordType) LogMsg("GetLargeResourceRecord: No RecordType for %##s", rr->resrec.name.c);
+	if (!RecordType) LogMsg("GetLargeResourceRecord: No RecordType for %##s", rr->resrec.name->c);
 
 	switch (rr->resrec.rrtype)
 		{
@@ -1799,7 +1849,7 @@ mDNSexport const mDNSu8 *GetLargeResourceRecord(mDNS *const m, const DNSMessage 
 							break;
 		}
 
-	rr->resrec.namehash = DomainNameHashValue(&rr->resrec.name);
+	rr->resrec.namehash = DomainNameHashValue(rr->resrec.name);
 	SetNewRData(&rr->resrec, mDNSNULL, 0);
 
 	return(ptr + pktrdlength);
@@ -1974,10 +2024,9 @@ mDNSlocal mDNSs32 GetNextScheduledEvent(const mDNS *const m)
 		if (m->NewQuestions->DelayAnswering) e = m->NewQuestions->DelayAnswering;
 		else return(m->timenow);
 		}
-	if (m->NewLocalOnlyQuestions)   return(m->timenow);
-	if (m->NewLocalOnlyRecords)     return(m->timenow);
-	if (m->DiscardLocalOnlyRecords) return(m->timenow);
-	if (m->SuppressSending)         return(m->SuppressSending);
+	if (m->NewLocalOnlyQuestions)                                   return(m->timenow);
+	if (m->NewLocalRecords && LocalRecordReady(m->NewLocalRecords)) return(m->timenow);
+	if (m->SuppressSending)                                         return(m->SuppressSending);
 #ifndef UNICAST_DISABLED
 	if (e - m->uDNS_info.nextevent   > 0) e = m->uDNS_info.nextevent;
 #endif

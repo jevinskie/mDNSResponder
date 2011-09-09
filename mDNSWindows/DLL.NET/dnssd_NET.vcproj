@@ -82,7 +82,8 @@
 				AdditionalDependencies="../DLL/Release/dnssd.lib mscoree.lib ws2_32.lib msvcrt.lib"
 				OutputFile="$(OutDir)\dnssd.NET.dll"
 				LinkIncremental="1"
-				GenerateDebugInformation="TRUE"/>
+				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile="$(IntDir)/$(ProjectName).pdb"/>
 			<Tool
 				Name="VCMIDLTool"/>
 			<Tool

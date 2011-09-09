@@ -23,7 +23,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="..\..\mDNSShared;..\..\mDNSWindows"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;DEBUG=1;ENABLE_DOT_LOCAL_NAMES;WINVER=0x0400"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;DEBUG=1;ENABLE_DOT_LOCAL_NAMES;WINVER=0x0501"
 				StringPooling="TRUE"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
@@ -85,7 +85,7 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release"
+			OutputDirectory=".\Release\Root\Program Files\bin"
 			IntermediateDirectory=".\Release"
 			ConfigurationType="2"
 			UseOfMFC="1"
@@ -99,7 +99,7 @@
 				FavorSizeOrSpeed="2"
 				OmitFramePointers="TRUE"
 				AdditionalIncludeDirectories="..\..\mDNSShared;..\..\mDNSWindows"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;WINVER=0x0400"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;WINVER=0x0501"
 				StringPooling="TRUE"
 				RuntimeLibrary="0"
 				BufferSecurityCheck="FALSE"
@@ -131,11 +131,12 @@
 				SuppressStartupBanner="TRUE"
 				IgnoreDefaultLibraryNames="uafxcw.lib"
 				ModuleDefinitionFile="./$(ProjectName).def"
-				ProgramDatabaseFile="$(OutDir)/$(ProjectName).pdb"
+				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile="$(IntDir)/$(ProjectName).pdb"
 				SubSystem="2"
 				OptimizeReferences="0"
 				EnableCOMDATFolding="0"
-				ImportLibrary="$(OutDir)/$(ProjectName).lib"/>
+				ImportLibrary="$(IntDir)/$(ProjectName).lib"/>
 			<Tool
 				Name="VCMIDLTool"
 				PreprocessorDefinitions="NDEBUG"
@@ -178,6 +179,15 @@
 			</File>
 			<File
 				RelativePath="..\..\mDNSWindows\WinServices.h">
+			</File>
+			<File
+				RelativePath="..\..\mDNSWindows\isocode.h">
+			</File>
+			<File
+				RelativePath="..\..\mDNSWindows\loclibrary.c">
+			</File>
+			<File
+				RelativePath="..\..\mDNSWindows\loclibrary.h">
 			</File>
 		</Filter>
 		<Filter
@@ -235,39 +245,15 @@
 			<File
 				RelativePath="StdAfx.h">
 			</File>
+			<File
+				RelativePath="resource_dll.h">
+			</File>
 		</Filter>
 		<Filter
 			Name="Resource Files"
 			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;jpg;jpeg;jpe;manifest">
 			<File
 				RelativePath="ExplorerPlugin.rc">
-			</File>
-			<File
-				RelativePath="Web.ico">
-			</File>
-			<File
-				RelativePath=".\about.bmp">
-			</File>
-			<File
-				RelativePath=".\res\about.bmp">
-			</File>
-			<File
-				RelativePath=".\res\cold.ico">
-			</File>
-			<File
-				RelativePath=".\cold.ico">
-			</File>
-			<File
-				RelativePath=".\hot.ico">
-			</File>
-			<File
-				RelativePath=".\res\hot.ico">
-			</File>
-			<File
-				RelativePath=".\logo.bmp">
-			</File>
-			<File
-				RelativePath=".\res\logo.bmp">
 			</File>
 		</Filter>
 	</Files>

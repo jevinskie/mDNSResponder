@@ -64,8 +64,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="Release"
-			IntermediateDirectory="Release"
+			OutputDirectory=".\Release\Root\Program Files\bin"
+			IntermediateDirectory=".\Release"
 			ConfigurationType="2"
 			CharacterSet="2">
 			<Tool
@@ -92,10 +92,11 @@
 				LinkIncremental="1"
 				ModuleDefinitionFile="mdnsNSP.def"
 				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile="$(IntDir)/$(ProjectName).pdb"
 				SubSystem="2"
 				OptimizeReferences="0"
 				EnableCOMDATFolding="0"
-				ImportLibrary="$(OutDir)/mdnsNSP.lib"
+				ImportLibrary="$(IntDir)/mdnsNSP.lib"
 				TargetMachine="1"/>
 			<Tool
 				Name="VCMIDLTool"/>

@@ -23,6 +23,17 @@
     Change History (most recent first):
     
 $Log: ExplorerBarWindow.cpp,v $
+Revision 1.15  2005/01/27 22:38:27  shersche
+add About item to tree list
+
+Revision 1.14  2005/01/25 17:55:39  shersche
+<rdar://problem/3911084> Get bitmaps from non-localizable resource module
+Bug #: 3911084
+
+Revision 1.13  2005/01/06 21:13:09  shersche
+<rdar://problem/3796779> Handle kDNSServiceErr_Firewall return codes
+Bug #: 3796779
+
 Revision 1.12  2004/10/26 00:56:03  cheshire
 Use "#if 0" instead of commenting out code
 
@@ -93,6 +104,7 @@ Explorer Plugin to browse for DNS-SD advertised Web and FTP servers from within 
 #include	"Resource.h"
 
 #include	"ExplorerBarWindow.h"
+#include	"ExplorerPlugin.h"
 
 // MFC Debugging
 
@@ -121,6 +133,7 @@ static char THIS_FILE[] = __FILE__;
 // TXT records
 
 #define	kTXTRecordKeyPath				"path"
+
 
 #if 0
 #pragma mark == Prototypes ==
@@ -195,7 +208,9 @@ int	ExplorerBarWindow::OnCreate( LPCREATESTRUCT inCreateStruct )
 	mTree.Create( WS_TABSTOP | WS_VISIBLE | WS_CHILD | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_HASLINES | TVS_NOHSCROLL , rect, this, 
 		IDC_EXPLORER_TREE );
 	
-	
+	s.LoadString( IDS_ABOUT );
+	m_about = mTree.InsertItem( s, 0, 0 );
+
 	ServiceHandlerEntry *		e;
 	
 	// Web Site Handler
@@ -212,7 +227,7 @@ int	ExplorerBarWindow::OnCreate( LPCREATESTRUCT inCreateStruct )
 	mServiceHandlers.Add( e );
 	
 	s.LoadString( IDS_WEB_SITES );
-	e->treeItem = mTree.InsertItem( s, 0, 0 );
+	e->treeItem = mTree.InsertItem( s, 1, 1 );
 	mTree.Expand( e->treeItem, TVE_EXPAND );
 	
 	err = DNSServiceBrowse( &e->ref, 0, 0, e->type, NULL, BrowseCallBack, e );
@@ -237,7 +252,7 @@ int	ExplorerBarWindow::OnCreate( LPCREATESTRUCT inCreateStruct )
 	mServiceHandlers.Add( e );
 	
 	s.LoadString( IDS_FTP_SITES );
-	e->treeItem = mTree.InsertItem( s, 0, 0 );
+	e->treeItem = mTree.InsertItem( s, 1, 1 );
 	mTree.Expand( e->treeItem, TVE_EXPAND );
 	
 	err = DNSServiceBrowse( &e->ref, 0, 0, e->type, NULL, BrowseCallBack, e );
@@ -248,20 +263,32 @@ int	ExplorerBarWindow::OnCreate( LPCREATESTRUCT inCreateStruct )
 
 	m_serviceRefs.push_back(e->ref); 
 
-	m_imageList.Create(16, 16, ILC_COLORDDB, 1, 0);
-	bitmap.LoadBitmap(IDB_LOGO);
-	m_imageList.Add(&bitmap, (CBitmap*) NULL);
+	m_imageList.Create( 16, 16, ILC_COLORDDB, 2, 0);
+	bitmap.Attach( ::LoadBitmap( GetNonLocalizedResources(), MAKEINTRESOURCE( IDB_GLOBE ) ) );
+	m_imageList.Add( &bitmap, (CBitmap*) NULL );
+	bitmap.Detach();
+	bitmap.Attach( ::LoadBitmap( GetNonLocalizedResources(), MAKEINTRESOURCE( IDB_LOGO ) ) );
+	m_imageList.Add( &bitmap, (CBitmap*) NULL );
 
 	mTree.SetImageList(&m_imageList, TVSIL_NORMAL);
 	
 exit:
 
 	// Cannot talk to the mDNSResponder service. Show the error message and exit (with kNoErr so they can see it).
-	if ( err != kNoErr )
+	if ( err )
 	{
-		s.LoadString( IDS_MDNSRESPONDER_NOT_AVAILABLE );
+		if ( err == kDNSServiceErr_Firewall )
+		{
+			s.LoadString( IDS_FIREWALL );
+		}
+		else
+		{
+			s.LoadString( IDS_MDNSRESPONDER_NOT_AVAILABLE );
+		}
+		
 		mTree.DeleteAllItems();
 		mTree.InsertItem( s, 0, 0, TVI_ROOT, TVI_LAST );
+		
 		err = kNoErr;
 	}
 
@@ -331,11 +358,25 @@ void	ExplorerBarWindow::OnDoubleClick( NMHDR *inNMHDR, LRESULT *outResult )
 	item = mTree.GetSelectedItem();
 	require( item, exit );
 	
-	service = reinterpret_cast < ServiceInfo * > ( mTree.GetItemData( item ) );
-	require_quiet( service, exit );
+	// Tell Internet Explorer to go to the URL if it's about item
 	
-	err = StartResolve( service );
-	require_noerr( err, exit );
+	if ( item == m_about )
+	{
+		CString url;
+
+		check( mOwner );
+
+		url.LoadString( IDS_ABOUT_URL );
+		mOwner->GoToURL( url );
+	}
+	else
+	{
+		service = reinterpret_cast < ServiceInfo * > ( mTree.GetItemData( item ) );
+		require_quiet( service, exit );
+		
+		err = StartResolve( service );
+		require_noerr( err, exit );
+	}
 
 exit:
 	*outResult = 0;
@@ -512,7 +553,7 @@ LONG	ExplorerBarWindow::OnServiceAdd( ServiceInfo * service )
 		
 		afterItem = ( index > 0 ) ? handler->array[ index - 1 ]->item : TVI_FIRST;
 		handler->array.InsertAt( index, service );
-		service->item = mTree.InsertItem( service->displayName, handler->treeItem, afterItem );
+		service->item = mTree.InsertItem( service->displayName, 1, 1, handler->treeItem, afterItem );
 		mTree.SetItemData( service->item, (DWORD_PTR) service );
 		
 		// Make sure the item is visible if this is the first time a service was added.

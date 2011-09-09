@@ -29,6 +29,9 @@
     Change History (most recent first):
 
 $Log: uds_daemon.h,v $
+Revision 1.14  2005/01/27 17:48:39  cheshire
+Added comment about CFSocketInvalidate closing the underlying socket
+
 Revision 1.13  2004/12/10 05:27:26  cheshire
 <rdar://problem/3909147> Guard against multiple autoname services of the same type on the same machine
 
@@ -101,7 +104,7 @@ extern void udsserver_default_browse_domain_changed(const domainname *d, mDNSBoo
 typedef	void (*udsEventCallback)(void *context);
 
 extern mStatus udsSupportAddFDToEventLoop(dnssd_sock_t fd, udsEventCallback callback, void *context);
-extern mStatus udsSupportRemoveFDFromEventLoop(dnssd_sock_t fd);
+extern mStatus udsSupportRemoveFDFromEventLoop(dnssd_sock_t fd); // Note: This also CLOSES the file descriptor as well
 
 // RecordUpdatedNiceLabel() can be a no-op on platforms that don't care about updating the machine's
 // global default service name (was OS X calls the "Computer Name") in response to name conflicts.

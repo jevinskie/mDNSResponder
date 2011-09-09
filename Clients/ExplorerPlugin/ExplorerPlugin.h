@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: ExplorerPlugin.h,v $
+Revision 1.3  2005/01/25 18:35:38  shersche
+Declare APIs for obtaining handles to resource modules
+
 Revision 1.2  2004/07/13 21:24:21  rpantos
 Fix for <rdar://problem/3701120>.
 
@@ -44,3 +47,6 @@ DEFINE_GUID(CLSID_ExplorerBar,
 
 extern HINSTANCE		gInstance;
 extern int				gDLLRefCount;
+extern HINSTANCE		GetNonLocalizedResources();
+extern HINSTANCE		GetLocalizedResources();
+

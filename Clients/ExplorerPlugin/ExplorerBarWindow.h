@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: ExplorerBarWindow.h,v $
+Revision 1.6  2005/01/27 22:27:03  shersche
+Add m_about member for "About Rendezvous" tree item
+
 Revision 1.5  2004/07/26 05:47:31  shersche
 use TXTRecord APIs, fix bug in locating service to be removed
 
@@ -295,6 +298,7 @@ class	ExplorerBarWindow : public CWnd
 
 		typedef std::list< DNSServiceRef >  ServiceRefList;
 		
+		HTREEITEM		m_about;
 		ServiceRefList	m_serviceRefs;
 		CImageList		m_imageList;
 };

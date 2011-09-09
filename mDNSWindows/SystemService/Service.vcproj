@@ -20,7 +20,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories=".;../;../../mDNSCore;../../mDNSShared;&quot;C:\Program Files\Microsoft Platform SDK for Windows XP SP2\Include&quot;"
-				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;DEBUG=1;MDNS_DEBUGMSGS=0;UNICAST_DISABLED;TARGET_OS_WIN32;WIN32_LEAN_AND_MEAN;USE_TCP_LOOPBACK;PLATFORM_NO_STRSEP;PLATFORM_NO_EPIPE;PLATFORM_NO_RLIMIT;PID_FILE=&quot;&quot;&quot;&quot;"
+				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;DEBUG=1;MDNS_DEBUGMSGS=0;TARGET_OS_WIN32;WIN32_LEAN_AND_MEAN;USE_TCP_LOOPBACK;PLATFORM_NO_STRSEP;PLATFORM_NO_EPIPE;PLATFORM_NO_RLIMIT;PID_FILE=&quot;&quot;&quot;&quot;"
 				StringPooling="TRUE"
 				MinimalRebuild="TRUE"
 				ExceptionHandling="FALSE"
@@ -37,7 +37,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="ws2_32.lib iphlpapi.lib"
+				AdditionalDependencies="ws2_32.lib iphlpapi.lib crypt32.lib"
 				OutputFile="$(OutDir)/mDNSResponder.exe"
 				LinkIncremental="2"
 				IgnoreAllDefaultLibraries="FALSE"
@@ -63,14 +63,14 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="Release"
-			IntermediateDirectory="Release"
+			OutputDirectory=".\Release\Root\Program Files\bin"
+			IntermediateDirectory=".\Release"
 			ConfigurationType="1"
 			CharacterSet="2">
 			<Tool
 				Name="VCCLCompilerTool"
 				AdditionalIncludeDirectories=".;../;../../mDNSCore;../../mDNSShared;&quot;C:\Program Files\Microsoft Platform SDK for Windows XP SP2\Include&quot;"
-				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;UNICAST_DISABLED;TARGET_OS_WIN32;WIN32_LEAN_AND_MEAN;USE_TCP_LOOPBACK;PLATFORM_NO_STRSEP;PLATFORM_NO_EPIPE;PLATFORM_NO_RLIMIT;PID_FILE=&quot;&quot;&quot;&quot;"
+				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;TARGET_OS_WIN32;WIN32_LEAN_AND_MEAN;USE_TCP_LOOPBACK;PLATFORM_NO_STRSEP;PLATFORM_NO_EPIPE;PLATFORM_NO_RLIMIT;PID_FILE=&quot;&quot;&quot;&quot;"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
 				WarningLevel="4"
@@ -84,6 +84,7 @@
 				OutputFile="$(OutDir)/mDNSResponder.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="TRUE"
+				ProgramDatabaseFile="$(IntDir)/$(ProjectName).pdb"
 				SubSystem="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
@@ -129,6 +130,9 @@
 				RelativePath=".\Service.c">
 			</File>
 			<File
+				RelativePath="..\dDNS.c">
+			</File>
+			<File
 				RelativePath="..\..\mDNSShared\dnssd_ipc.c">
 			</File>
 			<File
@@ -167,13 +171,16 @@
 				RelativePath=".\Resource.h">
 			</File>
 			<File
+				RelativePath="..\dDNS.h">
+			</File>
+			<File
 				RelativePath="..\..\mDNSShared\dnssd_ipc.h">
 			</File>
 			<File
-				RelativePath="..\..\mDNSCore\mDNSClientAPI.h">
+				RelativePath="..\..\mDNSCore\mDNSDebug.h">
 			</File>
 			<File
-				RelativePath="..\..\mDNSCore\mDNSDebug.h">
+				RelativePath="..\..\mDNSCore\mDNSEmbeddedAPI.h">
 			</File>
 			<File
 				RelativePath="..\mDNSWin32.h">

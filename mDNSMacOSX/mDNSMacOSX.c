@@ -24,6 +24,122 @@
     Change History (most recent first):
 
 $Log: mDNSMacOSX.c,v $
+Revision 1.294  2005/01/27 21:30:23  cheshire
+<rdar://problem/3952067> "Can't assign requested address" message after AirPort turned off
+Don't write syslog messages for EADDRNOTAVAIL if we know network configuration changes are happening
+
+Revision 1.293  2005/01/27 19:15:41  cheshire
+Remove extraneous LogMsg() call
+
+Revision 1.292  2005/01/27 17:48:38  cheshire
+Added comment about CFSocketInvalidate closing the underlying socket
+
+Revision 1.291  2005/01/27 00:10:58  cheshire
+<rdar://problem/3967867> Name change log messages every time machine boots
+
+Revision 1.290  2005/01/25 23:18:30  ksekar
+fix for <rdar://problem/3971467> requires that local-only ".local" registration record be created
+
+Revision 1.289  2005/01/25 18:08:31  ksekar
+Removed redundant debug output
+
+Revision 1.288  2005/01/25 17:42:26  ksekar
+Renamed FoundDefBrowseDomain -> FoundLegacyBrowseDomain,
+cleaned up duplicate log messages when adding/removing browse domains
+
+Revision 1.287  2005/01/25 16:59:23  ksekar
+<rdar://problem/3971138> sa_len not set checking reachability for TCP connections
+
+Revision 1.286  2005/01/25 02:02:37  cheshire
+<rdar://problem/3970673> mDNSResponder leaks
+GetSearchDomains() was not calling dns_configuration_free().
+
+Revision 1.285  2005/01/22 00:07:54  ksekar
+<rdar://problem/3960546> mDNSResponder should look at all browse domains in SCPreferences
+
+Revision 1.284  2005/01/21 23:07:17  ksekar
+<rdar://problem/3960795> mDNSResponder causes Dial on Demand
+
+Revision 1.283  2005/01/19 21:16:16  cheshire
+Make sure when we set NetworkChanged that we don't set it to zero
+
+Revision 1.282  2005/01/19 19:19:21  ksekar
+<rdar://problem/3960191> Need a way to turn off domain discovery
+
+Revision 1.281  2005/01/18 18:10:55  ksekar
+<rdar://problem/3954575> Use 10.4 resolver API to get search domains
+
+Revision 1.280  2005/01/17 22:48:52  ksekar
+No longer need to call MarkSearchListElem for registration domain
+
+Revision 1.279  2005/01/17 20:40:34  ksekar
+SCPreferences changes should remove exactly one browse and one legacy browse domain for each remove event
+
+Revision 1.278  2005/01/17 19:53:34  ksekar
+Refinement to previous fix - register _legacy._browse records for SCPreference domains to achieve correct reference counting
+
+Revision 1.277  2005/01/12 00:17:50  ksekar
+<rdar://problem/3933573> Update LLQs *after* setting DNS
+
+Revision 1.276  2005/01/10 17:39:10  ksekar
+Refinement to 1.272 - avoid spurious warnings when registration and browse domains are set to same value and toggled on/off
+
+Revision 1.275  2005/01/10 04:02:22  ksekar
+Refinement to <rdar://problem/3891628> - strip trailing dot before writing hostname status to dynamic store
+
+Revision 1.274  2005/01/10 03:41:36  ksekar
+Correction to checkin 1.272 - check that registration domain is set
+before trying to remove it as an implicit browse domain
+
+Revision 1.273  2005/01/08 00:42:18  ksekar
+<rdar://problem/3922758> Clean up syslog messages
+
+Revision 1.272  2005/01/07 23:21:42  ksekar
+<rdar://problem/3891628> Clean up SCPreferences format
+
+Revision 1.271  2004/12/20 23:18:12  cheshire
+<rdar://problem/3485365> Guard against repeating wireless dissociation/re-association
+One more refinement: When an interface with a v6LL address gets a v4 address too, that's not a flap
+
+Revision 1.270  2004/12/20 21:28:14  cheshire
+<rdar://problem/3485365> Guard against repeating wireless dissociation/re-association
+Additional refinements to handle sleep/wake better
+
+Revision 1.269  2004/12/20 20:48:11  cheshire
+Only show "mach_absolute_time went backwards" notice on 10.4 (build 8xxx) or later
+
+Revision 1.268  2004/12/18 03:19:04  cheshire
+Show netmask in error log
+
+Revision 1.267  2004/12/18 00:51:52  cheshire
+Use symbolic constant kDNSServiceInterfaceIndexLocalOnly instead of (mDNSu32) ~0
+
+Revision 1.266  2004/12/17 23:49:38  cheshire
+<rdar://problem/3922754> Computer Name change is slow
+Also treat changes to "Setup:/Network/DynamicDNS" the same way
+
+Revision 1.265  2004/12/17 23:37:47  cheshire
+<rdar://problem/3485365> Guard against repeating wireless dissociation/re-association
+(and other repetitive configuration changes)
+
+Revision 1.264  2004/12/17 19:03:05  cheshire
+Update debugging messages to show netmask a simple CIDR-style numeric value (0-128)
+
+Revision 1.263  2004/12/17 05:25:46  cheshire
+<rdar://problem/3925163> Shorten DNS-SD queries to avoid NAT bugs
+
+Revision 1.262  2004/12/17 04:48:32  cheshire
+<rdar://problem/3922754> Computer Name change is slow
+
+Revision 1.261  2004/12/17 02:40:08  cheshire
+Undo last change -- it was too strict
+
+Revision 1.260  2004/12/16 22:17:16  cheshire
+Only accept multicast packets on interfaces that have McastTxRx set
+
+Revision 1.259  2004/12/16 20:13:01  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.258  2004/12/14 00:18:05  cheshire
 Don't log dns_configuration_copy() failures in the first three minutes after boot
 
@@ -855,8 +971,10 @@ static DNameListElem *DefRegList = NULL;       // manually generated list of dom
 static ARListElem *SCPrefBrowseDomains = NULL; // manually generated local-only PTR records for browse domains we get from SCPreferences
 
 static domainname DynDNSRegDomain;             // Default wide-area zone for service registration
-static domainname DynDNSBrowseDomain;          // Default wide-area zone for legacy ("empty string") browses
+static CFArrayRef DynDNSBrowseDomains = NULL;  // Default wide-area zones for legacy ("empty string") browses
 static domainname DynDNSHostname;
+
+static mDNSBool DomainDiscoveryDisabled = mDNSfalse;
 
 #define CONFIG_FILE "/etc/mDNSResponder.conf"
 #define DYNDNS_KEYCHAIN_SERVICE "DynDNS Shared Secret"
@@ -895,7 +1013,7 @@ mDNSlocal void AddDefRegDomain(domainname *d)
 	
 	newelem = mallocL("DNameListElem", sizeof(*newelem));
 	if (!newelem) { LogMsg("Error - malloc"); return; }
-	AssignDomainName(newelem->name, *d);
+	AssignDomainName(&newelem->name, d);
 	newelem->next = DefRegList;
 	DefRegList = newelem;
 
@@ -988,7 +1106,7 @@ mDNSlocal int myIfIndexToName(u_short index, char* name)
 mDNSexport mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(const mDNS *const m, mDNSu32 index)
 	{
 	NetworkInterfaceInfoOSX *i;
-	if (index == (uint32_t)~0) return(mDNSInterface_LocalOnly);
+	if (index == kDNSServiceInterfaceIndexLocalOnly) return(mDNSInterface_LocalOnly);
 	if (index)
 		for (i = m->p->InterfaceList; i; i = i->next)
 			// Don't get tricked by inactive interfaces with no InterfaceID set
@@ -999,12 +1117,28 @@ mDNSexport mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(const mDNS 
 mDNSexport mDNSu32 mDNSPlatformInterfaceIndexfromInterfaceID(const mDNS *const m, mDNSInterfaceID id)
 	{
 	NetworkInterfaceInfoOSX *i;
-	if (id == mDNSInterface_LocalOnly) return((mDNSu32)~0);
+	if (id == mDNSInterface_LocalOnly) return(kDNSServiceInterfaceIndexLocalOnly);
 	if (id)
 		for (i = m->p->InterfaceList; i; i = i->next)
 			// Don't use i->ifinfo.InterfaceID here, because we DO want to find inactive interfaces, which have no InterfaceID set
 			if ((mDNSInterfaceID)i == id) return(i->scope_id);
 	return 0;
+	}
+
+mDNSlocal mDNSBool AddrRequiresPPPConnection(const struct sockaddr *addr)
+	{
+	mDNSBool result = mDNSfalse;
+	SCNetworkConnectionFlags flags;
+	SCNetworkReachabilityRef ReachRef = NULL;
+
+	ReachRef = SCNetworkReachabilityCreateWithAddress(kCFAllocatorDefault, addr);	
+	if (!ReachRef) { LogMsg("ERROR: RequiresConnection - SCNetworkReachabilityCreateWithAddress"); goto end; }
+	if (!SCNetworkReachabilityGetFlags(ReachRef, &flags)) { LogMsg("ERROR: AddrRequiresPPPConnection - SCNetworkReachabilityGetFlags"); goto end; }
+	result = flags & kSCNetworkFlagsConnectionRequired;
+
+	end:
+	if (ReachRef) CFRelease(ReachRef);
+	return result;	
 	}
 
 // NOTE: If InterfaceID is NULL, it means, "send this packet through our anonymous unicast socket"
@@ -1032,7 +1166,7 @@ mDNSexport mStatus mDNSPlatformSendUDP(const mDNS *const m, const void *const ms
 		if ((m->h.flags.b[0] & kDNSFlag0_QR_Mask) == kDNSFlag0_QR_Query)
 			LogMsg("mDNSPlatformSendUDP: ERROR: Sending query OP from mDNS port to non-mDNS destination %#a:%d", dst, mDNSVal16(dstPort));
 		}
-
+	
 	if (dst->type == mDNSAddrType_IPv4)
 		{
 		struct sockaddr_in *sin_to = (struct sockaddr_in*)&to;
@@ -1059,6 +1193,15 @@ mDNSexport mStatus mDNSPlatformSendUDP(const mDNS *const m, const void *const ms
 		return mStatus_BadParamErr;
 		}
 
+	// Don't send if it would cause dial on demand connection initiation.  As an optimization,
+	// don't bother consulting reachability API / routing table when sending Multicast DNS
+	// since we ignore PPP interfaces for mDNS traffic
+	if (!mDNSAddrIsDNSMulticast(dst) && AddrRequiresPPPConnection((struct sockaddr *)&to))
+		{
+		debugf("mDNSPlatformSendUDP: Surpressing sending to avoid dial-on-demand connection");
+		return mStatus_NoError;
+		}
+		
 	if (s >= 0)
 		verbosedebugf("mDNSPlatformSendUDP: sending on InterfaceID %p %5s/%ld to %#a:%d skt %d",
 			InterfaceID, ifa_name, dst->type, dst, mDNSVal16(dstPort), s);
@@ -1079,6 +1222,8 @@ mDNSexport mStatus mDNSPlatformSendUDP(const mDNS *const m, const void *const ms
 		// This is because mDNSResponder intentionally starts up early in the boot process (See <rdar://problem/3409090>)
 		// but this means that sometimes it starts before configd has finished setting up the multicast routing entries.
 		if (errno == EHOSTUNREACH && (mDNSu32)(mDNSPlatformRawTime()) < (mDNSu32)(mDNSPlatformOneSecond * 180)) return(err);
+		// Don't report EADDRNOTAVAIL ("Can't assign requested address") if we're in the middle of a network configuration change
+		if (errno == EADDRNOTAVAIL && m->p->NetworkChanged) return(err);
 		LogMsg("mDNSPlatformSendUDP sendto failed to send packet on InterfaceID %p %5s/%ld to %#a:%d skt %d error %d errno %d (%s) %lu",
 			InterfaceID, ifa_name, dst->type, dst, mDNSVal16(dstPort), s, err, errno, strerror(errno), (mDNSu32)(m->timenow));
 		return(err);
@@ -1232,7 +1377,7 @@ mDNSlocal void myCFSocketCallBack(CFSocketRef cfs, CFSocketCallBackType CallBack
 			// interface they arrive on. According to the official Unix Powers That Be, this is Not A Bug.
 			// To work around this weirdness, we use the IP_RECVIF option to find the name of the interface
 			// on which the packet arrived, and ignore the packet if it really arrived on some other interface.
-			if (!ss->info)
+			if (!ss->info || !ss->info->Exists)
 				{
 				verbosedebugf("myCFSocketCallBack got multicast packet from %#a to %#a on unicast socket (Ignored)", &senderAddr, &destAddr);
 				return;
@@ -1341,6 +1486,19 @@ mDNSexport mStatus mDNSPlatformTCPConnect(const mDNSAddr *dst, mDNSOpaque16 dstp
 		return mStatus_UnknownErr;
 		}
 
+	bzero(&saddr, sizeof(saddr));
+	saddr.sin_family = AF_INET;
+	saddr.sin_port = dstport.NotAnInteger;
+	saddr.sin_len = sizeof(saddr);
+	memcpy(&saddr.sin_addr, &dst->ip.v4.NotAnInteger, sizeof(saddr.sin_addr));
+
+	// Don't send if it would cause dial on demand connection initiation.
+	if (AddrRequiresPPPConnection((struct sockaddr *)&saddr))
+		{
+		debugf("mDNSPlatformTCPConnect: Surpressing sending to avoid dial-on-demand connection");
+		return mStatus_UnknownErr;
+		}
+
 	sd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sd < 3) { LogMsg("mDNSPlatformTCPConnect: socket error %d errno %d (%s)", sd, errno, strerror(errno)); return mStatus_UnknownErr; }
 
@@ -1383,10 +1541,6 @@ mDNSexport mStatus mDNSPlatformTCPConnect(const mDNSAddr *dst, mDNSOpaque16 dstp
 	CFRelease(rls);
 	
 	// initiate connection wth peer
-	bzero(&saddr, sizeof(saddr));
-	saddr.sin_family = AF_INET;
-	saddr.sin_port = dstport.NotAnInteger;
-	memcpy(&saddr.sin_addr, &dst->ip.v4.NotAnInteger, sizeof(saddr.sin_addr));
 	if (connect(sd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0)
 		{
 		if (errno == EINPROGRESS)
@@ -1397,7 +1551,7 @@ mDNSexport mStatus mDNSPlatformTCPConnect(const mDNSAddr *dst, mDNSOpaque16 dstp
 			}
 		LogMsg("ERROR: mDNSPlatformTCPConnect - connect failed: %s", strerror(errno));
 		freeL("mDNSPlatformTCPConnect", info);
-		CFSocketInvalidate(sr);
+		CFSocketInvalidate(sr);		// Note: Also closes the underlying socket
 		return mStatus_ConnFailed;
 		}
 	info->connected = 1;
@@ -1484,14 +1638,23 @@ mDNSlocal void GetUserSpecifiedLocalHostName(domainlabel *const namelabel)
 		}
 	}
 
-mDNSlocal void GetUserSpecifiedDDNSConfig(domainname *const fqdn, domainname *const regDomain, domainname *const browseDomain)
+mDNSlocal mDNSBool DDNSSettingEnabled(CFDictionaryRef dict)
+	{
+	mDNSs32 val;
+	CFNumberRef state = CFDictionaryGetValue(dict, CFSTR("Enabled"));
+	if (!state) return mDNSfalse;
+	if (!CFNumberGetValue(state, kCFNumberSInt32Type, &val)) { LogMsg("ERROR: DDNSSettingEnabled - CFNumberGetValue"); return mDNSfalse; }
+	return val ? mDNStrue : mDNSfalse;
+	}
+
+mDNSlocal void GetUserSpecifiedDDNSConfig(domainname *const fqdn, domainname *const regDomain, CFArrayRef *const browseDomains)
 	{
 	char buf[MAX_ESCAPED_DOMAIN_NAME];
 
 	fqdn->c[0] = 0;
 	regDomain->c[0] = 0;
-	browseDomain->c[0] = 0;
 	buf[0] = 0;
+	*browseDomains = NULL;
 	
 	SCDynamicStoreRef store = SCDynamicStoreCreate(NULL, CFSTR("mDNSResponder:GetUserSpecifiedDDNSConfig"), NULL, NULL);
 	if (store)
@@ -1499,42 +1662,45 @@ mDNSlocal void GetUserSpecifiedDDNSConfig(domainname *const fqdn, domainname *co
 		CFDictionaryRef dict = SCDynamicStoreCopyValue(store, CFSTR("Setup:/Network/DynamicDNS"));
 		if (dict)
 			{
-			CFArrayRef fqdnArray = CFDictionaryGetValue(dict, CFSTR("FQDN"));
-			CFArrayRef regArray = CFDictionaryGetValue(dict, CFSTR("DefaultRegistrationDomain"));
-			CFArrayRef browseArray = CFDictionaryGetValue(dict, CFSTR("DefaultBrowseDomain"));
+			CFArrayRef fqdnArray = CFDictionaryGetValue(dict, CFSTR("HostNames"));
 			if (fqdnArray)
-				{
-				CFStringRef name = CFArrayGetValueAtIndex(fqdnArray, 0);
-				if (name)
-					{
-					if (!CFStringGetCString(name, buf, sizeof(buf), kCFStringEncodingUTF8) ||
-                        !MakeDomainNameFromDNSNameString(fqdn, buf) || !fqdn->c[0])
-						LogMsg("GetUserSpecifiedDDNSConfig SCDynamicStore bad DDNS host name: %s", buf[0] ? buf : "(unknown)");
-					else debugf("GetUserSpecifiedDDNSConfig SCDynamicStore DDNS host name: %s", buf);
-					}
-				}			
-			if (regArray)
-				{
-				CFStringRef name = CFArrayGetValueAtIndex(regArray, 0);
-				if (name)
-					{
-					if (!CFStringGetCString(name, buf, sizeof(buf), kCFStringEncodingUTF8) ||
-                        !MakeDomainNameFromDNSNameString(regDomain, buf) || !regDomain->c[0])
-						LogMsg("GetUserSpecifiedDDNSConfig SCDynamicStore bad DDNS registration domain: %s", buf[0] ? buf : "(unknown)");
-					else debugf("GetUserSpecifiedDDNSConfig SCDynamicStore DDNS registration zone: %s", buf);
+				{				
+				CFDictionaryRef fqdnDict = CFArrayGetValueAtIndex(fqdnArray, 0); // for now, we only look at the first array element.  if we ever support multiple configurations, we will walk the list
+				if (fqdnDict && DDNSSettingEnabled(fqdnDict))
+					{						
+					CFStringRef name = CFDictionaryGetValue(fqdnDict, CFSTR("Domain"));
+					if (name)
+						{
+						if (!CFStringGetCString(name, buf, sizeof(buf), kCFStringEncodingUTF8) ||
+							!MakeDomainNameFromDNSNameString(fqdn, buf) || !fqdn->c[0])
+							LogMsg("GetUserSpecifiedDDNSConfig SCDynamicStore bad DDNS host name: %s", buf[0] ? buf : "(unknown)");
+						else debugf("GetUserSpecifiedDDNSConfig SCDynamicStore DDNS host name: %s", buf);
+						}
 					}
 				}
+
+			CFArrayRef regArray = CFDictionaryGetValue(dict, CFSTR("RegistrationDomains"));
+			if (regArray)
+				{
+				CFDictionaryRef regDict = CFArrayGetValueAtIndex(regArray, 0);
+				if (regDict && DDNSSettingEnabled(regDict))
+					{
+					CFStringRef name = CFDictionaryGetValue(regDict, CFSTR("Domain"));
+					if (name)
+						{
+						if (!CFStringGetCString(name, buf, sizeof(buf), kCFStringEncodingUTF8) ||
+							!MakeDomainNameFromDNSNameString(regDomain, buf) || !regDomain->c[0])
+							LogMsg("GetUserSpecifiedDDNSConfig SCDynamicStore bad DDNS registration domain: %s", buf[0] ? buf : "(unknown)");
+						else debugf("GetUserSpecifiedDDNSConfig SCDynamicStore DDNS registration zone: %s", buf);
+						}
+					}
+				}
+			CFArrayRef browseArray = CFDictionaryGetValue(dict, CFSTR("BrowseDomains"));
 			if (browseArray)
 				{
-				CFStringRef name = CFArrayGetValueAtIndex(browseArray, 0);
-				if (name)
-					{
-					if (!CFStringGetCString(name, buf, sizeof(buf), kCFStringEncodingUTF8) ||
-                        !MakeDomainNameFromDNSNameString(browseDomain, buf) || !browseDomain->c[0])
-						LogMsg("GetUserSpecifiedDDNSConfig SCDynamicStore bad DDNS browse domain: %s", buf[0] ? buf : "(unknown)");
-					else debugf("GetUserSpecifiedDDNSConfig SCDynamicStore DDNS browse zone: %s", buf);
-					}
-				}			
+				CFRetain(browseArray);
+				*browseDomains = browseArray;
+				}
 			CFRelease(dict);
 			}
 		CFRelease(store);
@@ -1549,18 +1715,32 @@ mDNSlocal void SetDDNSNameStatus(domainname *const dname, mStatus status)
 		char uname[MAX_ESCAPED_DOMAIN_NAME];
 		ConvertDomainNameToCString(dname, uname);
 		char *p = uname;
-		while (*p) { *p = tolower(*p); p++; }
-		const void *n1 = CFStringCreateWithCString(NULL, uname, kCFStringEncodingUTF8); // CFStringRef
-		const void *v1 = CFNumberCreate(NULL, kCFNumberSInt32Type, &status); // CFNumberRef
-		const void *n2 = CFSTR("FQDN"); // CFStringRef
-		const void *v2 = CFDictionaryCreate(NULL, &n1, &v1, 1, NULL, NULL); // CFDictionaryRef
-		CFDictionaryRef dict = CFDictionaryCreate(NULL, &n2, &v2, 1, NULL, NULL);
-		SCDynamicStoreSetValue(store, CFSTR("State:/Network/DynamicDNS"), dict);
-		CFRelease(dict);
-		CFRelease(v2);
-		CFRelease(n2);
-		CFRelease(v1);
-		CFRelease(n1);
+
+		while (*p)
+			{
+			*p = tolower(*p);
+			if (!(*(p+1)) && *p == '.') *p = 0; // if last character, strip trailing dot
+			p++;
+			}
+		
+		const void *StatusKey = CFSTR("Status");		
+		const void *StatusVal = CFNumberCreate(NULL, kCFNumberSInt32Type, &status); // CFNumberRef
+		const void *StatusDict = CFDictionaryCreate(NULL, &StatusKey, &StatusVal, 1, NULL, NULL);
+
+		const void *HostKey = CFStringCreateWithCString(NULL, uname, kCFStringEncodingUTF8);
+		const void *HostDict = CFDictionaryCreate(NULL, &HostKey, &StatusDict, 1, NULL, NULL);
+				
+		const void *StateKey = CFSTR("HostNames"); // CFStringRef
+		CFDictionaryRef StateDict = CFDictionaryCreate(NULL, &StateKey, &HostDict, 1, NULL, NULL);
+		SCDynamicStoreSetValue(store, CFSTR("State:/Network/DynamicDNS"), StateDict);
+
+		CFRelease(StateDict);
+		CFRelease(StateKey);
+		CFRelease(HostDict);
+		CFRelease(HostKey);
+		CFRelease(StatusDict);
+		CFRelease(StatusVal);
+		CFRelease(StatusKey);
 		CFRelease(store);
 		}
 	}
@@ -1771,7 +1951,7 @@ mDNSlocal mDNSEthAddr GetBSSID(char *ifa_name)
 	return(eth);
 	}
 
-mDNSlocal NetworkInterfaceInfoOSX *AddInterfaceToList(mDNS *const m, struct ifaddrs *ifa)
+mDNSlocal NetworkInterfaceInfoOSX *AddInterfaceToList(mDNS *const m, struct ifaddrs *ifa, mDNSs32 utc)
 	{
 	mDNSu32 scope_id  = if_nametoindex(ifa->ifa_name);
 	mDNSEthAddr bssid = GetBSSID(ifa->ifa_name);
@@ -1807,6 +1987,7 @@ mDNSlocal NetworkInterfaceInfoOSX *AddInterfaceToList(mDNS *const m, struct ifad
 	
 	i->next            = mDNSNULL;
 	i->Exists          = mDNStrue;
+	i->LastSeen        = utc;
 	i->scope_id        = scope_id;
 	i->BSSID           = bssid;
 	i->sa_family       = ifa->ifa_addr->sa_family;
@@ -1832,7 +2013,7 @@ mDNSlocal NetworkInterfaceInfoOSX *FindRoutableIPv4(mDNS *const m, mDNSu32 scope
 	return(mDNSNULL);
 	}
 
-mDNSlocal mStatus UpdateInterfaceList(mDNS *const m)
+mDNSlocal mStatus UpdateInterfaceList(mDNS *const m, mDNSs32 utc)
 	{
 	mDNSBool foundav4           = mDNSfalse;
 	mDNSBool foundav6           = mDNSfalse;
@@ -1849,25 +2030,25 @@ mDNSlocal mStatus UpdateInterfaceList(mDNS *const m)
 		{
 #if LIST_ALL_INTERFACES
 		if (ifa->ifa_addr->sa_family == AF_APPLETALK)
-			debugf("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d is AF_APPLETALK",
+			LogMsg("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d is AF_APPLETALK",
 				ifa->ifa_name, if_nametoindex(ifa->ifa_name), ifa->ifa_flags, ifa->ifa_addr->sa_family);
 		else if (ifa->ifa_addr->sa_family == AF_LINK)
-			debugf("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d is AF_LINK",
+			LogMsg("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d is AF_LINK",
 				ifa->ifa_name, if_nametoindex(ifa->ifa_name), ifa->ifa_flags, ifa->ifa_addr->sa_family);
 		else if (ifa->ifa_addr->sa_family != AF_INET && ifa->ifa_addr->sa_family != AF_INET6)
-			debugf("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d not AF_INET (2) or AF_INET6 (30)",
+			LogMsg("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d not AF_INET (2) or AF_INET6 (30)",
 				ifa->ifa_name, if_nametoindex(ifa->ifa_name), ifa->ifa_flags, ifa->ifa_addr->sa_family);
 		if (!(ifa->ifa_flags & IFF_UP))
-			debugf("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d Interface not IFF_UP",
+			LogMsg("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d Interface not IFF_UP",
 				ifa->ifa_name, if_nametoindex(ifa->ifa_name), ifa->ifa_flags, ifa->ifa_addr->sa_family);
 		if (!(ifa->ifa_flags & IFF_MULTICAST))
-			debugf("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d Interface not IFF_MULTICAST",
+			LogMsg("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d Interface not IFF_MULTICAST",
 				ifa->ifa_name, if_nametoindex(ifa->ifa_name), ifa->ifa_flags, ifa->ifa_addr->sa_family);
 		if (ifa->ifa_flags & IFF_POINTOPOINT)
-			debugf("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d Interface IFF_POINTOPOINT",
+			LogMsg("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d Interface IFF_POINTOPOINT",
 				ifa->ifa_name, if_nametoindex(ifa->ifa_name), ifa->ifa_flags, ifa->ifa_addr->sa_family);
 		if (ifa->ifa_flags & IFF_LOOPBACK)
-			debugf("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d Interface IFF_LOOPBACK",
+			LogMsg("UpdateInterfaceList: %5s(%d) Flags %04X Family %2d Interface IFF_LOOPBACK",
 				ifa->ifa_name, if_nametoindex(ifa->ifa_name), ifa->ifa_flags, ifa->ifa_addr->sa_family);
 #endif
 
@@ -1916,7 +2097,7 @@ mDNSlocal mStatus UpdateInterfaceList(mDNS *const m)
 							else                                     v6Loopback = ifa;
 						else
 							{
-							AddInterfaceToList(m, ifa);
+							AddInterfaceToList(m, ifa, utc);
 							if (ifa->ifa_addr->sa_family == AF_INET) foundav4 = mDNStrue;
 							else                                     foundav6 = mDNStrue;
 							}
@@ -1927,8 +2108,8 @@ mDNSlocal mStatus UpdateInterfaceList(mDNS *const m)
 		}
 
     // For efficiency, we don't register a loopback interface when other interfaces of that family are available
-	if (!foundav4 && v4Loopback) AddInterfaceToList(m, v4Loopback);
-	if (!foundav6 && v6Loopback) AddInterfaceToList(m, v6Loopback);
+	if (!foundav4 && v4Loopback) AddInterfaceToList(m, v4Loopback, utc);
+	if (!foundav6 && v6Loopback) AddInterfaceToList(m, v6Loopback, utc);
 
 	// Now the list is complete, set the McastTxRx setting for each interface.
 	// We always send and receive using IPv4.
@@ -1958,13 +2139,21 @@ mDNSlocal mStatus UpdateInterfaceList(mDNS *const m)
 	domainlabel nicelabel;
 	nicelabel.c[0] = 0;
 	GetUserSpecifiedFriendlyComputerName(&nicelabel);
-	if (nicelabel.c[0] == 0) MakeDomainLabelFromLiteralString(&nicelabel, defaultname);
+	if (nicelabel.c[0] == 0)
+		{
+		LogMsg("Couldn't read user-specified Computer Name; using default “%s” instead", defaultname);
+		MakeDomainLabelFromLiteralString(&nicelabel, defaultname);
+		}
 
 	// Set up the RFC 1034-compliant label
 	domainlabel hostlabel;
 	hostlabel.c[0] = 0;
 	GetUserSpecifiedLocalHostName(&hostlabel);
-	if (hostlabel.c[0] == 0) MakeDomainLabelFromLiteralString(&hostlabel, defaultname);
+	if (hostlabel.c[0] == 0)
+		{
+		LogMsg("Couldn't read user-specified local hostname; using default “%s.local” instead", defaultname);
+		MakeDomainLabelFromLiteralString(&hostlabel, defaultname);
+		}
 
 	if (SameDomainLabel(m->p->usernicelabel.c, nicelabel.c))
 		debugf("Usernicelabel (%#s) unchanged since last time; not changing m->nicelabel (%#s)", m->p->usernicelabel.c, m->nicelabel.c);
@@ -1986,8 +2175,22 @@ mDNSlocal mStatus UpdateInterfaceList(mDNS *const m)
 	return(mStatus_NoError);
 	}
 
+mDNSlocal int CountMaskBits(mDNSAddr *mask)
+	{
+	int i = 0, bits = 0;
+	int bytes = mask->type == mDNSAddrType_IPv4 ? 4 : mask->type == mDNSAddrType_IPv6 ? 16 : 0;
+	while (i < bytes)
+		{
+		mDNSu8 b = mask->ip.v6.b[i++];
+		while (b & 0x80) { bits++; b <<= 1; }
+		if (b) return(-1);
+		}
+	while (i < bytes) if (mask->ip.v6.b[i++]) return(-1);
+	return(bits);
+	}
+
 // returns count of non-link local V4 addresses registered
-mDNSlocal int SetupActiveInterfaces(mDNS *const m)
+mDNSlocal int SetupActiveInterfaces(mDNS *const m, mDNSs32 utc)
 	{
 	NetworkInterfaceInfoOSX *i;
 	int count = 0;
@@ -2010,10 +2213,15 @@ mDNSlocal int SetupActiveInterfaces(mDNS *const m)
 				// so we need to make sure we call mDNS_DeregisterInterface() before disposing it.
 				// If n->InterfaceID is NOT set, then we haven't registered it and we should not try to deregister it
 				n->InterfaceID = (mDNSInterfaceID)primary;
-				mDNS_RegisterInterface(m, n);
+				// If i->LastSeen == utc, then this is a brand-new interface, just created, or an interface that never went away.
+				// If i->LastSeen != utc, then this is an old interface, previously seen, that went away for (utc - i->LastSeen) seconds.
+				// If the interface is an old one that went away and came back in less than a minute, then we're in a flapping scenario.
+				mDNSBool flapping = (utc - i->LastSeen > 0 && utc - i->LastSeen < 60);
+				mDNS_RegisterInterface(m, n, flapping ? mDNSPlatformOneSecond * 5 : 0);
 				if (i->ifinfo.ip.type == mDNSAddrType_IPv4 &&  (i->ifinfo.ip.ip.v4.b[0] != 169 || i->ifinfo.ip.ip.v4.b[1] != 254)) count++;
-				LogOperation("SetupActiveInterfaces:   Registered    %5s(%lu) %.6a InterfaceID %p %#a/%#a%s",
-					i->ifa_name, i->scope_id, &i->BSSID, primary, &n->ip, &n->mask, n->InterfaceActive ? " (Primary)" : "");
+				LogOperation("SetupActiveInterfaces:   Registered    %5s(%lu) %.6a InterfaceID %p %#a/%d%s%s",
+					i->ifa_name, i->scope_id, &i->BSSID, primary, &n->ip, CountMaskBits(&n->mask),
+					flapping ? " (Flapping)" : "", n->InterfaceActive ? " (Primary)" : "");
 				}
 	
 			if (!n->McastTxRx)
@@ -2023,30 +2231,34 @@ mDNSlocal int SetupActiveInterfaces(mDNS *const m)
 				if (i->sa_family == AF_INET && primary->ss.sktv4 == -1)
 					{
 					mStatus err = SetupSocket(m, &primary->ss, mDNStrue, &i->ifinfo.ip, AF_INET);
-					if (err == 0) debugf("SetupActiveInterfaces:   v4 socket%2d %5s(%lu) %.6a InterfaceID %p %#a",          primary->ss.sktv4, i->ifa_name, i->scope_id, &i->BSSID, n->InterfaceID, &n->ip);
-					else          LogMsg("SetupActiveInterfaces:   v4 socket%2d %5s(%lu) %.6a InterfaceID %p %#a FAILED",   primary->ss.sktv4, i->ifa_name, i->scope_id, &i->BSSID, n->InterfaceID, &n->ip);
+					if (err == 0) debugf("SetupActiveInterfaces:   v4 socket%2d %5s(%lu) %.6a InterfaceID %p %#a/%d",          primary->ss.sktv4, i->ifa_name, i->scope_id, &i->BSSID, n->InterfaceID, &n->ip, CountMaskBits(&n->mask));
+					else          LogMsg("SetupActiveInterfaces:   v4 socket%2d %5s(%lu) %.6a InterfaceID %p %#a/%d FAILED",   primary->ss.sktv4, i->ifa_name, i->scope_id, &i->BSSID, n->InterfaceID, &n->ip, CountMaskBits(&n->mask));
 					}
 			
 				if (i->sa_family == AF_INET6 && primary->ss.sktv6 == -1)
 					{
 					mStatus err = SetupSocket(m, &primary->ss, mDNStrue, &i->ifinfo.ip, AF_INET6);
-					if (err == 0) debugf("SetupActiveInterfaces:   v6 socket%2d %5s(%lu) %.6a InterfaceID %p %#a",          primary->ss.sktv6, i->ifa_name, i->scope_id, &i->BSSID, n->InterfaceID, &n->ip);
-					else          LogMsg("SetupActiveInterfaces:   v6 socket%2d %5s(%lu) %.6a InterfaceID %p %#a FAILED",   primary->ss.sktv6, i->ifa_name, i->scope_id, &i->BSSID, n->InterfaceID, &n->ip);
+					if (err == 0) debugf("SetupActiveInterfaces:   v6 socket%2d %5s(%lu) %.6a InterfaceID %p %#a/%d",          primary->ss.sktv6, i->ifa_name, i->scope_id, &i->BSSID, n->InterfaceID, &n->ip, CountMaskBits(&n->mask));
+					else          LogMsg("SetupActiveInterfaces:   v6 socket%2d %5s(%lu) %.6a InterfaceID %p %#a/%d FAILED",   primary->ss.sktv6, i->ifa_name, i->scope_id, &i->BSSID, n->InterfaceID, &n->ip, CountMaskBits(&n->mask));
 					}
 				}
 			}
 	return count;
 	}
 
-mDNSlocal void MarkAllInterfacesInactive(mDNS *const m)
+mDNSlocal void MarkAllInterfacesInactive(mDNS *const m, mDNSs32 utc)
 	{
 	NetworkInterfaceInfoOSX *i;
 	for (i = m->p->InterfaceList; i; i = i->next)
+		{
+		if (i->Exists) i->LastSeen = utc;
 		i->Exists = mDNSfalse;
+		}
 	}
 
 mDNSlocal void CloseRunLoopSourceSocket(CFRunLoopSourceRef rls, CFSocketRef cfs)
 	{
+	// Note: CFSocketInvalidate also closes the underlying socket for us
 	// Comments show retain counts (obtained via CFGetRetainCount()) after each call.	   rls 3 cfs 3
 	CFRunLoopRemoveSource(CFRunLoopGetCurrent(), rls, kCFRunLoopDefaultMode);			// rls 2 cfs 3
 	CFRelease(rls);																		// rls ? cfs 3
@@ -2067,7 +2279,7 @@ mDNSlocal void CloseSocketSet(CFSocketSet *ss)
 	}
 
 // returns count of non-link local V4 addresses deregistered
-mDNSlocal int ClearInactiveInterfaces(mDNS *const m)
+mDNSlocal int ClearInactiveInterfaces(mDNS *const m, mDNSs32 utc)
 	{
 	// First pass:
 	// If an interface is going away, then deregister this from the mDNSCore.
@@ -2085,10 +2297,11 @@ mDNSlocal int ClearInactiveInterfaces(mDNS *const m)
 		if (i->ifinfo.InterfaceID)
 			if (i->Exists == 0 || i->Exists == 2 || i->ifinfo.InterfaceID != (mDNSInterfaceID)primary)
 				{
-				LogOperation("ClearInactiveInterfaces: Deregistering %5s(%lu) %.6a InterfaceID %p %#a%s",
-					i->ifa_name, i->scope_id, &i->BSSID, i->ifinfo.InterfaceID, &i->ifinfo.ip, i->ifinfo.InterfaceActive ? " (Primary)" : "");
+				LogOperation("ClearInactiveInterfaces: Deregistering %5s(%lu) %.6a InterfaceID %p %#a/%d%s",
+					i->ifa_name, i->scope_id, &i->BSSID, i->ifinfo.InterfaceID,
+					&i->ifinfo.ip, CountMaskBits(&i->ifinfo.mask), i->ifinfo.InterfaceActive ? " (Primary)" : "");
 				mDNS_DeregisterInterface(m, &i->ifinfo);
-				if (i->ifinfo.ip.type == mDNSAddrType_IPv4 &&  (i->ifinfo.ip.ip.v4.b[0] != 169 || i->ifinfo.ip.ip.v4.b[1] != 254)) count++;
+				if (i->ifinfo.ip.type == mDNSAddrType_IPv4 && (i->ifinfo.ip.ip.v4.b[0] != 169 || i->ifinfo.ip.ip.v4.b[1] != 254)) count++;
 				i->ifinfo.InterfaceID = mDNSNULL;
 				// NOTE: If n->InterfaceID is set, that means we've called mDNS_RegisterInterface() for this interface,
 				// so we need to make sure we call mDNS_DeregisterInterface() before disposing it.
@@ -2106,31 +2319,39 @@ mDNSlocal int ClearInactiveInterfaces(mDNS *const m)
 		// (We may have previously had both v4 and v6, and we may not need both any more.)
 		CloseSocketSet(&i->ss);
 		// 3. If no longer active, delete interface from list and free memory
-		if (!i->Exists && NumCacheRecordsForInterfaceID(m, (mDNSInterfaceID)i) == 0)
+		if (!i->Exists)
 			{
-			debugf("ClearInactiveInterfaces: Deleting      %#a", &i->ifinfo.ip);
-			*p = i->next;
-			if (i->ifa_name) freeL("NetworkInterfaceInfoOSX name", i->ifa_name);
-			freeL("NetworkInterfaceInfoOSX", i);
+			if (i->LastSeen == utc) i->LastSeen = utc - 1;
+			mDNSBool delete = (NumCacheRecordsForInterfaceID(m, (mDNSInterfaceID)i) == 0) && (utc - i->LastSeen >= 60);
+			LogOperation("ClearInactiveInterfaces: %-13s %5s(%lu) %.6a InterfaceID %p %#a/%d Age %d%s", delete ? "Deleting" : "Holding",
+				i->ifa_name, i->scope_id, &i->BSSID, i->ifinfo.InterfaceID,
+				&i->ifinfo.ip, CountMaskBits(&i->ifinfo.mask), utc - i->LastSeen,
+				i->ifinfo.InterfaceActive ? " (Primary)" : "");
+			if (delete)
+				{
+				*p = i->next;
+				if (i->ifa_name) freeL("NetworkInterfaceInfoOSX name", i->ifa_name);
+				freeL("NetworkInterfaceInfoOSX", i);
+				continue;	// After deleting this object, don't want to do the "p = &i->next;" thing at the end of the loop
+				}
 			}
-		else
-			p = &i->next;
+		p = &i->next;
 		}
 	return count;
 	}
 
-mDNSlocal mStatus RegisterSplitDNS(mDNS *m)
+mDNSlocal mStatus GetDNSConfig(void **result)
 	{
 #ifndef MAC_OS_X_VERSION_10_4
 	static int MessageShown = 0;
-	(void)m;
 	if (!MessageShown) { MessageShown = 1; LogMsg("Note: Compiled without Apple-specific split DNS support"); }
-    return mStatus_UnsupportedErr;
+	*result = NULL;
+	return mStatus_UnsupportedErr;
 #else
-	int i;
-	dns_config_t *config = dns_configuration_copy();
 
-	if (!config)
+	*result = dns_configuration_copy();
+
+	if (!*result)
 		{
 		// When running on 10.3 (build 7xxx) and earlier, we don't expect dns_configuration_copy() to succeed
 		if (mDNSMacOSXSystemBuildNumber(NULL) < 8) return mStatus_UnsupportedErr;
@@ -2139,55 +2360,70 @@ mDNSlocal mStatus RegisterSplitDNS(mDNS *m)
 		// Apparently this is expected behaviour -- "not a bug".
 		// Accordingly, we suppress syslog messages for the first three minutes after boot.
 		// If we are still getting failures after three minutes, then we log them.
-		if ((mDNSu32)(mDNSPlatformRawTime()) < (mDNSu32)(mDNSPlatformOneSecond * 180)) return mStatus_UnknownErr;
+		if ((mDNSu32)(mDNSPlatformRawTime()) < (mDNSu32)(mDNSPlatformOneSecond * 180)) return mStatus_NoError;
 
-		LogMsg("RegisterSplitDNS: Error: dns_configuration_copy returned NULL");
+		LogMsg("GetDNSConfig: Error: dns_configuration_copy returned NULL");
 		return mStatus_UnknownErr;
 		}
-	mDNS_DeleteDNSServers(m);
-
-	LogOperation("RegisterSplitDNS: Registering %d resolvers", config->n_resolver);
-	for (i = 0; i < config->n_resolver; i++)		
-		{
-		int j, n;
-		domainname d;
-		dns_resolver_t *r = config->resolver[i];
-		if (r->port == MulticastDNSPort.NotAnInteger) continue; // ignore configurations for .local
-		if (r->search_order == DEFAULT_SEARCH_ORDER || !r->domain || !*r->domain) d.c[0] = 0; // we ignore domain for "default" resolver
-		else if (!MakeDomainNameFromDNSNameString(&d, r->domain)) { LogMsg("RegisterSplitDNS: bad domain %s", r->domain); continue; }
-
-		// check if this is the lowest-weighted server for the domain
-		for (j = 0; j < config->n_resolver; j++)
-			{
-			dns_resolver_t *p = config->resolver[j];
-			if (p->port == MulticastDNSPort.NotAnInteger) continue;
-			if (p->search_order <= r->search_order)
-				{
-				domainname tmp;				
-				if (p->search_order == DEFAULT_SEARCH_ORDER || !p->domain || !*p->domain) tmp.c[0] = '\0';
-				else if (!MakeDomainNameFromDNSNameString(&tmp, p->domain)) { LogMsg("RegisterSplitDNS: bad domain %s", p->domain); continue; }
-				if (SameDomainName(&d, &tmp))
-					if (p->search_order < r->search_order || j < i) break;  // if equal weights, pick first in list, otherwise pick lower-weight (p)
-				}
-			}
-		if (j < config->n_resolver) // found a lower-weighted resolver for this domain
-			{ debugf("Rejecting DNS server in slot %d domain %##s (slot %d outranks)", i, d.c, j); continue; }
-		// we're using this resolver - find the first IPv4 address
-		for (n = 0; n < r->n_nameserver; n++)
-			{
-			if (r->nameserver[n]->sa_family == AF_INET)
-				{
-				mDNSAddr saddr;
-				if (SetupAddr(&saddr, r->nameserver[n])) { LogMsg("RegisterSplitDNS: bad IP address"); continue; }
-				debugf("Adding dns server from slot %d %d.%d.%d.%d for domain %##s", i, saddr.ip.v4.b[0], saddr.ip.v4.b[1], saddr.ip.v4.b[2], saddr.ip.v4.b[3], d.c);
-				mDNS_AddDNSServer(m, &saddr, &d);
-				break;  // !!!KRS if we ever support round-robin servers, don't break here
-				}
-			}
-		}
-	dns_configuration_free(config);
 	return mStatus_NoError;
-#endif	
+#endif // MAC_OS_X_VERSION_10_4
+	}
+
+mDNSlocal mStatus RegisterSplitDNS(mDNS *m)
+	{
+	(void)m;  // unused on 10.3 systems
+	void *v;
+	mStatus err = GetDNSConfig(&v);
+	if (!err && v)
+		{
+#ifdef MAC_OS_X_VERSION_10_4
+		int i;
+		dns_config_t *config = v;  // use void * to allow compilation on 10.3 systems
+		mDNS_DeleteDNSServers(m);
+		
+		LogOperation("RegisterSplitDNS: Registering %d resolvers", config->n_resolver);
+		for (i = 0; i < config->n_resolver; i++)		
+			{
+			int j, n;
+			domainname d;
+			dns_resolver_t *r = config->resolver[i];
+			if (r->port == MulticastDNSPort.NotAnInteger) continue; // ignore configurations for .local
+			if (r->search_order == DEFAULT_SEARCH_ORDER || !r->domain || !*r->domain) d.c[0] = 0; // we ignore domain for "default" resolver
+			else if (!MakeDomainNameFromDNSNameString(&d, r->domain)) { LogMsg("RegisterSplitDNS: bad domain %s", r->domain); continue; }
+			
+			// check if this is the lowest-weighted server for the domain
+			for (j = 0; j < config->n_resolver; j++)
+				{
+				dns_resolver_t *p = config->resolver[j];
+				if (p->port == MulticastDNSPort.NotAnInteger) continue;
+				if (p->search_order <= r->search_order)
+					{
+					domainname tmp;				
+					if (p->search_order == DEFAULT_SEARCH_ORDER || !p->domain || !*p->domain) tmp.c[0] = '\0';
+					else if (!MakeDomainNameFromDNSNameString(&tmp, p->domain)) { LogMsg("RegisterSplitDNS: bad domain %s", p->domain); continue; }
+					if (SameDomainName(&d, &tmp))
+						if (p->search_order < r->search_order || j < i) break;  // if equal weights, pick first in list, otherwise pick lower-weight (p)
+					}
+				}
+			if (j < config->n_resolver) // found a lower-weighted resolver for this domain
+				{ debugf("Rejecting DNS server in slot %d domain %##s (slot %d outranks)", i, d.c, j); continue; }
+			// we're using this resolver - find the first IPv4 address
+			for (n = 0; n < r->n_nameserver; n++)
+				{
+				if (r->nameserver[n]->sa_family == AF_INET && !AddrRequiresPPPConnection(r->nameserver[n]))
+					{
+					mDNSAddr saddr;
+					if (SetupAddr(&saddr, r->nameserver[n])) { LogMsg("RegisterSplitDNS: bad IP address"); continue; }
+					debugf("Adding dns server from slot %d %d.%d.%d.%d for domain %##s", i, saddr.ip.v4.b[0], saddr.ip.v4.b[1], saddr.ip.v4.b[2], saddr.ip.v4.b[3], d.c);
+					mDNS_AddDNSServer(m, &saddr, &d);
+					break;  // !!!KRS if we ever support round-robin servers, don't break here
+					}
+				}
+			}
+		dns_configuration_free(config);
+#endif
+		}
+		return err;
 	}
 
 mDNSlocal mStatus RegisterNameServers(mDNS *const m, CFDictionaryRef dict)
@@ -2235,7 +2471,7 @@ mDNSlocal void FoundDomain(mDNS *const m, DNSQuestion *question, const ResourceR
 	SearchListElem *slElem = question->QuestionContext;
 	ARListElem *arElem, *ptr, *prev;
     AuthRecord *dereg;
-	char *name;
+	const char *name;
 	mStatus err;
 	
 	if (AddRecord)
@@ -2243,15 +2479,16 @@ mDNSlocal void FoundDomain(mDNS *const m, DNSQuestion *question, const ResourceR
 		arElem = mallocL("FoundDomain - arElem", sizeof(ARListElem));
 		if (!arElem) { LogMsg("ERROR: malloc");  return; }
 		mDNS_SetupResourceRecord(&arElem->ar, mDNSNULL, mDNSInterface_LocalOnly, kDNSType_PTR, 7200,  kDNSRecordTypeShared, FreeARElemCallback, arElem);
-		if      (question == &slElem->BrowseQ)       name = "_browse._dns-sd._udp.local.";
-		else if (question == &slElem->DefBrowseQ)    name = "_default._browse._dns-sd._udp.local.";
-		else if (question == &slElem->LegacyBrowseQ) name = "_legacy._browse._dns-sd._udp.local.";
-		else if (question == &slElem->RegisterQ)     name = "_register._dns-sd._udp.local.";
-		else if (question == &slElem->DefRegisterQ)  name = "_default._register._dns-sd._udp.local.";
+		if      (question == &slElem->BrowseQ)       name = mDNS_DomainTypeNames[mDNS_DomainTypeBrowse];
+		else if (question == &slElem->DefBrowseQ)    name = mDNS_DomainTypeNames[mDNS_DomainTypeBrowseDefault];
+		else if (question == &slElem->LegacyBrowseQ) name = mDNS_DomainTypeNames[mDNS_DomainTypeBrowseLegacy];
+		else if (question == &slElem->RegisterQ)     name = mDNS_DomainTypeNames[mDNS_DomainTypeRegistration];
+		else if (question == &slElem->DefRegisterQ)  name = mDNS_DomainTypeNames[mDNS_DomainTypeRegistrationDefault];
 		else { LogMsg("FoundDomain - unknown question"); return; }
 		
-		MakeDomainNameFromDNSNameString(&arElem->ar.resrec.name, name);
-		AssignDomainName(arElem->ar.resrec.rdata->u.name, answer->rdata->u.name);
+		MakeDomainNameFromDNSNameString(arElem->ar.resrec.name, name);
+		AppendDNSNameString            (arElem->ar.resrec.name, "local");
+		AssignDomainName(&arElem->ar.resrec.rdata->u.name, &answer->rdata->u.name);
 		err = mDNS_Register(m, &arElem->ar);
 		if (err)
 			{
@@ -2270,7 +2507,7 @@ mDNSlocal void FoundDomain(mDNS *const m, DNSQuestion *question, const ResourceR
 			{
 			if (SameDomainName(&ptr->ar.resrec.rdata->u.name, &answer->rdata->u.name))
 				{
-				debugf("Deregistering PTR %s -> %s", ptr->ar.resrec.name.c, ptr->ar.resrec.rdata->u.name.c);
+				debugf("Deregistering PTR %s -> %s", ptr->ar.resrec.name->c, ptr->ar.resrec.rdata->u.name.c);
                 dereg = &ptr->ar;
 				if (prev) prev->next = ptr->next;
 				else slElem->AuthRecs = ptr->next;
@@ -2287,13 +2524,20 @@ mDNSlocal void FoundDomain(mDNS *const m, DNSQuestion *question, const ResourceR
 		}
 	}
 
-mDNSlocal void MarkSearchListElem(domainname *domain)
+mDNSlocal void MarkSearchListElem(const char *d)
 	{
 	SearchListElem *new, *ptr;
+	domainname domain;
 	
+	if (!MakeDomainNameFromDNSNameString(&domain, d))
+		{ LogMsg("ERROR: MarkSearchListElem - bad domain %##s", d); return; }
+
+	if (SameDomainName(&domain, &localdomain) || SameDomainName(&domain, &LocalReverseMapomain))
+		{ debugf("MarkSearchListElem - ignoring local domain %##s", domain.c); return; } 
+
 	// if domain is in list, mark as pre-existent (0)
 	for (ptr = SearchList; ptr; ptr = ptr->next)
-		if (SameDomainName(&ptr->domain, domain))
+		if (SameDomainName(&ptr->domain, &domain))
 			{
 			if (ptr->flag != 1) ptr->flag = 0;  // gracefully handle duplicates - if it is already marked as add, don't bump down to preexistent
 			break;
@@ -2305,26 +2549,41 @@ mDNSlocal void MarkSearchListElem(domainname *domain)
 		new = mallocL("MarkSearchListElem - SearchListElem", sizeof(SearchListElem));
 		if (!new) { LogMsg("ERROR: MarkSearchListElem - malloc"); return; }
 		bzero(new, sizeof(SearchListElem));
-		AssignDomainName(new->domain, *domain);
+		AssignDomainName(&new->domain, &domain);
 		new->flag = 1;  // add
 		new->next = SearchList;
 		SearchList = new;
 		}
 	}
 
-mDNSlocal mStatus RegisterSearchDomains(mDNS *const m, CFDictionaryRef dict)
+// Get the search domains via OS X resolver routines.  Returns mStatus_UnsupporterErr if compiled or run on 10.3 systems
+mDNSlocal mStatus GetSearchDomains(void)
 	{
-	struct ifaddrs *ifa = NULL;
+	void *v;
+	mStatus err = GetDNSConfig(&v);
+	if (!err && v)
+		{
+#ifdef MAC_OS_X_VERSION_10_4	
+		int i;
+		dns_config_t *config = v;
+		if (!config->n_resolver) return err;
+		dns_resolver_t *resolv = config->resolver[0];  // use the first slot for search domains
+
+		for (i = 0; i < resolv->n_search; i++) MarkSearchListElem(resolv->search[i]);
+		if (resolv->domain) MarkSearchListElem(resolv->domain);
+		dns_configuration_free(config);
+#endif
+		}
+	return err;
+	}
+
+// Get search domains from dynamic store - used as a fallback mechanism on 10.3 systems, if GetSearchDomains (above) fails.
+mDNSlocal void GetDSSearchDomains(CFDictionaryRef dict)
+	{
+	char buf[MAX_ESCAPED_DOMAIN_NAME];
 	int i, count;
-	domainname domain;
-	char  buf[MAX_ESCAPED_DOMAIN_NAME];
+
 	CFStringRef s;
-	SearchListElem *ptr, *prev, *freeSLPtr;
-	ARListElem *arList;
-	mStatus err;
-	
-	// step 1: mark each elem for removal (-1), unless we aren't passed a dictionary in which case we mark as preexistent
-	for (ptr = SearchList; ptr; ptr = ptr->next) ptr->flag = dict ? -1 : 0;
 
 	// get all the domains from "Search Domains" field of sharing prefs
 	if (dict)
@@ -2336,32 +2595,42 @@ mDNSlocal mStatus RegisterSearchDomains(mDNS *const m, CFDictionaryRef dict)
 			for (i = 0; i < count; i++)
 				{
 				s = CFArrayGetValueAtIndex(searchdomains, i);
-				if (!s) { LogMsg("ERROR: RegisterSearchDomains - CFArrayGetValueAtIndex"); break; }
+				if (!s) { LogMsg("ERROR: GetDSSearchDomains - CFArrayGetValueAtIndex"); break; }
 				if (!CFStringGetCString(s, buf, MAX_ESCAPED_DOMAIN_NAME, kCFStringEncodingUTF8))
 					{
-					LogMsg("ERROR: RegisterSearchDomains - CFStringGetCString");
+					LogMsg("ERROR: GetDSSearchDomains - CFStringGetCString");
 					continue;
 					}
-				if (!MakeDomainNameFromDNSNameString(&domain, buf))
-					{
-					LogMsg("ERROR: RegisterSearchDomains - invalid search domain %s", buf);
-					continue;
-					}
-				MarkSearchListElem(&domain);
+				MarkSearchListElem(buf);
 				}
 			}
+
+		// get DHCP domain field
 		CFStringRef dname = CFDictionaryGetValue(dict, kSCPropNetDNSDomainName);
 		if (dname)
 			{
 			if (CFStringGetCString(dname, buf, MAX_ESCAPED_DOMAIN_NAME, kCFStringEncodingUTF8))
-				{
-				if (MakeDomainNameFromDNSNameString(&domain, buf)) MarkSearchListElem(&domain);
-				else LogMsg("ERROR: RegisterSearchDomains - invalid domain %s", buf);
-				}
-			else LogMsg("ERROR: RegisterSearchDomains - CFStringGetCString");
+				MarkSearchListElem(buf);
+			else LogMsg("ERROR: GetDSSearchDomains - CFStringGetCString");
 			}
 		}
+	}
+
+mDNSlocal mStatus RegisterSearchDomains(mDNS *const m, CFDictionaryRef dict)
+	{
+	struct ifaddrs *ifa = NULL;
+	SearchListElem *ptr, *prev, *freeSLPtr;
+	ARListElem *arList;
+	mStatus err;
+
+	if (DomainDiscoveryDisabled) return mStatus_NoError;
 	
+	// step 1: mark each elem for removal (-1), unless we aren't passed a dictionary in which case we mark as preexistent
+	for (ptr = SearchList; ptr; ptr = ptr->next) ptr->flag = dict ? -1 : 0;
+
+	// Get search domains from resolver library (available in OS X 10.4 and later), reverting to dynamic store on 10.3 systems
+	if (GetSearchDomains() == mStatus_UnsupportedErr) GetDSSearchDomains(dict);
+ 	
 	// Construct reverse-map search domains
 	ifa = myGetIfAddrs(1);
 	while (ifa)
@@ -2377,14 +2646,11 @@ mDNSlocal mStatus RegisterSearchDomains(mDNS *const m, CFDictionaryRef dict)
                                                              addr.ip.v4.b[2] & netmask.ip.v4.b[2],
                                                              addr.ip.v4.b[1] & netmask.ip.v4.b[1],
                                                              addr.ip.v4.b[0] & netmask.ip.v4.b[0]);
-				MakeDomainNameFromDNSNameString(&domain, buffer);
-				MarkSearchListElem(&domain);
+				MarkSearchListElem(buffer);
 				}
 			}
 		ifa = ifa->ifa_next;
 		}
-
-	if (DynDNSRegDomain.c[0]) MarkSearchListElem(&DynDNSRegDomain);         // implicitly browse reg domain too (no-op if same as BrowseDomain)
 	
 	// delete elems marked for removal, do queries for elems marked add
 	prev = NULL;
@@ -2406,7 +2672,7 @@ mDNSlocal mStatus RegisterSearchDomains(mDNS *const m, CFDictionaryRef dict)
 				{
 				AuthRecord *dereg = &arList->ar;
 				arList = arList->next;
-				debugf("Deregistering PTR %s -> %s", dereg->resrec.name.c, dereg->resrec.rdata->u.name.c);
+				debugf("Deregistering PTR %s -> %s", dereg->resrec.name->c, dereg->resrec.rdata->u.name.c);
 				err = mDNS_Deregister(m, dereg);
 				if (err) LogMsg("ERROR: RegisterSearchDomains mDNS_Deregister returned %d", err);
 				}
@@ -2452,8 +2718,8 @@ mDNSlocal mStatus RegisterSearchDomains(mDNS *const m, CFDictionaryRef dict)
 mDNSlocal void SCPrefsDynDNSCallback(mDNS *const m, AuthRecord *const rr, mStatus result)
 	{
 	(void)m;  // unused
-	debugf("SCPrefsDynDNSCallback: result %d for registration of name %##s", result, rr->resrec.name.c);
-	SetDDNSNameStatus(&rr->resrec.name, result);
+	debugf("SCPrefsDynDNSCallback: result %d for registration of name %##s", result, rr->resrec.name->c);
+	SetDDNSNameStatus(rr->resrec.name, result);
 	}
 
 mDNSlocal void SetSecretForDomain(mDNS *m, const domainname *domain)
@@ -2500,36 +2766,80 @@ mDNSlocal void SetSecretForDomain(mDNS *m, const domainname *domain)
 		}
 	}
 
+mDNSlocal void SetSCPrefsBrowseDomainsFromCFArray(mDNS *m, CFArrayRef browseDomains, mDNSBool add)
+	{
+	if (browseDomains)
+		{
+		CFIndex count = CFArrayGetCount(browseDomains);
+		CFDictionaryRef browseDict;
+		char buf[MAX_ESCAPED_DOMAIN_NAME];
+		int i;
+		
+		for (i = 0; i < count; i++)
+			{
+			browseDict = (CFDictionaryRef)CFArrayGetValueAtIndex(browseDomains, i);
+			if (browseDict && DDNSSettingEnabled(browseDict))
+				{
+				CFStringRef name = CFDictionaryGetValue(browseDict, CFSTR("Domain"));
+				if (name)
+					{
+					domainname BrowseDomain;
+					if (!CFStringGetCString(name, buf, sizeof(buf), kCFStringEncodingUTF8) || !MakeDomainNameFromDNSNameString(&BrowseDomain, buf) || !BrowseDomain.c[0])
+						LogMsg("SetSCPrefsBrowseDomainsFromCFArray SCDynamicStore bad DDNS browse domain: %s", buf[0] ? buf : "(unknown)");
+					else SetSCPrefsBrowseDomain(m, &BrowseDomain, add);
+					}
+				}
+			}
+		}
+	}
+
+
 mDNSlocal void DynDNSConfigChanged(mDNS *const m)
 	{
 	static mDNSBool LegacyNATInitialized = mDNSfalse;
 	uDNS_GlobalInfo *u = &m->uDNS_info;
 	CFDictionaryRef dict;
 	CFStringRef     key;
-	domainname BrowseDomain, RegDomain, fqdn;
+	domainname RegDomain, fqdn;
+	CFArrayRef NewBrowseDomains = NULL;
 	
 	// get fqdn, zone from SCPrefs
-	GetUserSpecifiedDDNSConfig(&fqdn, &RegDomain, &BrowseDomain);
-	if (!fqdn.c[0] && !RegDomain.c[0]) ReadDDNSSettingsFromConfFile(m, CONFIG_FILE, &fqdn, &RegDomain);
+	GetUserSpecifiedDDNSConfig(&fqdn, &RegDomain, &NewBrowseDomains);
+	ReadDDNSSettingsFromConfFile(m, CONFIG_FILE, fqdn.c[0] ? NULL : &fqdn, RegDomain.c[0] ? NULL : &RegDomain, &DomainDiscoveryDisabled);
 
-	if (!SameDomainName(&BrowseDomain, &DynDNSBrowseDomain))
-		{
-		if (DynDNSBrowseDomain.c[0]) SetSCPrefsBrowseDomain(m, &DynDNSBrowseDomain, mDNSfalse);
-		AssignDomainName(DynDNSBrowseDomain, BrowseDomain);
-		if (DynDNSBrowseDomain.c[0]) SetSCPrefsBrowseDomain(m, &DynDNSBrowseDomain, mDNStrue);
-		}
-	
 	if (!SameDomainName(&RegDomain, &DynDNSRegDomain))
 		{		
-		if (DynDNSRegDomain.c[0]) RemoveDefRegDomain(&DynDNSRegDomain);
-		AssignDomainName(DynDNSRegDomain, RegDomain);		
-		if (DynDNSRegDomain.c[0]) { SetSecretForDomain(m, &DynDNSRegDomain); AddDefRegDomain(&DynDNSRegDomain); }
+		if (DynDNSRegDomain.c[0])
+			{
+			RemoveDefRegDomain(&DynDNSRegDomain);
+			SetSCPrefsBrowseDomain(m, &DynDNSRegDomain, mDNSfalse); // if we were automatically browsing in our registration domain, stop
+			}
+		AssignDomainName(&DynDNSRegDomain, &RegDomain);		
+		if (DynDNSRegDomain.c[0])
+			{
+			SetSecretForDomain(m, &DynDNSRegDomain);
+			AddDefRegDomain(&DynDNSRegDomain);
+			SetSCPrefsBrowseDomain(m, &DynDNSRegDomain, mDNStrue);
+			}
 		}
+
+    // Add new browse domains to internal list
+	if (NewBrowseDomains) SetSCPrefsBrowseDomainsFromCFArray(m, NewBrowseDomains, mDNStrue);
+
+	// Remove old browse domains from internal list
+	if (DynDNSBrowseDomains) 
+		{
+		SetSCPrefsBrowseDomainsFromCFArray(m, DynDNSBrowseDomains, mDNSfalse);
+		CFRelease(DynDNSBrowseDomains);
+		}
+
+	// Replace the old browse domains array with the new array
+	DynDNSBrowseDomains = NewBrowseDomains;
 	
 	if (!SameDomainName(&fqdn, &DynDNSHostname))
 		{
 		if (DynDNSHostname.c[0]) mDNS_RemoveDynDNSHostName(m, &DynDNSHostname);
-		AssignDomainName(DynDNSHostname, fqdn);
+		AssignDomainName(&DynDNSHostname, &fqdn);
 		if (DynDNSHostname.c[0])
 			{
 			SetSecretForDomain(m, &fqdn); // no-op if "zone" secret, above, is to be used for hostname
@@ -2570,9 +2880,19 @@ mDNSlocal void DynDNSConfigChanged(mDNS *const m)
 	CFStringRef router = CFDictionaryGetValue(dict, kSCPropNetIPv4Router);
 	if (router)
 		{
+		struct sockaddr_in saddr;
+		
 		if (!CFStringGetCString(router, buf, 256, kCFStringEncodingUTF8))
 			LogMsg("Could not convert router to CString");
-		else inet_aton(buf, (struct in_addr *)&r.ip.v4);
+		else
+			{
+			saddr.sin_len = sizeof(saddr);
+			saddr.sin_family = AF_INET;
+			saddr.sin_port = 0;			
+			inet_aton(buf, &saddr.sin_addr);
+			if (AddrRequiresPPPConnection((struct sockaddr *)&saddr)) { debugf("Ignoring router %s (requires PPP connection)", buf); }
+			else *(in_addr_t *)&r.ip.v4 = saddr.sin_addr.s_addr;
+			}
 		}
 
 	// handle primary interface changes
@@ -2597,7 +2917,7 @@ mDNSlocal void DynDNSConfigChanged(mDNS *const m)
 					r.ip.v4.NotAnInteger != u->Router.ip.v4.NotAnInteger)
 					{
 					if (LegacyNATInitialized) { LegacyNATDestroy(); LegacyNATInitialized = mDNSfalse; }
-					if (IsPrivateV4Addr(&ip))
+					if (r.ip.v4.NotAnInteger && IsPrivateV4Addr(&ip))
 						{
 						mStatus err = LegacyNATInit();
 						if (err)  LogMsg("ERROR: LegacyNATInit");
@@ -2610,20 +2930,21 @@ mDNSlocal void DynDNSConfigChanged(mDNS *const m)
 			ifa = ifa->ifa_next;
 			}
 		}
-
+	
 	error:
 	CFRelease(dict);
 	}
 
 mDNSexport void mDNSMacOSXNetworkChanged(mDNS *const m)
-	{
+   {
 	LogOperation("***   Network Configuration Change   ***");
-	MarkAllInterfacesInactive(m);
-	UpdateInterfaceList(m);
-	int nDeletions = ClearInactiveInterfaces(m);
-	int nAdditions = SetupActiveInterfaces(m);
-	if (nDeletions || nAdditions) mDNS_UpdateLLQs(m);
-	DynDNSConfigChanged(m);
+	mDNSs32 utc = mDNSPlatformUTC();
+	MarkAllInterfacesInactive(m, utc);
+	UpdateInterfaceList(m, utc);
+	int nDeletions = ClearInactiveInterfaces(m, utc);
+	int nAdditions = SetupActiveInterfaces(m, utc);
+	DynDNSConfigChanged(m);                           // note - call DynDNSConfigChanged *before* mDNS_UpdateLLQs	                        
+	if (nDeletions || nAdditions) mDNS_UpdateLLQs(m); // so that LLQs are restarted against the up to date name servers
 	
 	if (m->MainCallback)
 		m->MainCallback(m, mStatus_ConfigChanged);
@@ -2633,10 +2954,31 @@ mDNSlocal void NetworkChanged(SCDynamicStoreRef store, CFArrayRef changedKeys, v
 	{
 	(void)store;        // Parameter not used
 	(void)changedKeys;  // Parameter not used
-	LogOperation("***   NetworkChanged   ***");
 	mDNS *const m = (mDNS *const)context;
 	mDNS_Lock(m);
-	m->p->NetworkChanged = NonZeroTime(m->timenow + mDNSPlatformOneSecond * 2);
+
+	mDNSs32 delay = mDNSPlatformOneSecond * 2;							// Start off assuming a two-second delay
+
+	int c = CFArrayGetCount(changedKeys);								// Count changes
+	CFRange range = { 0, c };
+	CFStringRef k1 = SCDynamicStoreKeyCreateComputerName(NULL);
+	CFStringRef k2 = SCDynamicStoreKeyCreateHostNames(NULL);
+	if (k1 && k2)
+		{
+		int c1 = (CFArrayContainsValue(changedKeys, range, k1) != 0);	// See if ComputerName changed
+		int c2 = (CFArrayContainsValue(changedKeys, range, k2) != 0);	// See if Local Hostname changed
+		int c3 = (CFArrayContainsValue(changedKeys, range, CFSTR("Setup:/Network/DynamicDNS")) != 0);
+		if (c && c - c1 - c2 - c3 == 0) delay = mDNSPlatformOneSecond/10;	// If these were the only changes, shorten delay
+		}
+	if (k1) CFRelease(k1);
+	if (k2) CFRelease(k2);
+
+	LogOperation("***   NetworkChanged   *** %d change%s, delay %d", c, c>1?"s":"", delay);
+
+	if (!m->p->NetworkChanged ||
+		m->p->NetworkChanged - NonZeroTime(m->timenow + delay) < 0)
+		m->p->NetworkChanged = NonZeroTime(m->timenow + delay);
+	
 	if (!m->SuppressSending ||
 		m->SuppressSending - m->p->NetworkChanged < 0)
 		m->SuppressSending = m->p->NetworkChanged;
@@ -2706,10 +3048,12 @@ mDNSlocal void PowerChanged(void *refcon, io_service_t service, natural_t messag
 	switch(messageType)
 		{
 		case kIOMessageCanSystemPowerOff:		debugf("PowerChanged kIOMessageCanSystemPowerOff (no action)");							break; // E0000240
-		case kIOMessageSystemWillPowerOff:		debugf("PowerChanged kIOMessageSystemWillPowerOff"); mDNSCoreMachineSleep(m, true);		break; // E0000250
+		case kIOMessageSystemWillPowerOff:		debugf("PowerChanged kIOMessageSystemWillPowerOff");
+												mDNSCoreMachineSleep(m, true); mDNSMacOSXNetworkChanged(m);								break; // E0000250
 		case kIOMessageSystemWillNotPowerOff:	debugf("PowerChanged kIOMessageSystemWillNotPowerOff (no action)");						break; // E0000260
 		case kIOMessageCanSystemSleep:			debugf("PowerChanged kIOMessageCanSystemSleep (no action)");							break; // E0000270
-		case kIOMessageSystemWillSleep:			debugf("PowerChanged kIOMessageSystemWillSleep");	 mDNSCoreMachineSleep(m, true);		break; // E0000280
+		case kIOMessageSystemWillSleep:			debugf("PowerChanged kIOMessageSystemWillSleep");
+												mDNSCoreMachineSleep(m, true); mDNSMacOSXNetworkChanged(m);								break; // E0000280
 		case kIOMessageSystemWillNotSleep:		debugf("PowerChanged kIOMessageSystemWillNotSleep (no action)");						break; // E0000290
 		case kIOMessageSystemHasPoweredOn:		debugf("PowerChanged kIOMessageSystemHasPoweredOn");
 												// If still sleeping (didn't get 'WillPowerOn' message for some reason?) wake now
@@ -2790,17 +3134,19 @@ mDNSlocal mDNSBool mDNSPlatformInit_CanReceiveUnicast(void)
 	}
 
 // Callback for the _legacy._browse queries - add answer to list of domains to search for empty-string browses
-mDNSlocal void FoundDefBrowseDomain(mDNS *const m, DNSQuestion *question, const ResourceRecord *const answer, mDNSBool AddRecord)
+mDNSlocal void FoundLegacyBrowseDomain(mDNS *const m, DNSQuestion *question, const ResourceRecord *const answer, mDNSBool AddRecord)
 	{
 	DNameListElem *ptr, *prev, *new;
 	(void)m; // unused;
 	(void)question;  // unused
 
+	LogMsg("%s browse domain %##s", AddRecord ? "Adding" : "Removing", answer->rdata->u.name.c);
+	
 	if (AddRecord)
 		{
-		new = mallocL("FoundDefBrowseDomain", sizeof(DNameListElem));
+		new = mallocL("FoundLegacyBrowseDomain", sizeof(DNameListElem));
 		if (!new) { LogMsg("ERROR: malloc"); return; }
-		AssignDomainName(new->name, answer->rdata->u.name);
+		AssignDomainName(&new->name, &answer->rdata->u.name);
 		new->next = DefBrowseList;
 		DefBrowseList = new;
 		DefaultBrowseDomainChanged(&new->name, mDNStrue);
@@ -2819,13 +3165,55 @@ mDNSlocal void FoundDefBrowseDomain(mDNS *const m, DNSQuestion *question, const 
 				udsserver_default_browse_domain_changed(&ptr->name, mDNSfalse);
 				if (prev) prev->next = ptr->next;
 				else DefBrowseList = ptr->next;
-				freeL("FoundDefBrowseDomain", ptr);				
+				freeL("FoundLegacyBrowseDomain", ptr);				
 				return;
 				}
 			prev = ptr;
 			ptr = ptr->next;
 			}
-		LogMsg("FoundDefBrowseDomain: Got remove event for domain %s not in list", answer->rdata->u.name.c);
+		LogMsg("FoundLegacyBrowseDomain: Got remove event for domain %s not in list", answer->rdata->u.name.c);
+		}
+	}
+
+mDNSlocal void RegisterBrowseDomainPTR(mDNS *m, const domainname *d, int type)
+	{
+	// allocate/register legacy and non-legacy _browse PTR record
+	ARListElem *browse = mallocL("ARListElem", sizeof(*browse));
+	mDNS_SetupResourceRecord(&browse->ar, mDNSNULL, mDNSInterface_LocalOnly, kDNSType_PTR, 7200,  kDNSRecordTypeShared, FreeARElemCallback, browse);
+	MakeDomainNameFromDNSNameString(browse->ar.resrec.name, mDNS_DomainTypeNames[type]);
+	AppendDNSNameString            (browse->ar.resrec.name, "local");
+	AssignDomainName(&browse->ar.resrec.rdata->u.name, d);
+	mStatus err = mDNS_Register(m, &browse->ar);
+	if (err)
+		{
+		LogMsg("SetSCPrefsBrowseDomain: mDNS_Register returned error %d", err);
+		freeL("ARListElem", browse);
+		}
+	else
+		{
+		browse->next = SCPrefBrowseDomains;
+		SCPrefBrowseDomains = browse;
+		}
+	}
+
+mDNSlocal void DeregisterBrowseDomainPTR(mDNS *m, const domainname *d, int type)
+	{
+	ARListElem *remove, **ptr = &SCPrefBrowseDomains;
+	domainname lhs; // left-hand side of PTR, for comparison
+	
+	MakeDomainNameFromDNSNameString(&lhs, mDNS_DomainTypeNames[type]);
+	AppendDNSNameString            (&lhs, "local");
+
+	while (*ptr)
+		{
+		if (SameDomainName(&(*ptr)->ar.resrec.rdata->u.name, d) && SameDomainName((*ptr)->ar.resrec.name, &lhs))
+			{
+			remove = *ptr;
+			*ptr = (*ptr)->next;
+			mDNS_Deregister(m, &remove->ar);
+			return;
+			}
+		else ptr = &(*ptr)->next;
 		}
 	}
 
@@ -2833,51 +3221,25 @@ mDNSlocal void FoundDefBrowseDomain(mDNS *const m, DNSQuestion *question, const 
 // Also register a non-legacy _browse PTR record so that the domain appears in enumeration lists
 mDNSlocal void SetSCPrefsBrowseDomain(mDNS *m, const domainname *d, mDNSBool add)
 	{
-	AuthRecord rec;
+	debugf("SetSCPrefsBrowseDomain: %s default browse domain %##s", add ? "Adding" : "Removing", d->c);
 	
-	// Create dummy  record pointing to the domain to be added/removed
-	mDNS_SetupResourceRecord(&rec, mDNSNULL, mDNSInterface_LocalOnly, kDNSType_PTR, 7200,  kDNSRecordTypeShared, mDNSNULL, mDNSNULL);
-	AssignDomainName(rec.resrec.rdata->u.name, *d);
-
-	// add/remove the "_legacy" entry
-	MakeDomainNameFromDNSNameString(&rec.resrec.name, "_legacy._browse._dns-sd._udp.local.");
-	FoundDefBrowseDomain(m, &LegacyBrowseDomainQ, &rec.resrec, add);
-
 	if (add)
 		{
-		// allocate/register a non-legacy _browse PTR record
-		ARListElem *ptr = mallocL("ARListElem", sizeof(*ptr));
-		mDNS_SetupResourceRecord(&ptr->ar, mDNSNULL, mDNSInterface_LocalOnly, kDNSType_PTR, 7200,  kDNSRecordTypeShared, FreeARElemCallback, ptr);
-		MakeDomainNameFromDNSNameString(&ptr->ar.resrec.name, "_browse._dns-sd._udp.local.");
-		AssignDomainName(ptr->ar.resrec.rdata->u.name, *d);
-		mStatus err = mDNS_Register(m, &ptr->ar);
-		if (err)
-			{
-			LogMsg("SetSCPrefsBrowseDomain: mDNS_Register returned error %d", err);
-			freeL("ARListElem", ptr);
-			}
-		else
-			{
-			ptr->next = SCPrefBrowseDomains;
-			SCPrefBrowseDomains = ptr;
-			}
+		RegisterBrowseDomainPTR(m, d, mDNS_DomainTypeBrowse);
+		RegisterBrowseDomainPTR(m, d, mDNS_DomainTypeBrowseLegacy);
 		}
 	else
 		{
-		ARListElem **remove = &SCPrefBrowseDomains;
-		while (*remove && !SameDomainName(&(*remove)->ar.resrec.rdata->u.name, d)) remove = &(*remove)->next;
-		if (!*remove) { LogMsg("SetSCPrefsBrowseDomain (remove) - domain %##s not found!", d->c); return; }
-		mDNS_Deregister(m, &(*remove)->ar);
-		*remove = (*remove)->next;
+		DeregisterBrowseDomainPTR(m, d, mDNS_DomainTypeBrowse);
+		DeregisterBrowseDomainPTR(m, d, mDNS_DomainTypeBrowseLegacy);
 		}
 	}
 
-
 // Construction of Default Browse domain list (i.e. when clients pass NULL) is as follows:
-// 1) query for _browse._dns-sd._udp.local on LocalOnly interface
+// 1) query for b._dns-sd._udp.local on LocalOnly interface
 //    (.local manually generated via explicit callback)
-// 2) for each search domain (from prefs pane), query for _browse._dns-sd._udp.<searchdomain>.
-// 3) for each result from (2), register LocalOnly PTR record_browse._dns-sd._udp.local. -> <result>
+// 2) for each search domain (from prefs pane), query for b._dns-sd._udp.<searchdomain>.
+// 3) for each result from (2), register LocalOnly PTR record b._dns-sd._udp.local. -> <result>
 // 4) result above should generate a callback from question in (1).  result added to global list
 // 5) global list delivered to client via GetSearchDomainList()
 // 6) client calls to enumerate domains now go over LocalOnly interface
@@ -2886,17 +3248,39 @@ mDNSlocal void SetSCPrefsBrowseDomain(mDNS *m, const domainname *d, mDNSBool add
 mDNSlocal mStatus InitDNSConfig(mDNS *const m)
 	{
 	mStatus err;
-
+	static AuthRecord LocalRegPTR;
+	
 	// start query for domains to be used in default (empty string domain) browses
-	err = mDNS_GetDomains(m, &LegacyBrowseDomainQ, mDNS_DomainTypeBrowseLegacy, NULL, mDNSInterface_LocalOnly, FoundDefBrowseDomain, NULL);
+	err = mDNS_GetDomains(m, &LegacyBrowseDomainQ, mDNS_DomainTypeBrowseLegacy, NULL, mDNSInterface_LocalOnly, FoundLegacyBrowseDomain, NULL);
 
-	// provide .local automatically
+	// provide browse domain "local" automatically
 	SetSCPrefsBrowseDomain(m, &localdomain, mDNStrue);
-    return mStatus_NoError;
+
+	// register registration domain "local"
+	mDNS_SetupResourceRecord(&LocalRegPTR, mDNSNULL, mDNSInterface_LocalOnly, kDNSType_PTR, 7200,  kDNSRecordTypeShared, NULL, NULL);
+	MakeDomainNameFromDNSNameString(LocalRegPTR.resrec.name, mDNS_DomainTypeNames[mDNS_DomainTypeRegistration]);
+	AppendDNSNameString            (LocalRegPTR.resrec.name, "local");
+	AssignDomainName(&LocalRegPTR.resrec.rdata->u.name, &localdomain);
+	err = mDNS_Register(m, &LocalRegPTR);
+	if (err) LogMsg("ERROR: InitDNSConfig - mDNS_Register returned error %d", err);
+	
+	return mStatus_NoError;
 	}
 
 mDNSlocal mStatus mDNSPlatformInit_setup(mDNS *const m)
 	{
+	// In 10.4, mDNSResponder is launched very early in the boot process, while other subsystems are still in the process of starting up.
+	// If we can't read the user's preferences, then we sleep a bit and try again, for up to five seconds before we give up.
+	int i;
+	for (i=0; i<100; i++)
+		{
+		domainlabel testlabel;
+		testlabel.c[0] = 0;
+		GetUserSpecifiedLocalHostName(&testlabel);
+		if (testlabel.c[0]) break;
+		usleep(50000);
+		}
+
 	mStatus err;
 
    	m->hostlabel.c[0]        = 0;
@@ -2944,8 +3328,9 @@ mDNSlocal mStatus mDNSPlatformInit_setup(mDNS *const m)
 	m->p->userhostlabel.c[0] = 0;
 	m->p->usernicelabel.c[0] = 0;
 	m->p->NotifyUser         = 0;
-	UpdateInterfaceList(m);
-	SetupActiveInterfaces(m);
+	mDNSs32 utc = mDNSPlatformUTC();
+	UpdateInterfaceList(m, utc);
+	SetupActiveInterfaces(m, utc);
 
 	err = WatchForNetworkChanges(m);
 	if (err) return(err);
@@ -2954,7 +3339,6 @@ mDNSlocal mStatus mDNSPlatformInit_setup(mDNS *const m)
 	if (err) return err;
 
 	DynDNSRegDomain.c[0] = '\0';
-	DynDNSBrowseDomain.c[0] = '\0';
 	DynDNSConfigChanged(m);						// Get initial DNS configuration
 
 	InitDNSConfig(m);
@@ -2994,8 +3378,9 @@ mDNSexport void mDNSPlatformClose(mDNS *const m)
 		m->p->StoreRLS = NULL;
 		}
 	
-	MarkAllInterfacesInactive(m);
-	ClearInactiveInterfaces(m);
+	mDNSs32 utc = mDNSPlatformUTC();
+	MarkAllInterfacesInactive(m, utc);
+	ClearInactiveInterfaces(m, utc);
 	CloseSocketSet(&m->p->unicastsockets);
 	}
 
@@ -3044,7 +3429,9 @@ mDNSexport mDNSs32 mDNSPlatformRawTime(void)
 		LogMsg("mDNSPlatformRawTime: this_mach_absolute_time %08X%08X", this_mach_absolute_time);
 		// Update last_mach_absolute_time *before* calling NotifyOfElusiveBug()
 		last_mach_absolute_time = this_mach_absolute_time;
-		NotifyOfElusiveBug("mach_absolute_time went backwards!", 3438376, "");
+		// Only show "mach_absolute_time went backwards" notice on 10.4 (build 8xxx) or later
+		if (mDNSMacOSXSystemBuildNumber(NULL) >= 8)
+			NotifyOfElusiveBug("mach_absolute_time went backwards!", 3438376, "");
 		}
 	last_mach_absolute_time = this_mach_absolute_time;
 

@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: Mac\040OS\040Test\040Searcher.c,v $
+Revision 1.21  2004/12/16 20:49:34  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.20  2004/10/19 21:33:18  cheshire
 <rdar://problem/3844991> Cannot resolve non-local registrations using the mach API
 Added flag 'kDNSServiceFlagsForceMulticast'. Passing through an interface id for a unicast name
@@ -78,7 +81,7 @@ typedef struct { ServiceInfo i; mDNSBool add; mDNSBool dom; OTLink link; } linke
 // These don't have to be globals, but their memory does need to remain valid for as
 // long as the search is going on. They are declared as globals here for simplicity.
 #define RR_CACHE_SIZE 1000
-static CacheRecord rrcachestorage[RR_CACHE_SIZE];
+static CacheEntity rrcachestorage[RR_CACHE_SIZE];
 static mDNS mDNSStorage;
 static mDNS_PlatformSupport PlatformSupportStorage;
 static SearcherServices services;
@@ -156,7 +159,7 @@ static void FoundInstance(mDNS *const m, DNSQuestion *question, const ResourceRe
 	SearcherServices *services = (SearcherServices *)question->QuestionContext;
 	linkedServiceInfo *info;
 
-	debugf("FoundInstance %##s PTR %##s", answer->name.c, answer->rdata->u.name.c);
+	debugf("FoundInstance %##s PTR %##s", answer->name->c, answer->rdata->u.name.c);
 
 	if (answer->rrtype != kDNSType_PTR) return;
 	if (!services) { debugf("FoundInstance: services is NULL"); return; }
@@ -189,7 +192,7 @@ static void FoundDomain(mDNS *const m, DNSQuestion *question, const ResourceReco
 	SearcherServices *services = (SearcherServices *)question->QuestionContext;
 	linkedServiceInfo *info;
 
-	debugf("FoundDomain %##s PTR %##s", answer->name.c, answer->rdata->u.name.c);
+	debugf("FoundDomain %##s PTR %##s", answer->name->c, answer->rdata->u.name.c);
 
 	if (answer->rrtype != kDNSType_PTR) return;
 	if (!services) { debugf("FoundDomain: services is NULL"); return; }

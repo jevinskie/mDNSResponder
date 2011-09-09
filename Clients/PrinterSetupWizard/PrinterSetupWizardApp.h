@@ -23,6 +23,10 @@
     Change History (most recent first):
     
 $Log: PrinterSetupWizardApp.h,v $
+Revision 1.2  2005/01/25 08:52:55  shersche
+<rdar://problem/3911084> Add APIs to return localizable and non-localizable resource DLL handles
+Bug #: 3911084
+
 Revision 1.1  2004/06/18 04:36:57  rpantos
 First checked in
 
@@ -57,4 +61,6 @@ public:
 };
 
 
-extern CPrinterSetupWizardApp theApp;
+extern CPrinterSetupWizardApp	theApp;
+extern HINSTANCE				GetNonLocalizedResources();
+extern HINSTANCE				GetLocalizedResources();

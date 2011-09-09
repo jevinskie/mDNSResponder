@@ -32,7 +32,7 @@
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = mDNSResponder.debug;
 				REZ_EXECUTABLE = YES;
-				SECTORDER_FLAGS = "";
+				SECTORDER_FLAGS = "-sectorder __TEXT __text mDNSResponder.order";
 				STRIPFLAGS = "-S";
 				WARNING_CFLAGS = "-W -Wall -Wmissing-prototypes -Wno-four-char-constants -Wno-unknown-pragmas";
 			};
@@ -318,6 +318,7 @@
 				08FB77A3FE84155DC02AAC07,
 				08FB77A5FE84155DC02AAC07,
 				FF5A0AE705632EA600743C27,
+				FF5585E507790732008D1C14,
 			);
 			buildSettings = {
 				FRAMEWORK_SEARCH_PATHS = "";
@@ -332,7 +333,7 @@
 				OTHER_REZFLAGS = "";
 				PRODUCT_NAME = mDNSResponder;
 				REZ_EXECUTABLE = YES;
-				SECTORDER_FLAGS = "";
+				SECTORDER_FLAGS = "-sectorder __TEXT __text mDNSResponder.order";
 				STRIPFLAGS = "-S";
 				WARNING_CFLAGS = "-W -Wall -Wmissing-prototypes -Wno-four-char-constants -Wno-unknown-pragmas";
 			};
@@ -1603,6 +1604,19 @@
 			name = mDNSResponder.8;
 			path = ../mDNSShared/mDNSResponder.8;
 			refType = 2;
+		};
+		FF5585E507790732008D1C14 = {
+			buildActionMask = 8;
+			files = (
+			);
+			generatedFileNames = (
+			);
+			isa = PBXShellScriptBuildPhase;
+			neededFileNames = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+			shellPath = /bin/sh;
+			shellScript = "mkdir -p ${DSTROOT}/System/Library/LaunchDaemons\ncp ${SRCROOT}/LaunchDaemonInfo.plist ${DSTROOT}/System/Library/LaunchDaemons/com.apple.mDNSResponder.plist";
 		};
 		FF5A0AE705632EA600743C27 = {
 			buildActionMask = 8;

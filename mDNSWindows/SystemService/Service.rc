@@ -47,7 +47,7 @@ BEGIN
             VALUE "FileDescription", "mDNSResponder"
             VALUE "FileVersion", MASTER_PROD_VERS_STR
             VALUE "InternalName", "mDNSResponder"
-            VALUE "LegalCopyright", "Copyright (C) 2003-2004 Apple Computer, Inc."
+            VALUE "LegalCopyright", MASTER_LEGAL_COPYRIGHT
             VALUE "OriginalFilename", "mDNSResponder.exe"
             VALUE "ProductName", MASTER_PROD_NAME
             VALUE "ProductVersion", MASTER_PROD_VERS_STR

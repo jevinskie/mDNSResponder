@@ -24,6 +24,12 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # $Log: Makefile,v $
+# Revision 1.55  2005/01/27 22:55:00  cheshire
+# Add "make os=tiger" target which uses gcc4 and "-Wdeclaration-after-statement"
+#
+# Revision 1.54  2004/12/17 19:33:03  cheshire
+# Add "-lresolv" for Solaris
+#
 # Revision 1.53  2004/12/01 20:04:31  cheshire
 # Tidy up alignment
 #
@@ -236,7 +242,7 @@ CFLAGS_OS = -DNOT_HAVE_DAEMON -DNOT_HAVE_SA_LEN -DNOT_HAVE_SOCKLEN_T -DNOT_HAVE_
 	 -DLOG_PERROR=0 -D_XPG4_2 -D__EXTENSIONS__ -DHAVE_BROKEN_RECVIF_NAME -DUSE_TCP_LOOPBACK
 CC = gcc
 LD = gcc -shared
-LIBFLAGS = -lsocket -lnsl
+LIBFLAGS = -lsocket -lnsl -lresolv
 JAVACFLAGS_OS += -I$(JDK)/include/solaris
 ifneq ($(DEBUG),1)
 STRIP = strip
@@ -289,8 +295,19 @@ JDK = /System/Library/Frameworks/JavaVM.framework/Home
 JAVACFLAGS_OS = -dynamiclib -I/System/Library/Frameworks/JavaVM.framework/Headers -framework JavaVM 
 else
 
-$(error ERROR: Must specify target OS on command-line, e.g. "make os=panther [target]".\
+ifeq ($(os),tiger)
+CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp -Wdeclaration-after-statement
+CC = @gcc-4.0
+LD = libtool -dynamic
+LIBFLAGS = -lSystem
+LDSUFFIX = dylib
+JDK = /System/Library/Frameworks/JavaVM.framework/Home
+JAVACFLAGS_OS = -dynamiclib -I/System/Library/Frameworks/JavaVM.framework/Headers -framework JavaVM 
+else
+
+$(error ERROR: Must specify target OS on command-line, e.g. "make os=tiger [target]".\
 Supported operating systems include: jaguar, panther, linux, netbsd, freebsd, openbsd, solaris) 
+endif
 endif
 endif
 endif

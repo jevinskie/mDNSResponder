@@ -28,6 +28,15 @@
 	Change History (most recent first):
 
 $Log: PosixDaemon.c,v $
+Revision 1.25  2005/01/27 20:01:50  cheshire
+udsSupportRemoveFDFromEventLoop() needs to close the file descriptor as well
+
+Revision 1.24  2005/01/19 19:20:49  ksekar
+<rdar://problem/3960191> Need a way to turn off domain discovery
+
+Revision 1.23  2004/12/16 20:17:11  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.22  2004/12/10 13:12:08  cheshire
 Create no-op function RecordUpdatedNiceLabel(), required by uds_daemon.c
 
@@ -125,7 +134,7 @@ static domainname DynDNSZone;                // Default wide-area zone for servi
 static domainname DynDNSHostname;
 
 #define RR_CACHE_SIZE 500
-static CacheRecord gRRCache[RR_CACHE_SIZE];
+static CacheEntity gRRCache[RR_CACHE_SIZE];
 
 extern const char mDNSResponderVersionString[];
 
@@ -162,7 +171,7 @@ static void Reconfigure(mDNS *m)
 	mDNS_DeleteDNSServers(m);
 	if (ParseDNSServers(m, uDNS_SERVERS_FILE) < 0)
 		LogMsg("Unable to parse DNS server list. Unicast DNS-SD unavailable");
-	ReadDDNSSettingsFromConfFile(m, CONFIG_FILE, &DynDNSHostname, &DynDNSZone);
+	ReadDDNSSettingsFromConfFile(m, CONFIG_FILE, &DynDNSHostname, &DynDNSZone, NULL);
 	FindDefaultRouteIP(&DynDNSIP);
 	if (DynDNSHostname.c[0]) mDNS_AddDynDNSHostName(m, &DynDNSHostname, NULL, NULL);
 	if (DynDNSIP.type)       mDNS_SetPrimaryInterfaceInfo(m, &DynDNSIP, NULL);
@@ -297,9 +306,10 @@ mStatus udsSupportAddFDToEventLoop(int fd, udsEventCallback callback, void *cont
 	return mDNSPosixAddFDToEventLoop(fd, callback, context);
 	}
 
-mStatus udsSupportRemoveFDFromEventLoop(int fd)
+mStatus udsSupportRemoveFDFromEventLoop(int fd)		// Note: This also CLOSES the file descriptor
 	{
 	return mDNSPosixRemoveFDFromEventLoop(fd);
+	close(fd);
 	}
 
 mDNSexport void RecordUpdatedNiceLabel(mDNS *const m, mDNSs32 delay)

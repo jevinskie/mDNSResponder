@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: mDNSLibrary.c,v $
+Revision 1.3  2004/12/16 20:49:35  cheshire
+<rdar://problem/3324626> Cache memory management improvements
+
 Revision 1.2  2004/09/17 01:08:50  cheshire
 Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
   The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
@@ -42,18 +45,17 @@ like Muse Research who want to be able to use mDNS/DNS-SD from GPL-licensed code
 
 mDNS mDNSStorage;
 static mDNS_PlatformSupport PlatformSupportStorage;
-#define RR_CACHE_SIZE 64
-static CacheRecord rrcachestorage[RR_CACHE_SIZE];
+// Start off with a default cache of 16K (about 100 records)
+#define RR_CACHE_SIZE ((16*1024) / sizeof(CacheRecord))
+static CacheEntity rrcachestorage[RR_CACHE_SIZE];
 
 mDNSlocal void mDNS_StatusCallback(mDNS *const m, mStatus result)
 	{
 	if (result == mStatus_GrowCache)
 		{
-		// If we've run out of cache space, then double the total cache size and give the memory to mDNSCore
-		mDNSu32 numrecords = m->rrcache_size;
-		CacheRecord *storage = OTAllocMem(sizeof(CacheRecord) * numrecords);
-		LogMsg("mStatus_GrowCache %d", numrecords);
-		if (storage) mDNS_GrowCache(m, storage, numrecords);
+		// Allocate another chunk of cache storage
+		CacheEntity *storage = OTAllocMem(sizeof(CacheEntity) * RR_CACHE_SIZE);
+		if (storage) mDNS_GrowCache(m, storage, RR_CACHE_SIZE);
 		}
 	}
 

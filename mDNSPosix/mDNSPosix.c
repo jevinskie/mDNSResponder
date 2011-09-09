@@ -37,6 +37,16 @@
 	Change History (most recent first):
 
 $Log: mDNSPosix.c,v $
+Revision 1.69  2004/12/18 02:03:28  cheshire
+Need to #include "dns_sd.h"
+
+Revision 1.68  2004/12/18 00:51:52  cheshire
+Use symbolic constant kDNSServiceInterfaceIndexLocalOnly instead of (mDNSu32) ~0
+
+Revision 1.67  2004/12/17 23:37:48  cheshire
+<rdar://problem/3485365> Guard against repeating wireless dissociation/re-association
+(and other repetitive configuration changes)
+
 Revision 1.66  2004/12/01 04:27:28  cheshire
 <rdar://problem/3872803> Darwin patches for Solaris and Suse
 Don't use uint32_t, etc. -- they require stdint.h, which doesn't exist on FreeBSD 4.x, Solaris, etc.
@@ -257,6 +267,7 @@ First checkin
 
 #include "mDNSEmbeddedAPI.h"           // Defines the interface provided to the client layer above
 #include "mDNSPosix.h"				 // Defines the specific types needed to run mDNS on this platform
+#include "dns_sd.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -621,7 +632,7 @@ extern mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(const mDNS *con
 
 	assert(m != NULL);
 
-	if (index == (mDNSu32)~0) return(mDNSInterface_LocalOnly);
+	if (index == kDNSServiceInterfaceIndexLocalOnly) return(mDNSInterface_LocalOnly);
 
 	intf = (PosixNetworkInterface*)(m->HostInterfaces);
 	while ( (intf != NULL) && (mDNSu32) intf->index != index) 
@@ -636,7 +647,7 @@ mDNSexport mDNSu32 mDNSPlatformInterfaceIndexfromInterfaceID(const mDNS *const m
 
 	assert(m != NULL);
 
-	if (id == mDNSInterface_LocalOnly) return((mDNSu32)~0);
+	if (id == mDNSInterface_LocalOnly) return(kDNSServiceInterfaceIndexLocalOnly);
 
 	intf = (PosixNetworkInterface*)(m->HostInterfaces);
 	while ( (intf != NULL) && (mDNSInterfaceID) intf != id)
@@ -958,7 +969,7 @@ mDNSlocal int SetupOneInterface(mDNS *const m, struct sockaddr *intfAddr, struct
 
 	// The interface is all ready to go, let's register it with the mDNS core.
 	if (err == 0)
-		err = mDNS_RegisterInterface(m, &intf->coreIntf);
+		err = mDNS_RegisterInterface(m, &intf->coreIntf, 0);
 
 	// Clean up.
 	if (err == 0)
