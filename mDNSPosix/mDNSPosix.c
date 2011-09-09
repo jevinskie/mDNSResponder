@@ -358,9 +358,12 @@ mDNSexport TCPSocket *mDNSPlatformTCPSocket(mDNS * const m, TCPSocketFlags flags
 
 mDNSexport TCPSocket *mDNSPlatformTCPAccept(TCPSocketFlags flags, int sd)
 	{
-	(void)sd;		// Unused
-	LogMsg("Attempted to call unimplemented Accept function");
-	return (mDNSNULL);
+	TCPSocket *sock = mallocL("TCPSocket/mDNSPlatformTCPAccept", sizeof(TCPSocket));
+	if (!sock) return(mDNSNULL);
+	mDNSPlatformMemZero(sock, sizeof(*sock));
+	sock->fd = fd;
+	sock->flags = flags;
+	return sock;
 	}
 
 mDNSexport int mDNSPlatformTCPGetFD(TCPSocket *sock)

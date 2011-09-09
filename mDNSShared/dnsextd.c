@@ -2741,7 +2741,9 @@ RecvTCPMessage
 	// wire.  We'll let it do that, and wait for the next packet which will be ours.
 
 	pkt = RecvPacket( context->sock, &context->pkt, &closed );
-	if (pkt) HdrNToH(pkt);
+	/* Do NOT call HdrNToH here, or bad things will happen when forwarding
+	 * the packet to the real resolver, because it never gets HtoN'd
+	 */
 	require_action( pkt || !closed, exit, err = mStatus_UnknownErr; LogMsg( "client disconnected" ) );
 
 	if ( pkt )
