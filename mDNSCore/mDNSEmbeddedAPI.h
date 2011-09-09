@@ -60,6 +60,9 @@
     Change History (most recent first):
 
 $Log: mDNSEmbeddedAPI.h,v $
+Revision 1.282  2005/03/16 00:42:32  ksekar
+<rdar://problem/4012279> Long-lived queries not working on Windows
+
 Revision 1.281  2005/02/25 17:47:44  ksekar
 <rdar://problem/4021868> SendServiceRegistration fails on wake from sleep
 
@@ -1367,6 +1370,11 @@ typedef packedstruct
 	mDNSu32 lease;
 	} LLQOptData;
 
+#define LLQ_OPTLEN ((3 * sizeof(mDNSu16)) + 8 + sizeof(mDNSu32))
+// Windows adds pad bytes to sizeof(LLQOptData).  Use this macro when setting length fields or validating option rdata from
+// off the wire.  Use sizeof(LLQOptData) when dealing with structures (e.g. memcpy).  Never memcpy between on-the-wire
+// representation and a structure
+	
 // NOTE: rdataOpt format may be repeated an arbitrary number of times in a single resource record
 typedef packedstruct
 	{
@@ -1773,8 +1781,8 @@ typedef struct
 #define kLLQOp_Refresh   2
 #define kLLQOp_Event     3
 
-#define LLQ_OPT_SIZE (2 * sizeof(mDNSu16)) + sizeof(LLQOptData)
-#define LEASE_OPT_SIZE (2 * sizeof(mDNSu16)) + sizeof(mDNSs32)
+#define LLQ_OPT_RDLEN ((2 * sizeof(mDNSu16)) + LLQ_OPTLEN)
+#define LEASE_OPT_RDLEN (2 * sizeof(mDNSu16)) + sizeof(mDNSs32)
 
 // LLQ Errror Codes
 enum

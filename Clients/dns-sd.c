@@ -550,7 +550,7 @@ static DNSServiceErrorType RegisterService(DNSServiceRef *sdRef,
 	for (i = 0; i < argc; i++)
 		{
 		unsigned char *len = ptr++;
-		*len = strlen(argv[i]);
+		*len = (unsigned char) strlen(argv[i]);
 		strcpy((char*)ptr, argv[i]);
 		ptr += *len;
 		}
@@ -558,7 +558,7 @@ static DNSServiceErrorType RegisterService(DNSServiceRef *sdRef,
 	printf("Registering Service %s.%s%s", nam, typ, dom);
 	if (host && *host) printf(" host %s", host);
 	printf(" port %s %s\n", port, txt);
-	return(DNSServiceRegister(sdRef, /* kDNSServiceFlagsAllowRemoteQuery */ 0, opinterface, nam, typ, dom, host, registerPort.NotAnInteger, ptr-txt, txt, reg_reply, NULL));
+	return(DNSServiceRegister(sdRef, /* kDNSServiceFlagsAllowRemoteQuery */ 0, opinterface, nam, typ, dom, host, registerPort.NotAnInteger, (uint16_t) (ptr-txt), txt, reg_reply, NULL));
 	}
 
 int main(int argc, char **argv)
@@ -582,6 +582,14 @@ int main(int argc, char **argv)
 		argv++;
 		opinterface = kDNSServiceInterfaceIndexLocalOnly;
 		printf("Using LocalOnly\n");
+		}
+
+	if (argc > 2 && !strcmp(argv[1], "-i") && atoi(argv[2]))
+		{
+		opinterface = atoi(argv[2]);
+		argc -= 2;
+		argv += 2;
+		printf("Using interface %d\n", opinterface);
 		}
 
 	if (argc < 2) goto Fail;        // Minimum command line is the command name and one argument

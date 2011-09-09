@@ -48,12 +48,14 @@
 #include <windows.h>
 #define _UNUSED
 #define bzero(a, b) memset(a, 0, b)
+#ifndef _MSL_STDINT_H
 typedef UINT8       uint8_t;
 typedef INT8        int8_t;
 typedef UINT16      uint16_t;
 typedef INT16       int16_t;
 typedef UINT32      uint32_t;
 typedef INT32       int32_t;
+#endif
 #else
 #include <stdint.h>
 #endif

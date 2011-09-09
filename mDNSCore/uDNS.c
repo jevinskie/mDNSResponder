@@ -23,6 +23,16 @@
     Change History (most recent first):
 
 $Log: uDNS.c,v $
+Revision 1.206  2005/03/31 02:19:55  cheshire
+<rdar://problem/4021486> Fix build warnings
+Reviewed by: Scott Herscher
+
+Revision 1.205  2005/03/21 00:33:51  shersche
+<rdar://problem/4021486> Fix build warnings on Win32 platform
+
+Revision 1.204  2005/03/16 00:42:32  ksekar
+<rdar://problem/4012279> Long-lived queries not working on Windows
+
 Revision 1.203  2005/03/04 03:00:03  ksekar
 <rdar://problem/4026546> Retransmissions happen too early, causing registrations to conflict with themselves
 
@@ -2425,7 +2435,7 @@ mDNSlocal void SetUpdateExpiration(mDNS *m, DNSMessage *msg, const mDNSu8 *end, 
 			if (!ptr) break;
 			if (lcr.r.resrec.rrtype == kDNSType_OPT)
 				{
-				if (lcr.r.resrec.rdlength < LEASE_OPT_SIZE) continue;
+				if (lcr.r.resrec.rdlength < LEASE_OPT_RDLEN) continue;
 				if (lcr.r.resrec.rdata->u.opt.opt != kDNSOpt_Lease) continue;
 				lease = lcr.r.resrec.rdata->u.opt.OptData.lease;
 				break;
@@ -2616,13 +2626,13 @@ mDNSlocal mDNSu8 *putLLQ(DNSMessage *const msg, mDNSu8 *ptr, DNSQuestion *questi
 	// format opt rr (fields not specified are zero-valued)
 	ubzero(&rr, sizeof(AuthRecord));
 	mDNS_SetupResourceRecord(&rr, mDNSNULL, mDNSInterface_Any, kDNSType_OPT, kStandardTTL, kDNSRecordTypeKnownUnique, mDNSNULL, mDNSNULL);
-	opt->rdlength = LLQ_OPT_SIZE;
-	opt->rdestimate = LLQ_OPT_SIZE;
+	opt->rdlength = LLQ_OPT_RDLEN;
+	opt->rdestimate = LLQ_OPT_RDLEN;
 
 	optRD = &rr.resrec.rdata->u.opt;
 	optRD->opt = kDNSOpt_LLQ;
-	optRD->optlen = sizeof(LLQOptData);
-	umemcpy(&optRD->OptData.llq, data, sizeof(LLQOptData));
+	optRD->optlen = LLQ_OPTLEN;
+	umemcpy(&optRD->OptData.llq, data, sizeof(*data));
 	ptr = PutResourceRecordTTLJumbo(msg, ptr, &msg->h.numAdditionals, opt, 0);
 	if (!ptr) { LogMsg("ERROR: putLLQ - PutResourceRecordTTLJumbo"); return mDNSNULL; }
 
@@ -2636,17 +2646,19 @@ mDNSlocal mDNSBool getLLQAtIndex(mDNS *m, DNSMessage *msg, const mDNSu8 *end, LL
 	int i;
 	const mDNSu8 *ptr;
 	
+	ubzero(&lcr, sizeof(lcr));
+	
 	ptr = LocateAdditionals(msg, end);
 	if (!ptr) return mDNSfalse;
-
+	
 	// find the last additional
 	for (i = 0; i < msg->h.numAdditionals; i++)
 //		{ ptr = GetLargeResourceRecord(m, msg, ptr, end, 0, kDNSRecordTypePacketAdd, &lcr); if (!ptr) return mDNSfalse; }
 //!!!KRS workaround for LH server bug, which puts OPT as first additional
 		{ ptr = GetLargeResourceRecord(m, msg, ptr, end, 0, kDNSRecordTypePacketAdd, &lcr); if (!ptr) return mDNSfalse; if (lcr.r.resrec.rrtype == kDNSType_OPT) break; }
 	if (lcr.r.resrec.rrtype != kDNSType_OPT) return mDNSfalse;
-	if (lcr.r.resrec.rdlength < (index + 1) * LLQ_OPT_SIZE) return mDNSfalse;  // rdata too small
-	umemcpy(llq, (mDNSu8 *)&lcr.r.resrec.rdata->u.opt.OptData.llq + (index * sizeof(LLQOptData)), sizeof(LLQOptData));	// !!! Should convert to host byte order?
+	if (lcr.r.resrec.rdlength < (index + 1) * LLQ_OPT_RDLEN) return mDNSfalse;  // rdata too small
+	umemcpy(llq, (mDNSu8 *)&lcr.r.resrec.rdata->u.opt.OptData.llq + (index * sizeof(*llq)), sizeof(*llq));
 	return mDNStrue;
 	}
 
@@ -3949,6 +3961,8 @@ mDNSlocal void SendServiceRegistration(mDNS *m, ServiceRecordSet *srs)
 	AuthRecord *srv = &srs->RR_SRV;
 	mDNSu32 i;
 	
+	privport = zeroIPPort;
+	
 	if (!rInfo->ns.ip.v4.NotAnInteger) { LogMsg("SendServiceRegistration - NS not set!"); return; }
 
 	id = newMessageID(u);
@@ -4950,14 +4964,14 @@ mDNSexport void uDNS_Init(mDNS *const m)
 	m->uDNS_info.nextevent = m->timenow_last + 0x78000000;
 	}
 
-mDNSexport void uDNS_Sleep(mDNS *m)
+mDNSexport void uDNS_Sleep(mDNS *const m)
 	{
 	SuspendLLQs(m, mDNStrue);
 	SleepServiceRegistrations(m);
 	SleepRecordRegistrations(m);
 	}
 
-mDNSexport void uDNS_Wake(mDNS *m)
+mDNSexport void uDNS_Wake(mDNS *const m)
 	{
 	RestartQueries(m);
 	WakeServiceRegistrations(m);

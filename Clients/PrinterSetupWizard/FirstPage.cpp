@@ -23,6 +23,9 @@
     Change History (most recent first):
     
 $Log: FirstPage.cpp,v $
+Revision 1.4  2005/03/16 01:41:29  shersche
+<rdar://problem/3989644> Remove info icon from first page
+
 Revision 1.3  2005/01/25 08:58:08  shersche
 <rdar://problem/3911084> Load icons at run-time from resource DLLs
 Bug #: 3911084
@@ -77,18 +80,6 @@ void CFirstPage::DoDataExchange(CDataExchange* pDX)
 BOOL
 CFirstPage::OnSetActive()
 {
-	static bool firstTime = true;
-
-	if ( firstTime )
-	{
-		CStatic * image = (CStatic*) GetDlgItem( IDC_INFO );
-		check( image );
-
-		image->SetIcon( LoadIcon( GetNonLocalizedResources(), MAKEINTRESOURCE( IDI_INFO ) ) );
-
-		firstTime = false;
-	}
-
 	CPropertySheet* psheet = (CPropertySheet*) GetParent();   
    
 	psheet->SetWizardButtons(PSWIZB_NEXT);

@@ -23,6 +23,31 @@
     Change History (most recent first):
     
 $Log: mDNSWin32.c,v $
+Revision 1.91  2005/04/25 21:34:28  shersche
+<rdar://problem/4096465> Wide-Area services don't disappear when interface goes away
+
+Revision 1.90  2005/04/25 21:18:08  shersche
+<rdar://problem/4097314> mDNSResponder crash when interface goes away.  This error seems to be caused by the Windows platform code not returning mStatus_TransientErr when there is a problem with a udp unicast send.
+
+Revision 1.89  2005/04/22 07:32:24  shersche
+<rdar://problem/4092108> PPP connection disables Bonjour .local lookups
+<rdar://problem/4093944> mDNSResponder ignores Point-to-Point interfaces
+
+Revision 1.88  2005/04/05 03:53:03  shersche
+<rdar://problem/4066485> Registering with shared secret key doesn't work.
+
+Revision 1.87  2005/04/03 08:03:12  shersche
+<rdar://problem/4076478> mDNSResponder won't start on Windows 2000.
+
+Revision 1.86  2005/03/30 07:37:14  shersche
+Use prefix to compute IPv4 subnet mask, falling back to calling AddressToIndexAndMask only if prefix is zero.
+
+Revision 1.85  2005/03/30 07:34:52  shersche
+<rdar://problem/4045657> Interface index being returned is 512
+
+Revision 1.84  2005/03/29 19:19:47  shersche
+<rdar://problem/4055599> Windows is not accepting unicast responses.  This bug was a result of an error in obtaining the subnet mask for IPv4 interfaces.
+
 Revision 1.83  2005/03/07 18:27:42  shersche
 <rdar://problem/4037940> Fix problem when ControlPanel commits changes to the browse domain list
 
@@ -381,6 +406,8 @@ Multicast DNS platform plugin for Win32
 	static GUID										kWSARecvMsgGUID = WSAID_WSARECVMSG;
 #endif
 
+#define kIPv6IfIndexBase							(10000000L)
+
 
 #if 0
 #pragma mark == Prototypes ==
@@ -446,6 +473,16 @@ mDNSexport mStatus	mDNSPlatformInterfaceIDToInfo( mDNS * const inMDNS, mDNSInter
 
 // Utilities
 
+typedef struct PolyString PolyString;
+
+struct PolyString
+{
+	domainname			m_dname;
+	char				m_utf8[256];
+	PLSA_UNICODE_STRING	m_lsa;
+};
+
+
 #if( MDNS_WINDOWS_USE_IPV6_IF_ADDRS )
 	mDNSlocal int	getifaddrs_ipv6( struct ifaddrs **outAddrs );
 #endif
@@ -458,15 +495,18 @@ mDNSexport mStatus	mDNSPlatformInterfaceIDToInfo( mDNS * const inMDNS, mDNSInter
 	mDNSlocal int	getifaddrs_ce( struct ifaddrs **outAddrs );
 #endif
 
-mDNSlocal mDNSBool	CanReceiveUnicast( void );
+mDNSlocal DWORD				GetPrimaryInterface();
+mDNSlocal mStatus			AddressToIndexAndMask( struct sockaddr * address, uint32_t * index, struct sockaddr * mask );
+mDNSlocal mDNSBool			CanReceiveUnicast( void );
+mDNSlocal mDNSBool			IsPointToPoint( IP_ADAPTER_UNICAST_ADDRESS * addr );
 
 mDNSlocal mStatus			StringToAddress( mDNSAddr * ip, LPSTR string );
 mDNSlocal mStatus			RegQueryString( HKEY key, LPCSTR param, LPSTR * string, DWORD * stringLen, DWORD * enabled );
 mDNSlocal struct ifaddrs*	myGetIfAddrs(int refresh);
 mDNSlocal OSStatus			TCHARtoUTF8( const TCHAR *inString, char *inBuffer, size_t inBufferSize );
 mDNSlocal OSStatus			WindowsLatin1toUTF8( const char *inString, char *inBuffer, size_t inBufferSize );
-mDNSlocal OSStatus			ConvertUTF8ToLsaString( const char * input, PLSA_UNICODE_STRING output );
-mDNSlocal OSStatus			ConvertLsaStringToUTF8( PLSA_UNICODE_STRING input, char ** output );
+mDNSlocal OSStatus			MakeLsaStringFromUTF8String( PLSA_UNICODE_STRING output, const char * input );
+mDNSlocal OSStatus			MakeUTF8StringFromLsaString( char * output, size_t len, PLSA_UNICODE_STRING input );
 mDNSlocal void				FreeTCPConnectionData( mDNSTCPConnectionData * data );
 
 #ifdef	__cplusplus
@@ -793,7 +833,20 @@ mStatus
 	{
 		n = sendto( sendingsocket, (char *) inMsg, n, 0, (struct sockaddr *) &addr, sizeof( addr ) );
 		err = translate_errno( n > 0, errno_compat(), kWriteErr );
-		require_noerr( err, exit );
+
+		if ( err )
+		{
+			// Don't report EHOSTDOWN (i.e. ARP failure), ENETDOWN, or no route to host for unicast destinations
+
+			if ( !mDNSAddressIsAllDNSLinkGroup( inDstIP ) && ( WSAGetLastError() == WSAEHOSTDOWN || WSAGetLastError() == WSAENETDOWN || WSAGetLastError() == WSAEHOSTUNREACH || WSAGetLastError() == WSAENETUNREACH ) )
+			{
+				err = mStatus_TransientErr;
+			}
+			else
+			{
+				require_noerr( err, exit );
+			}
+		}
 	}
 	
 exit:
@@ -960,7 +1013,7 @@ mDNSs32	mDNSPlatformRawTime( void )
 
 mDNSexport mDNSs32	mDNSPlatformUTC( void )
 {
-	return( -1 );
+	return ( mDNSs32 ) time( NULL );
 }
 
 //===========================================================================================================================
@@ -1462,36 +1515,38 @@ exit:
 //===========================================================================================================================
 
 void
-dDNSPlatformSetSecretForDomain( mDNS *m, const domainname * domain )
+dDNSPlatformSetSecretForDomain( mDNS *m, const domainname * inDomain )
 {
-	char					dstring[MAX_ESCAPED_DOMAIN_NAME];
-	domainname			*	d;
-	domainname				canon;
+	PolyString				domain;
+	PolyString				key;
+	PolyString				secret;
 	size_t					i;
 	size_t					dlen;
 	LSA_OBJECT_ATTRIBUTES	attrs;
 	LSA_HANDLE				handle = NULL;
-	LSA_UNICODE_STRING		keyName = { 0, 0, NULL };
-	LSA_UNICODE_STRING	*	secret = NULL;
-	char				*	converted = NULL;
 	NTSTATUS				res;
 	OSStatus				err;
 
+	// Initialize PolyStrings
+
+	domain.m_lsa	= NULL;
+	key.m_lsa		= NULL;
+	secret.m_lsa	= NULL;
+
 	// canonicalize name by converting to lower case (keychain and some name servers are case sensitive)
 	
-	ConvertDomainNameToCString(domain, dstring);
-	dlen = strlen(dstring);
-	for (i = 0; i < dlen; i++)
+	ConvertDomainNameToCString( inDomain, domain.m_utf8 );
+	dlen = strlen( domain.m_utf8 );
+	for ( i = 0; i < dlen; i++ )
 	{
-		dstring[i] = (char) tolower(dstring[i]);  // canonicalize -> lower case
+		domain.m_utf8[i] = (char) tolower( domain.m_utf8[i] );  // canonicalize -> lower case
 	}
 
-	MakeDomainNameFromDNSNameString(&canon, dstring);
-	d = &canon;
+	MakeDomainNameFromDNSNameString( &domain.m_dname, domain.m_utf8 );
 
 	// attrs are reserved, so initialize to zeroes.
 
-	ZeroMemory(&attrs, sizeof( attrs ) );
+	ZeroMemory( &attrs, sizeof( attrs ) );
 
 	// Get a handle to the Policy object on the local system
 
@@ -1501,38 +1556,59 @@ dDNSPlatformSetSecretForDomain( mDNS *m, const domainname * domain )
 
 	// Get the encrypted data
 
-	err = ConvertUTF8ToLsaString( dstring, &keyName );
+	domain.m_lsa = ( PLSA_UNICODE_STRING) malloc( sizeof( LSA_UNICODE_STRING ) );
+	require_action( domain.m_lsa != NULL, exit, err = mStatus_NoMemoryErr );
+	err = MakeLsaStringFromUTF8String( domain.m_lsa, domain.m_utf8 );
 	require_noerr( err, exit );
 
-	res = LsaRetrievePrivateData( handle, &keyName, &secret );
+	// Retrieve the key
+
+	res = LsaRetrievePrivateData( handle, domain.m_lsa, &key.m_lsa );
 	err = translate_errno( res == 0, LsaNtStatusToWinError( res ), kUnknownErr );
 	require_noerr_quiet( err, exit );
 
-	// Convert the unicode to string to 8 bit
+	// Convert the key to a domainname
 
-	err = ConvertLsaStringToUTF8( secret, &converted );
+	err = MakeUTF8StringFromLsaString( key.m_utf8, sizeof( key.m_utf8 ), key.m_lsa );
+	require_noerr( err, exit );
+	MakeDomainNameFromDNSNameString( &key.m_dname, key.m_utf8 );
+
+	// Retrieve the secret
+
+	res = LsaRetrievePrivateData( handle, key.m_lsa, &secret.m_lsa );
+	err = translate_errno( res == 0, LsaNtStatusToWinError( res ), kUnknownErr );
+	require_noerr_quiet( err, exit );
+	
+	// Convert the secret to UTF8 string
+
+	err = MakeUTF8StringFromLsaString( secret.m_utf8, sizeof( secret.m_utf8 ), secret.m_lsa );
 	require_noerr( err, exit );
 
-	mDNS_SetSecretForZone( m, d, d, converted );
+	// And finally, tell the core about this secret
+
+	debugf("Setting shared secret for zone %s with key %##s", domain.m_utf8, key.m_dname.c);
+	mDNS_SetSecretForZone( m, &domain.m_dname, &key.m_dname, secret.m_utf8 );
 
 exit:
 
-	if ( converted )
+	if ( domain.m_lsa != NULL )
 	{
-		free( converted );
-		converted = NULL;
+		if ( domain.m_lsa->Buffer != NULL )
+		{
+			free( domain.m_lsa->Buffer );
+		}
+
+		free( domain.m_lsa );
 	}
 
-	if ( secret )
+	if ( key.m_lsa != NULL )
 	{
-		LsaFreeMemory( secret );
-		secret = NULL;
+		LsaFreeMemory( key.m_lsa );
 	}
 
-	if ( keyName.Buffer )
+	if ( secret.m_lsa != NULL )
 	{
-		free( keyName.Buffer );
-		keyName.Buffer = NULL;
+		LsaFreeMemory( secret.m_lsa );
 	}
 
 	if ( handle )
@@ -1680,35 +1756,64 @@ exit:
 IPAddrListElem*
 dDNSPlatformGetDNSServers( void )
 {
-	FIXED_INFO		*	fixedInfo	= NULL;
-	ULONG				bufLen		= sizeof( FIXED_INFO );	
-	IP_ADDR_STRING	*	ipAddr;
-	IPAddrListElem	*	head		= NULL;
-	IPAddrListElem	*	current		= NULL;
+	PIP_PER_ADAPTER_INFO	pAdapterInfo	=	NULL;
+	FIXED_INFO			*	fixedInfo	= NULL;
+	ULONG					bufLen		= 0;	
+	IP_ADDR_STRING		*	dnsServerList;
+	IP_ADDR_STRING		*	ipAddr;
+	IPAddrListElem		*	head		= NULL;
+	IPAddrListElem		*	current		= NULL;
+	DWORD					index;
 	int					i			= 0;
 	mStatus				err;
 
-	while ( 1 )
+	// Get the primary interface.
+
+	index = GetPrimaryInterface();
+
+	// This should have the interface index of the primary index.  Fall back in cases where
+	// it can't be determined.
+
+	if ( index )
 	{
-		if ( fixedInfo )
+		bufLen = 0;
+
+		while ( GetPerAdapterInfo( index, pAdapterInfo, &bufLen ) == ERROR_BUFFER_OVERFLOW )
 		{
-			GlobalFree( fixedInfo );
-			fixedInfo = NULL;
+			pAdapterInfo = (PIP_PER_ADAPTER_INFO) realloc( pAdapterInfo, bufLen );
+			require_action( pAdapterInfo, exit, err = mStatus_NoMemoryErr );
 		}
 
-		fixedInfo = (FIXED_INFO*) GlobalAlloc( GPTR, bufLen );
-   
-		err = GetNetworkParams( fixedInfo, &bufLen );
+		dnsServerList = &pAdapterInfo->DnsServerList;
+	}
+	else
+	{
+		bufLen = sizeof( FIXED_INFO );
 
-		if ( ( err != ERROR_BUFFER_OVERFLOW ) || ( i++ == 100 ) )
+		while ( 1 )
 		{
-			break;
+			if ( fixedInfo )
+			{
+				GlobalFree( fixedInfo );
+				fixedInfo = NULL;
+			}
+
+			fixedInfo = (FIXED_INFO*) GlobalAlloc( GPTR, bufLen );
+	   
+			err = GetNetworkParams( fixedInfo, &bufLen );
+
+			if ( ( err != ERROR_BUFFER_OVERFLOW ) || ( i++ == 100 ) )
+			{
+				break;
+			}
 		}
+
+		require_noerr( err, exit );
+
+		dnsServerList = &fixedInfo->DnsServerList;
 	}
 
-	require_noerr( err, exit );
-
-	for ( ipAddr = &fixedInfo->DnsServerList; ipAddr; ipAddr = ipAddr->Next )
+	for ( ipAddr = dnsServerList; ipAddr; ipAddr = ipAddr->Next )
 	{
 		mDNSAddr			addr;
 		IPAddrListElem	*	last = current;
@@ -1738,6 +1843,11 @@ dDNSPlatformGetDNSServers( void )
 	}
 
 exit:
+
+	if ( pAdapterInfo )
+	{
+		free( pAdapterInfo );
+	}
 
 	if ( fixedInfo )
 	{
@@ -1835,6 +1945,7 @@ dDNSPlatformGetPrimaryInterface( mDNS * m, mDNSAddr * primary, mDNSAddr * router
 	DWORD				bufLen		= sizeof( IP_ADAPTER_INFO );
 	int					i;
 	BOOL				found;
+	DWORD				index;
 	mStatus				err = mStatus_NoError;
 
 	DEBUG_UNUSED( m );
@@ -1861,10 +1972,7 @@ dDNSPlatformGetPrimaryInterface( mDNS * m, mDNSAddr * primary, mDNSAddr * router
 		}
 	}
 
-	// Windows doesn't really have a concept of a primary adapter,
-	// so we're just going to iterate through all the adapters and
-	// pick the first one that has an IP address assigned and
-	// a gateway assigned
+	index = GetPrimaryInterface();
 
 	for ( pAdapter = pAdapterInfo; pAdapter; pAdapter = pAdapter->Next )
 	{
@@ -1873,23 +1981,14 @@ dDNSPlatformGetPrimaryInterface( mDNS * m, mDNSAddr * primary, mDNSAddr * router
 		     pAdapter->GatewayList.IpAddress.String &&
 		     pAdapter->GatewayList.IpAddress.String[0] &&
 		     ( StringToAddress( primary, pAdapter->IpAddressList.IpAddress.String ) == mStatus_NoError ) &&
-		     ( StringToAddress( router, pAdapter->GatewayList.IpAddress.String ) == mStatus_NoError ) )
+		     ( StringToAddress( router, pAdapter->GatewayList.IpAddress.String ) == mStatus_NoError ) &&
+		     ( !index || ( pAdapter->Index == index ) ) )
 		{
 			// Found one that will work
 
 			found = TRUE;
 			break;
 		}
-	}
-
-	if ( !found )
-	{
-		// If we couldn't find one, then let's try the first one in the list
-
-		err = StringToAddress( primary, pAdapter->IpAddressList.IpAddress.String );
-		require_noerr( err, exit );
-
-		found = TRUE;
 	}
 
 exit:
@@ -2232,19 +2331,24 @@ mDNSlocal mStatus	SetupInterfaceList( mDNS * const inMDNS )
 	mDNSInterfaceData *			ifd;
 	struct ifaddrs *			addrs;
 	struct ifaddrs *			p;
-	struct ifaddrs *			loopback;
+	struct ifaddrs *			loopbackv4;
+	struct ifaddrs *			loopbackv6;
 	u_int						flagMask;
 	u_int						flagTest;
-	BOOL						foundUnicastSock4DestAddr;
-	BOOL						foundUnicastSock6DestAddr;
+	mDNSBool					foundv4;
+	mDNSBool					foundv6;
+	mDNSBool					foundUnicastSock4DestAddr;
+	mDNSBool					foundUnicastSock6DestAddr;
 	
 	dlog( kDebugLevelTrace, DEBUG_NAME "setting up interface list\n" );
 	check( inMDNS );
 	check( inMDNS->p );
 	
 	addrs						= NULL;
-	foundUnicastSock4DestAddr	= FALSE;
-	foundUnicastSock6DestAddr	= FALSE;
+	foundv4						= mDNSfalse;
+	foundv6						= mDNSfalse;
+	foundUnicastSock4DestAddr	= mDNSfalse;
+	foundUnicastSock6DestAddr	= mDNSfalse;
 	
 	// Tear down any existing interfaces that may be set up.
 	
@@ -2266,10 +2370,11 @@ mDNSlocal mStatus	SetupInterfaceList( mDNS * const inMDNS )
 	err = getifaddrs( &addrs );
 	require_noerr( err, exit );
 	
-	loopback	= NULL;
+	loopbackv4	= NULL;
+	loopbackv6	= NULL;
 	next		= &inMDNS->p->interfaceList;
-	
-	flagMask = IFF_UP | IFF_MULTICAST | IFF_POINTTOPOINT;
+
+	flagMask = IFF_UP | IFF_MULTICAST;
 	flagTest = IFF_UP | IFF_MULTICAST;
 	
 #if( MDNS_WINDOWS_ENABLE_IPV4 )
@@ -2281,9 +2386,9 @@ mDNSlocal mStatus	SetupInterfaceList( mDNS * const inMDNS )
 		}
 		if( p->ifa_flags & IFF_LOOPBACK )
 		{
-			if( !loopback )
+			if( !loopbackv4 )
 			{
-				loopback = p;
+				loopbackv4 = p;
 			}
 			continue;
 		}
@@ -2292,7 +2397,16 @@ mDNSlocal mStatus	SetupInterfaceList( mDNS * const inMDNS )
 		
 		err = SetupInterface( inMDNS, p, &ifd );
 		require_noerr( err, exit );
-		
+
+		// If this guy is point-to-point (ifd->interfaceInfo.McastTxRx == 0 ) we still want to
+		// register him, but we also want to note that we haven't found a v4 interface
+		// so that we register loopback so same host operations work
+ 		
+		if ( ifd->interfaceInfo.McastTxRx == mDNStrue )
+		{
+			foundv4 = mDNStrue;
+		}
+
 		// If we're on a platform that doesn't have WSARecvMsg(), there's no way
 		// of determing the destination address of a packet that is sent to us.
 		// For multicast packets, that's easy to determine.  But for the unicast
@@ -2308,8 +2422,6 @@ mDNSlocal mStatus	SetupInterfaceList( mDNS * const inMDNS )
 		*next = ifd;
 		next  = &ifd->next;
 		++inMDNS->p->interfaceCount;
-
-		
 	}
 #endif
 	
@@ -2324,9 +2436,9 @@ mDNSlocal mStatus	SetupInterfaceList( mDNS * const inMDNS )
 		}
 		if( p->ifa_flags & IFF_LOOPBACK )
 		{
-			if( !loopback )
+			if( !loopbackv6 )
 			{
-				loopback = p;
+				loopbackv6 = p;
 			}
 			continue;
 		}
@@ -2336,6 +2448,15 @@ mDNSlocal mStatus	SetupInterfaceList( mDNS * const inMDNS )
 		err = SetupInterface( inMDNS, p, &ifd );
 		require_noerr( err, exit );
 				
+		// If this guy is point-to-point (ifd->interfaceInfo.McastTxRx == 0 ) we still want to
+		// register him, but we also want to note that we haven't found a v4 interface
+		// so that we register loopback so same host operations work
+ 		
+		if ( ifd->interfaceInfo.McastTxRx == mDNStrue )
+		{
+			foundv6 = mDNStrue;
+		}
+
 		// If we're on a platform that doesn't have WSARecvMsg(), there's no way
 		// of determing the destination address of a packet that is sent to us.
 		// For multicast packets, that's easy to determine.  But for the unicast
@@ -2371,18 +2492,19 @@ mDNSlocal mStatus	SetupInterfaceList( mDNS * const inMDNS )
 		{
 			continue;
 		}
-		loopback = p;
+		
+		v4loopback = p;
 		break;
 	}
 	
 #endif
 	
-	if( !inMDNS->p->interfaceList && loopback )
+	if ( !foundv4 && loopbackv4 )
 	{
 		dlog( kDebugLevelVerbose, DEBUG_NAME "Interface %40s (0x%08X) %##a\n", 
-			loopback->ifa_name ? loopback->ifa_name : "<null>", loopback->ifa_extra.index, loopback->ifa_addr );
+			loopbackv4->ifa_name ? loopbackv4->ifa_name : "<null>", loopbackv4->ifa_extra.index, loopbackv4->ifa_addr );
 		
-		err = SetupInterface( inMDNS, loopback, &ifd );
+		err = SetupInterface( inMDNS, loopbackv4, &ifd );
 		require_noerr( err, exit );
 		
 #if( MDNS_WINDOWS_ENABLE_IPV4 )
@@ -2497,7 +2619,6 @@ mDNSlocal mStatus	SetupInterface( mDNS * const inMDNS, const struct ifaddrs *inI
 	ifd->sock		= kInvalidSocketRef;
 	ifd->index		= inIFA->ifa_extra.index;
 	ifd->scopeID	= inIFA->ifa_extra.index;
-	
 	check( strlen( inIFA->ifa_name ) < sizeof( ifd->name ) );
 	strncpy( ifd->name, inIFA->ifa_name, sizeof( ifd->name ) - 1 );
 	ifd->name[ sizeof( ifd->name ) - 1 ] = '\0';
@@ -2512,7 +2633,7 @@ mDNSlocal mStatus	SetupInterface( mDNS * const inMDNS, const struct ifaddrs *inI
 	// but we cut the packet rate in half. At this time, reducing the packet rate is more important than v6-only 
 	// devices on a large configured network, so we are willing to make that sacrifice.
 	
-	ifd->interfaceInfo.McastTxRx   = mDNStrue;
+	ifd->interfaceInfo.McastTxRx   = ( ( inIFA->ifa_flags & IFF_MULTICAST ) && !( inIFA->ifa_flags & IFF_POINTTOPOINT ) ) ? mDNStrue : mDNSfalse;
 	ifd->interfaceInfo.InterfaceID = NULL;
 
 	for( p = inMDNS->p->interfaceList; p; p = p->next )
@@ -2521,7 +2642,6 @@ mDNSlocal mStatus	SetupInterface( mDNS * const inMDNS, const struct ifaddrs *inI
 		{
 			if (!ifd->interfaceInfo.InterfaceID)
 			{
-				p->scopeID						= ifd->scopeID;
 				ifd->interfaceInfo.InterfaceID	= (mDNSInterfaceID) p;
 			}
 
@@ -3496,7 +3616,7 @@ mDNSlocal void	ProcessingThreadProcessPacket( mDNS *inMDNS, mDNSInterfaceData *i
 
 				if ( inIFD )
 				{
-					require_action( ipv4PacketInfo->ipi_ifindex == ( inIFD->index >> 8 ), exit, err = kMismatchErr );
+					require_action( ipv4PacketInfo->ipi_ifindex == inIFD->index, exit, err = kMismatchErr );
 				}
 
 				dstAddr.type 				= mDNSAddrType_IPv4;
@@ -3510,7 +3630,7 @@ mDNSlocal void	ProcessingThreadProcessPacket( mDNS *inMDNS, mDNSInterfaceData *i
 
 				if ( inIFD )
 				{
-					require_action( ipv6PacketInfo->ipi6_ifindex == inIFD->index, exit, err = kMismatchErr );
+					require_action( ipv6PacketInfo->ipi6_ifindex == ( inIFD->index - kIPv6IfIndexBase), exit, err = kMismatchErr );
 				}
 
 				dstAddr.type	= mDNSAddrType_IPv6;
@@ -3577,6 +3697,13 @@ mDNSlocal void	ProcessingThreadInterfaceListChanged( mDNS *inMDNS )
 	err = SetupInterfaceList( inMDNS );
 	check_noerr( err );
 		
+	err = dDNS_Setup( inMDNS );
+	check_noerr( err );
+
+	// so that LLQs are restarted against the up to date name servers
+
+	mDNS_UpdateLLQs( inMDNS );
+
 	mDNSPlatformUnlock( inMDNS );
 	
 	// Inform clients of the change.
@@ -3638,6 +3765,10 @@ mDNSlocal void ProcessingThreadTCPIPConfigChanged( mDNS * inMDNS )
 	err = dDNS_Setup( inMDNS );
 	check_noerr( err );
 
+	// so that LLQs are restarted against the up to date name servers
+
+	mDNS_UpdateLLQs( inMDNS );
+
 	// and reset the event handler
 
 	if ( ( inMDNS->p->tcpipKey != NULL ) && ( inMDNS->p->tcpipChangedEvent ) )
@@ -3664,6 +3795,10 @@ mDNSlocal void	ProcessingThreadDynDNSConfigChanged( mDNS *inMDNS )
 
 	err = dDNS_Setup( inMDNS );
 	check_noerr( err );
+
+	// so that LLQs are restarted against the up to date name servers
+
+	mDNS_UpdateLLQs( inMDNS );
 
 	// and reset the event handler
 
@@ -3770,7 +3905,7 @@ mDNSlocal int	getifaddrs_ipv6( struct ifaddrs **outAddrs )
 	// This loops to handle the case where the interface changes in the window after getting the size, but before the
 	// second call completes. A limit of 100 retries is enforced to prevent infinite loops if something else is wrong.
 	
-	flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_SKIP_FRIENDLY_NAME;
+	flags = GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_SKIP_FRIENDLY_NAME;
 	i = 0;
 	for( ;; )
 	{
@@ -3868,16 +4003,27 @@ mDNSlocal int	getifaddrs_ipv6( struct ifaddrs **outAddrs )
 			ifa->ifa_flags = 0;
 			if( iaa->OperStatus == IfOperStatusUp ) 		ifa->ifa_flags |= IFF_UP;
 			if( iaa->IfType == IF_TYPE_SOFTWARE_LOOPBACK )	ifa->ifa_flags |= IFF_LOOPBACK;
+			else if ( IsPointToPoint( addr ) )				ifa->ifa_flags |= IFF_POINTTOPOINT;
 			if( !( iaa->Flags & IP_ADAPTER_NO_MULTICAST ) )	ifa->ifa_flags |= IFF_MULTICAST;
+
 			
-			// Get the interface index. Windows does not have a uniform scheme for IPv4 and IPv6 interface indexes
-			// so the following is a hack to put IPv4 interface indexes in the upper 24-bits and IPv6 interface indexes
-			// in the lower 8-bits. This allows the IPv6 interface index to be usable as an IPv6 scope ID directly.
+			// <rdar://problem/4045657> Interface index being returned is 512
+			//
+			// Windows does not have a uniform scheme for IPv4 and IPv6 interface indexes.
+			// This code used to shift the IPv4 index up to ensure uniqueness between
+			// it and IPv6 indexes.  Although this worked, it was somewhat confusing to developers, who
+			// then see interface indexes passed back that don't correspond to anything
+			// that is seen in Win32 APIs or command line tools like "route".  As a relatively
+			// small percentage of developers are actively using IPv6, it seems to 
+			// make sense to make our use of IPv4 as confusion free as possible.
+			// So now, IPv6 interface indexes will be shifted up by a
+			// constant value which will serve to uniquely identify them, and we will
+			// leave IPv4 interface indexes unmodified.
 			
 			switch( family )
 			{
-				case AF_INET:  ifa->ifa_extra.index = iaa->IfIndex << 8; break;
-				case AF_INET6: ifa->ifa_extra.index = ipv6IfIndex;	 break;
+				case AF_INET:  ifa->ifa_extra.index = iaa->IfIndex; break;
+				case AF_INET6: ifa->ifa_extra.index = ipv6IfIndex + kIPv6IfIndexBase;	 break;
 				default: break;
 			}
 			
@@ -3913,7 +4059,7 @@ mDNSlocal int	getifaddrs_ipv6( struct ifaddrs **outAddrs )
 			{
 				case AF_INET:
 				{
-					struct sockaddr_in *		sa4;
+					struct sockaddr_in * sa4;
 					
 					require_action( prefixLength <= 32, exit, err = ERROR_INVALID_DATA );
 					
@@ -3921,12 +4067,21 @@ mDNSlocal int	getifaddrs_ipv6( struct ifaddrs **outAddrs )
 					require_action( sa4, exit, err = WSAENOBUFS );
 					
 					sa4->sin_family = AF_INET;
-					if( prefixLength == 0 )
+					
+					if ( prefixLength != 0 )
 					{
-						dlog( kDebugLevelWarning, DEBUG_NAME "%s: IPv4 netmask 0, defaulting to 255.255.255.255\n", __ROUTINE__ );
-						prefixLength = 32;
+						sa4->sin_addr.s_addr = htonl( 0xFFFFFFFFU << ( 32 - prefixLength ) );
 					}
-					sa4->sin_addr.s_addr = htonl( 0xFFFFFFFFU << ( 32 - prefixLength ) );
+					else
+					{
+						uint32_t index;
+
+						dlog( kDebugLevelWarning, DEBUG_NAME "%s: IPv4 prefixLength is 0\n", __ROUTINE__ );
+						err = AddressToIndexAndMask( ifa->ifa_addr, &index, (struct sockaddr*) sa4 );
+						require_noerr( err, exit );
+					}
+
+					dlog( kDebugLevelInfo, DEBUG_NAME "%s: IPv4 mask = %s\n", __ROUTINE__, inet_ntoa( sa4->sin_addr ) );
 					ifa->ifa_netmask = (struct sockaddr *) sa4;
 					break;
 				}
@@ -4073,32 +4228,31 @@ mDNSlocal int	getifaddrs_ipv4( struct ifaddrs **outAddrs )
 		
 		// Get addresses.
 		
-		switch( ifInfo->iiAddress.Address.sa_family )
+		if ( ifInfo->iiAddress.Address.sa_family == AF_INET )
 		{
-			case AF_INET:
-			{
-				struct sockaddr_in *		sa4;
-				
-				sa4 = &ifInfo->iiAddress.AddressIn;
-				ifa->ifa_addr = (struct sockaddr *) calloc( 1, sizeof( *sa4 ) );
-				require_action( ifa->ifa_addr, exit, err = WSAENOBUFS );
-				memcpy( ifa->ifa_addr, sa4, sizeof( *sa4 ) );
-
-				sa4 = &ifInfo->iiNetmask.AddressIn;
-				ifa->ifa_netmask = (struct sockaddr*) calloc(1, sizeof( *sa4 ) );
-				require_action( ifa->ifa_netmask, exit, err = WSAENOBUFS );
-				memcpy( ifa->ifa_netmask, sa4, sizeof( *sa4 ) );
-
-				break;
-			}
+			struct sockaddr_in *		sa4;
 			
-			default:
-				break;
+			sa4 = &ifInfo->iiAddress.AddressIn;
+			ifa->ifa_addr = (struct sockaddr *) calloc( 1, sizeof( *sa4 ) );
+			require_action( ifa->ifa_addr, exit, err = WSAENOBUFS );
+			memcpy( ifa->ifa_addr, sa4, sizeof( *sa4 ) );
+
+			ifa->ifa_netmask = (struct sockaddr*) calloc(1, sizeof( *sa4 ) );
+
+			// <rdar://problem/4076478> Service won't start on Win2K. The address
+			// family field was not being initialized.
+
+			ifa->ifa_netmask->sa_family = AF_INET;
+			require_action( ifa->ifa_netmask, exit, err = WSAENOBUFS );
+			err = AddressToIndexAndMask( ifa->ifa_addr, &ifa->ifa_extra.index, ifa->ifa_netmask );
+			require_noerr( err, exit );
 		}
+		else
+		{
+			// Emulate an interface index.
 		
-		// Emulate an interface index.
-		
-		ifa->ifa_extra.index = (uint32_t)( i + 1 );
+			ifa->ifa_extra.index = (uint32_t)( i + 1 );
+		}
 	}
 	
 	// Success!
@@ -4297,6 +4451,118 @@ void	freeifaddrs( struct ifaddrs *inIFAs )
 	}
 }
 
+
+//===========================================================================================================================
+//	GetPrimaryInterface
+//===========================================================================================================================
+
+mDNSlocal DWORD
+GetPrimaryInterface()
+{
+	PMIB_IPFORWARDTABLE	pIpForwardTable	= NULL;
+	DWORD				dwSize			= 0;
+	BOOL				bOrder			= FALSE;
+	OSStatus			err;
+	DWORD				index			= 0;
+	DWORD				metric			= 0;
+	unsigned long int	i;
+
+	// Find out how big our buffer needs to be.
+
+	err = GetIpForwardTable(NULL, &dwSize, bOrder);
+	require_action( err == ERROR_INSUFFICIENT_BUFFER, exit, err = kUnknownErr );
+
+	// Allocate the memory for the table
+
+	pIpForwardTable = (PMIB_IPFORWARDTABLE) malloc( dwSize );
+	require_action( pIpForwardTable, exit, err = kNoMemoryErr );
+  
+	// Now get the table.
+
+	err = GetIpForwardTable(pIpForwardTable, &dwSize, bOrder);
+	require_noerr( err, exit );
+
+
+	// Search for the row in the table we want.
+
+	for ( i = 0; i < pIpForwardTable->dwNumEntries; i++)
+	{
+		// Look for a default route
+
+		if ( pIpForwardTable->table[i].dwForwardDest == 0 )
+		{
+			if ( index && ( pIpForwardTable->table[i].dwForwardMetric1 >= metric ) )
+			{
+				continue;
+			}
+
+			index	= pIpForwardTable->table[i].dwForwardIfIndex;
+			metric	= pIpForwardTable->table[i].dwForwardMetric1;
+		}
+	}
+
+exit:
+
+	if ( pIpForwardTable != NULL )
+	{
+		free( pIpForwardTable );
+	}
+
+	return index;
+}
+
+
+//===========================================================================================================================
+//	AddressToIndexAndMask
+//===========================================================================================================================
+
+mDNSlocal mStatus
+AddressToIndexAndMask( struct sockaddr * addr, uint32_t * ifIndex, struct sockaddr * mask  )
+{
+	// Before calling AddIPAddress we use GetIpAddrTable to get
+	// an adapter to which we can add the IP.
+	
+	PMIB_IPADDRTABLE	pIPAddrTable	= NULL;
+	DWORD				dwSize			= 0;
+	mStatus				err				= mStatus_UnknownErr;
+	DWORD				i;
+
+	// For now, this is only for IPv4 addresses.  That is why we can safely cast
+	// addr's to sockaddr_in.
+
+	require_action( addr->sa_family == AF_INET, exit, err = mStatus_UnknownErr );
+
+	// Make an initial call to GetIpAddrTable to get the
+	// necessary size into the dwSize variable
+
+	while ( GetIpAddrTable( pIPAddrTable, &dwSize, 0 ) == ERROR_INSUFFICIENT_BUFFER )
+	{
+		pIPAddrTable = (MIB_IPADDRTABLE *) realloc( pIPAddrTable, dwSize );
+		require_action( pIPAddrTable, exit, err = WSAENOBUFS );
+	}
+
+	for ( i = 0; i < pIPAddrTable->dwNumEntries; i++ )
+	{
+		if ( ( ( struct sockaddr_in* ) addr )->sin_addr.s_addr == pIPAddrTable->table[i].dwAddr )
+		{
+			*ifIndex											= pIPAddrTable->table[i].dwIndex;
+			( ( struct sockaddr_in*) mask )->sin_addr.s_addr	= pIPAddrTable->table[i].dwMask;
+			err													= mStatus_NoError;
+			break;
+		}
+	}
+
+exit:
+
+	if ( pIPAddrTable )
+	{
+		free( pIPAddrTable );
+	}
+
+	return err;
+}
+
+
 //===========================================================================================================================
 //	CanReceiveUnicast
 //===========================================================================================================================
@@ -4326,6 +4592,49 @@ mDNSlocal mDNSBool	CanReceiveUnicast( void )
 	dlog( kDebugLevelInfo, DEBUG_NAME "Unicast UDP responses %s\n", ok ? "okay" : "*not allowed*" );
 	return( ok );
 }
+
+
+//===========================================================================================================================
+//	IsPointToPoint
+//===========================================================================================================================
+
+mDNSlocal mDNSBool IsPointToPoint( IP_ADAPTER_UNICAST_ADDRESS * addr )
+{
+	struct ifaddrs	*	addrs	=	NULL;
+	struct ifaddrs	*	p		=	NULL;
+	OSStatus			err;
+	mDNSBool			ret		=	mDNSfalse;
+
+	// For now, only works for IPv4 interfaces
+
+	if ( addr->Address.lpSockaddr->sa_family == AF_INET )
+	{
+		// The getifaddrs_ipv4 call will give us correct information regarding IFF_POINTTOPOINT flags.
+
+		err = getifaddrs_ipv4( &addrs );
+		require_noerr( err, exit );
+
+		for ( p = addrs; p; p = p->ifa_next )
+		{
+			if ( ( addr->Address.lpSockaddr->sa_family == p->ifa_addr->sa_family ) &&
+			     ( ( ( struct sockaddr_in* ) addr->Address.lpSockaddr )->sin_addr.s_addr == ( ( struct sockaddr_in* ) p->ifa_addr )->sin_addr.s_addr ) )
+			{
+				ret = ( p->ifa_flags & IFF_POINTTOPOINT ) ? mDNStrue : mDNSfalse;
+				break;
+			}
+		}
+	}
+
+exit:
+
+	if ( addrs )
+	{
+		freeifaddrs( addrs );
+	}
+
+	return ret;
+}
+
 
 //===========================================================================================================================
 //	GetWindowsVersionString
@@ -4504,6 +4813,7 @@ static mStatus StringToAddress( mDNSAddr * ip, LPSTR string )
 		dwSize = sizeof( sa4 );
 
 		err = WSAStringToAddressA( string, AF_INET, NULL, (struct sockaddr*) &sa4, &dwSize );
+		err = translate_errno( err == 0, WSAGetLastError(), kUnknownErr );
 		require_noerr( err, exit );
 			
 		err = dDNS_SetupAddr( ip, (struct sockaddr*) &sa4 );
@@ -4606,7 +4916,7 @@ exit:
 //===========================================================================================================================
 
 mDNSlocal OSStatus
-ConvertUTF8ToLsaString( const char * input, PLSA_UNICODE_STRING output )
+MakeLsaStringFromUTF8String( PLSA_UNICODE_STRING output, const char * input )
 {
 	int			size;
 	OSStatus	err;
@@ -4650,40 +4960,35 @@ exit:
 //===========================================================================================================================
 
 static OSStatus
-ConvertLsaStringToUTF8( PLSA_UNICODE_STRING input, char ** output )
+MakeUTF8StringFromLsaString( char * output, size_t len, PLSA_UNICODE_STRING input )
 {
-	int			size;
+	size_t		size;
 	OSStatus	err = kNoErr;
 
 	// The Length field of this structure holds the number of bytes,
 	// but WideCharToMultiByte expects the number of wchar_t's. So
 	// we divide by sizeof(wchar_t) to get the correct number.
 
-	size = WideCharToMultiByte(CP_UTF8, 0, input->Buffer, ( input->Length / sizeof( wchar_t ) ), NULL, 0, NULL, NULL);
+	size = (size_t) WideCharToMultiByte(CP_UTF8, 0, input->Buffer, ( input->Length / sizeof( wchar_t ) ), NULL, 0, NULL, NULL);
 	err = translate_errno( size != 0, GetLastError(), kUnknownErr );
 	require_noerr( err, exit );
 	
-	// Add one for trailing '\0'
+	// Ensure that we have enough space (Add one for trailing '\0')
 
-	*output = (char*) malloc( size + 1 );
-	require_action( *output, exit, err = mStatus_NoMemoryErr );
+	require_action( ( size + 1 ) <= len, exit, err = mStatus_NoMemoryErr );
 
-	size = WideCharToMultiByte(CP_UTF8, 0, input->Buffer, ( input->Length / sizeof( wchar_t ) ), *output, size, NULL, NULL);	
+	// Convert the string
+
+	size = (size_t) WideCharToMultiByte( CP_UTF8, 0, input->Buffer, ( input->Length / sizeof( wchar_t ) ), output, (int) size, NULL, NULL);	
 	err = translate_errno( size != 0, GetLastError(), kUnknownErr );
 	require_noerr( err, exit );
 
 	// have to add the trailing 0 because WideCharToMultiByte doesn't do it,
 	// although it does return the correct size
 
-	(*output)[size] = '\0';
+	output[size] = '\0';
 
 exit:
-
-	if ( err && *output )
-	{
-		free( *output );
-		*output = NULL;
-	}
 
 	return err;
 }

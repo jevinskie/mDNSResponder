@@ -23,6 +23,10 @@
     Change History (most recent first):
 
 $Log: uDNS.h,v $
+Revision 1.31  2005/03/31 02:19:56  cheshire
+<rdar://problem/4021486> Fix build warnings
+Reviewed by: Scott Herscher
+
 Revision 1.30  2005/03/04 03:00:03  ksekar
 <rdar://problem/4026546> Retransmissions happen too early, causing registrations to conflict with themselves
 
@@ -147,9 +151,9 @@ extern mStatus uDNS_StartQuery(mDNS *const m, DNSQuestion *const question);
 extern mDNSBool uDNS_IsActiveQuery(DNSQuestion *const question, uDNS_GlobalInfo *u);  // returns true if OK to call StopQuery
 extern mStatus uDNS_StopQuery(mDNS *const m, DNSQuestion *const question);
 	
-extern void uDNS_Init(mDNS *m);
-extern void uDNS_Sleep(mDNS *m);
-extern void uDNS_Wake(mDNS *m);
+extern void uDNS_Init(mDNS *const m);
+extern void uDNS_Sleep(mDNS *const m);
+extern void uDNS_Wake(mDNS *const m);
 #define uDNS_Close uDNS_Sleep
 	
 // uDNS_UpdateRecord
