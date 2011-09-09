@@ -12,7 +12,7 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\Debug\PrinterWizard.Resources"
+			OutputDirectory=".\Debug\Resources\PrinterWizard.exe.Resources"
 			IntermediateDirectory=".\Debug"
 			ConfigurationType="2"
 			UseOfMFC="1"
@@ -38,7 +38,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile="$(OutDir)/PrinterWizardResources.dll"
+				OutputFile="$(OutDir)/PrinterWizard.dll"
 				LinkIncremental="2"
 				GenerateDebugInformation="TRUE"
 				SubSystem="2"
@@ -57,7 +57,8 @@
 			<Tool
 				Name="VCPreLinkEventTool"
 				Description="Building Output Directories"
-				CommandLine="if not exist Debug\PrinterWizard.Resources mkdir Debug\PrinterWizard.Resources"/>
+				CommandLine="if not exist Debug\Resources mkdir Debug\Resources
+if not exist Debug\Resources\PrinterWizard.exe.Resources mkdir Debug\Resources\PrinterWizard.exe.Resources"/>
 			<Tool
 				Name="VCResourceCompilerTool"
 				PreprocessorDefinitions="_DEBUG"
@@ -70,7 +71,7 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release\Root\Program Files\Bonjour\PrinterWizard.Resources"
+			OutputDirectory=".\Release\Root\Program Files\Bonjour\Resources\PrinterWizard.exe.Resources"
 			IntermediateDirectory=".\Release"
 			ConfigurationType="2"
 			UseOfMFC="1"
@@ -96,7 +97,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile="$(OutDir)/PrinterWizardResources.dll"
+				OutputFile="$(OutDir)/PrinterWizard.dll"
 				LinkIncremental="1"
 				GenerateDebugInformation="FALSE"
 				SubSystem="2"
@@ -120,7 +121,8 @@
 				CommandLine="if not exist Release\Root mkdir Release\Root
 if not exist &quot;Release\Root\Program Files&quot; mkdir &quot;Release\Root\Program Files&quot;
 if not exist &quot;Release\Root\Program Files\Bonjour&quot; mkdir &quot;Release\Root\Program Files\Bonjour&quot;
-if not exist &quot;Release\Root\Program Files\Bonjour\PrinterWizard.Resources&quot; mkdir &quot;Release\Root\Program Files\Bonjour\PrinterWizard.Resources&quot;"/>
+if not exist &quot;Release\Root\Program Files\Bonjour\Resources&quot; mkdir &quot;Release\Root\Program Files\Bonjour\Resources&quot;
+if not exist &quot;Release\Root\Program Files\Bonjour\Resources\PrinterWizard.exe.Resources&quot; mkdir &quot;Release\Root\Program Files\Bonjour\Resources\PrinterWizard.exe.Resources&quot;"/>
 			<Tool
 				Name="VCResourceCompilerTool"
 				PreprocessorDefinitions="NDEBUG"

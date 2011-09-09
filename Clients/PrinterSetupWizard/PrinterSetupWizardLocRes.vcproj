@@ -12,7 +12,7 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\Debug\PrinterWizard.Resources\en.lproj"
+			OutputDirectory=".\Debug\Resources\PrinterWizard.exe.Resources\en.lproj"
 			IntermediateDirectory=".\Debug"
 			ConfigurationType="2"
 			UseOfMFC="1"
@@ -57,8 +57,9 @@
 			<Tool
 				Name="VCPreLinkEventTool"
 				Description="Building Output Directories"
-				CommandLine="if not exist Debug\PrinterWizard.Resources mkdir Debug\PrinterWizard.Resources
-if not exist Debug\PrinterWizard.Resources\en.lproj mkdir Debug\PrinterWizard.Resources\en.lproj
+				CommandLine="if not exist Debug\Resources mkdir Debug\Resources
+if not exist Debug\Resources\PrinterWizard.exe.Resources mkdir Debug\Resources\PrinterWizard.exe.Resources
+if not exist Debug\Resources\PrinterWizard.exe.Resources\en.lproj mkdir Debug\Resources\PrinterWizard.exe.Resources\en.lproj
 "/>
 			<Tool
 				Name="VCResourceCompilerTool"
@@ -72,7 +73,7 @@ if not exist Debug\PrinterWizard.Resources\en.lproj mkdir Debug\PrinterWizard.Re
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release\Root\Program Files\Bonjour\PrinterWizard.Resources\en.lproj"
+			OutputDirectory=".\Release\Root\Program Files\Bonjour\Resources\PrinterWizard.exe.Resources\en.lproj"
 			IntermediateDirectory=".\Release"
 			ConfigurationType="2"
 			UseOfMFC="1"
@@ -122,8 +123,9 @@ if not exist Debug\PrinterWizard.Resources\en.lproj mkdir Debug\PrinterWizard.Re
 				CommandLine="if not exist Release\Root mkdir Release\Root
 if not exist &quot;Release\Root\Program Files&quot; mkdir &quot;Release\Root\Program Files&quot;
 if not exist &quot;Release\Root\Program Files\Bonjour&quot; mkdir &quot;Release\Root\Program Files\Bonjour&quot;
-if not exist &quot;Release\Root\Program Files\Bonjour\PrinterWizard.Resources&quot; mkdir &quot;Release\Root\Program Files\Bonjour\PrinterWizard.Resources&quot;
-if not exist &quot;Release\Root\Program Files\Bonjour\PrinterWizard.Resources\en.lproj&quot; mkdir &quot;Release\Root\Program Files\Bonjour\PrinterWizard.Resources\en.lproj&quot;"/>
+if not exist &quot;Release\Root\Program Files\Bonjour\Resources&quot; mkdir &quot;Release\Root\Program Files\Bonjour\Resources&quot;
+if not exist &quot;Release\Root\Program Files\Bonjour\Resources\PrinterWizard.exe.Resources&quot; mkdir &quot;Release\Root\Program Files\Bonjour\Resources\PrinterWizard.exe.Resources&quot;
+if not exist &quot;Release\Root\Program Files\Bonjour\Resources\PrinterWizard.exe.Resources\en.lproj&quot; mkdir &quot;Release\Root\Program Files\Bonjour\Resources\PrinterWizard.exe.Resources\en.lproj&quot;"/>
 			<Tool
 				Name="VCResourceCompilerTool"
 				PreprocessorDefinitions="NDEBUG"

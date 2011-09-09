@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2003-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
@@ -22,41 +22,26 @@
 
     Change History (most recent first):
 
-$Log: ConfigDialog.h,v $
-Revision 1.2  2005/03/03 19:55:21  shersche
-<rdar://problem/4034481> ControlPanel source code isn't saving CVS log info
+$Log: Prefix.h,v $
+Revision 1.1  2004/06/18 04:17:43  rpantos
+Move up one level.
 
-
+Revision 1.1  2004/01/30 02:58:57  bradley
+Test tool for the mDNSResponder Windows service.
+					
 */
 
-#pragma once
+#ifndef __PREFIX__
+#define __PREFIX__
 
-#include "stdafx.h"
-#include "resource.h"
+#if( defined( _DEBUG ) )
+	#define	DEBUG					1
+	#define	MDNS_DEBUGMSGS			1
+#else
+	#define	DEBUG					0
+#endif
 
-//---------------------------------------------------------------------------------------------------------------------------
-//	CConfigDialog
-//---------------------------------------------------------------------------------------------------------------------------
+#define	DNS_SD_DIRECT_ENABLED		0
+#define	DNS_SD_CLIENT_ENABLED		1
 
-class CConfigDialog : public CDialog
-{
-public:
-
-	CConfigDialog();
-
-protected:
-
-	//{{AFX_DATA(CConfigDialog)
-	enum { IDD = IDR_APPLET };
-	//}}AFX_DATA
-
-	//{{AFX_VIRTUAL(CConfigDialog)
-	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
-	//}}AFX_VIRTUAL
-
-	//{{AFX_MSG(CConfigDialog)
-	//}}AFX_MSG
-	DECLARE_MESSAGE_MAP()
-
-	DECLARE_DYNCREATE(CConfigDialog)
-};
+#endif	// __PREFIX__

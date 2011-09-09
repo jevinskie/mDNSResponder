@@ -23,18 +23,6 @@
     Change History (most recent first):
     
 $Log: mdnsNSP.c,v $
-Revision 1.14  2005/03/29 20:35:28  shersche
-<rdar://problem/4053899> Remove reverse lookup implementation due to NSP framework limitation
-
-Revision 1.13  2005/03/29 19:42:47  shersche
-Do label check before checking etc/hosts file
-
-Revision 1.12  2005/03/21 00:42:45  shersche
-<rdar://problem/4021486> Fix build warnings on Win32 platform
-
-Revision 1.11  2005/03/16 03:04:51  shersche
-<rdar://problem/4050633> Don't issue multicast query multilabel dot-local names
-
 Revision 1.10  2005/02/23 22:16:07  shersche
 Unregister the NSP before registering to workaround an installer problem during upgrade installs
 
@@ -239,11 +227,6 @@ DEBUG_LOCAL OSStatus	HostsFileOpen( HostsFile ** self, const char * fname );
 DEBUG_LOCAL OSStatus	HostsFileClose( HostsFile * self );
 DEBUG_LOCAL void		HostsFileInfoFree( HostsFileInfo * info );
 DEBUG_LOCAL OSStatus	HostsFileNext( HostsFile * self, HostsFileInfo ** hInfo );
-DEBUG_LOCAL const char * GetNextLabel( const char *cstr, char label[64] );
-
-#ifdef ENABLE_REVERSE_LOOKUP
-DEBUG_LOCAL OSStatus	IsReverseLookup( LPCWSTR name, size_t size );
-#endif
 
 
 #if 0
@@ -562,49 +545,70 @@ DEBUG_LOCAL int WSPAPI
 		( ( p[ 4 ] != 'A' ) && ( p[ 4 ] != 'a' ) )	||
 		( ( p[ 5 ] != 'L' ) && ( p[ 5 ] != 'l' ) ) ) )
 	{
-#ifdef ENABLE_REVERSE_LOOKUP
-
-		err = IsReverseLookup( name, size );
-
-#else
-
-		err = WSASERVICE_NOT_FOUND;
-
-#endif
-
-		require_noerr( err, exit );
+		require_action_quiet( size > sizeof_string( ".0.8.e.f.ip6.arpa" ), exit, err = WSASERVICE_NOT_FOUND );
+ 
+		p = name + ( size - 1 );
+		p = ( *p == '.' ) ? ( p - sizeof_string( ".0.8.e.f.ip6.arpa" ) ) : ( ( p - sizeof_string( ".0.8.e.f.ip6.arpa" ) ) + 1 );
+	
+		if	( ( ( p[ 0 ] != '.' )							||
+			( ( p[ 1 ] != '0' ) )							||
+			( ( p[ 2 ] != '.' ) )							||
+			( ( p[ 3 ] != '8' ) )							||
+			( ( p[ 4 ] != '.' ) )							||
+			( ( p[ 5 ] != 'E' ) && ( p[ 5 ] != 'e' ) )		||
+			( ( p[ 6 ] != '.' ) )							||
+			( ( p[ 7 ] != 'F' ) && ( p[ 7 ] != 'f' ) )		||
+			( ( p[ 8 ] != '.' ) )							||
+			( ( p[ 9 ] != 'I' ) && ( p[ 9 ] != 'i' ) )		||
+			( ( p[ 10 ] != 'P' ) && ( p[ 10 ] != 'p' ) )	||	
+			( ( p[ 11 ] != '6' ) )							||
+			( ( p[ 12 ] != '.' ) )							||
+			( ( p[ 13 ] != 'A' ) && ( p[ 13 ] != 'a' ) )	||
+			( ( p[ 14 ] != 'R' ) && ( p[ 14 ] != 'r' ) )	||
+			( ( p[ 15 ] != 'P' ) && ( p[ 15 ] != 'p' ) )	||
+			( ( p[ 16 ] != 'A' ) && ( p[ 16 ] != 'a' ) ) ) )
+		{
+			require_action_quiet( size > sizeof_string( ".254.169.in-addr.arpa" ), exit, err = WSASERVICE_NOT_FOUND );
+ 
+			p = name + ( size - 1 );
+			p = ( *p == '.' ) ? ( p - sizeof_string( ".254.169.in-addr.arpa" ) ) : ( ( p - sizeof_string( ".254.169.in-addr.arpa" ) ) + 1 );
+	
+	require_action_quiet( ( ( p[ 0 ] == '.' )						 &&
+									( ( p[ 1 ] == '2' ) )							&&
+									( ( p[ 2 ] == '5' ) )							&&
+									( ( p[ 3 ] == '4' ) )							&&
+									( ( p[ 4 ] == '.' ) )							&&
+									( ( p[ 5 ] == '1' ) )							&&
+									( ( p[ 6 ] == '6' ) )							&&
+									( ( p[ 7 ] == '9' ) )							&&
+									( ( p[ 8 ] == '.' ) )							&&
+									( ( p[ 9 ] == 'I' ) || ( p[ 9 ] == 'i' ) )		&&
+									( ( p[ 10 ] == 'N' ) || ( p[ 10 ] == 'n' ) )	&&	
+									( ( p[ 11 ] == '-' ) )							&&
+									( ( p[ 12 ] == 'A' ) || ( p[ 12 ] == 'a' ) )	&&
+									( ( p[ 13 ] == 'D' ) || ( p[ 13 ] == 'd' ) )	&&
+									( ( p[ 14 ] == 'D' ) || ( p[ 14 ] == 'd' ) )	&&
+									( ( p[ 15 ] == 'R' ) || ( p[ 15 ] == 'r' ) )	&&
+									( ( p[ 16 ] == '.' ) )							&&
+									( ( p[ 17 ] == 'A' ) || ( p[ 17 ] == 'a' ) )	&&
+									( ( p[ 18 ] == 'R' ) || ( p[ 18 ] == 'r' ) )	&&
+									( ( p[ 19 ] == 'P' ) || ( p[ 19 ] == 'p' ) )	&&
+									( ( p[ 20 ] == 'A' ) || ( p[ 20 ] == 'a' ) ) ),
+									exit, err = WSASERVICE_NOT_FOUND );
+		}
 	}
 	else
 	{
-		const char	*	replyDomain;
-		char			translated[ kDNSServiceMaxDomainName ];
-		int				n;
-		int				labels		= 0;
-		const char	*	label[128];
-		char			text[64];
-
-		n = WideCharToMultiByte( CP_UTF8, 0, name, -1, translated, sizeof( translated ), NULL, NULL );
-		require_action( n > 0, exit, err = WSASERVICE_NOT_FOUND );
-
-		// <rdar://problem/4050633>
-
-		// Don't resolve multi-label name
-
-		replyDomain = translated;
-
-		while ( *replyDomain )
-		{
-			label[labels++]	= replyDomain;
-			replyDomain		= GetNextLabel(replyDomain, text);
-		}
-
-		require_action( labels == 2, exit, err = WSASERVICE_NOT_FOUND );
-
 		// <rdar://problem/3936771>
 		//
 		// Check to see if the name of this host is in the hosts table. If so,
 		// don't try and resolve it
 		
+		char	translated[ kDNSServiceMaxDomainName ];
+		int		n;
+
+		n = WideCharToMultiByte( CP_UTF8, 0, name, -1, translated, sizeof( translated ), NULL, NULL );
+		require_action( n > 0, exit, err = WSASERVICE_NOT_FOUND );
 		require_action( InHostsTable( translated ) == FALSE, exit, err = WSASERVICE_NOT_FOUND );
 	}
 
@@ -1980,108 +1984,3 @@ exit:
 
 	return err;
 }
-
-
-//===========================================================================================================================
-//	GetNextLabel
-//===========================================================================================================================
-DEBUG_LOCAL const char*
-GetNextLabel(const char *cstr, char label[64])
-{
-	char *ptr = label;
-	while (*cstr && *cstr != '.')								// While we have characters in the label...
-		{
-		char c = *cstr++;
-		if (c == '\\')
-			{
-			c = *cstr++;
-			if (isdigit(cstr[-1]) && isdigit(cstr[0]) && isdigit(cstr[1]))
-				{
-				int v0 = cstr[-1] - '0';						// then interpret as three-digit decimal
-				int v1 = cstr[ 0] - '0';
-				int v2 = cstr[ 1] - '0';
-				int val = v0 * 100 + v1 * 10 + v2;
-				if (val <= 255) { c = (char)val; cstr += 2; }	// If valid three-digit decimal value, use it
-				}
-			}
-		*ptr++ = c;
-		if (ptr >= label+64) return(NULL);
-		}
-	if (*cstr) cstr++;											// Skip over the trailing dot (if present)
-	*ptr++ = 0;
-	return(cstr);
-}
-
-
-#ifdef ENABLE_REVERSE_LOOKUP
-//===========================================================================================================================
-//	IsReverseLookup
-//===========================================================================================================================
-
-DEBUG_LOCAL OSStatus
-IsReverseLookup( LPCWSTR name, size_t size )
-{
-	LPCWSTR		p;
-	OSStatus	err = kNoErr;
-
-	require_action_quiet( size > sizeof_string( ".0.8.e.f.ip6.arpa" ), exit, err = WSASERVICE_NOT_FOUND );
- 
-	p = name + ( size - 1 );
-	p = ( *p == '.' ) ? ( p - sizeof_string( ".0.8.e.f.ip6.arpa" ) ) : ( ( p - sizeof_string( ".0.8.e.f.ip6.arpa" ) ) + 1 );
-	
-	if	( ( ( p[ 0 ] != '.' )							||
-		( ( p[ 1 ] != '0' ) )							||
-		( ( p[ 2 ] != '.' ) )							||
-		( ( p[ 3 ] != '8' ) )							||
-		( ( p[ 4 ] != '.' ) )							||
-		( ( p[ 5 ] != 'E' ) && ( p[ 5 ] != 'e' ) )		||
-		( ( p[ 6 ] != '.' ) )							||
-		( ( p[ 7 ] != 'F' ) && ( p[ 7 ] != 'f' ) )		||
-		( ( p[ 8 ] != '.' ) )							||
-		( ( p[ 9 ] != 'I' ) && ( p[ 9 ] != 'i' ) )		||
-		( ( p[ 10 ] != 'P' ) && ( p[ 10 ] != 'p' ) )	||	
-		( ( p[ 11 ] != '6' ) )							||
-		( ( p[ 12 ] != '.' ) )							||
-		( ( p[ 13 ] != 'A' ) && ( p[ 13 ] != 'a' ) )	||
-		( ( p[ 14 ] != 'R' ) && ( p[ 14 ] != 'r' ) )	||
-		( ( p[ 15 ] != 'P' ) && ( p[ 15 ] != 'p' ) )	||
-		( ( p[ 16 ] != 'A' ) && ( p[ 16 ] != 'a' ) ) ) )
-	{
-		require_action_quiet( size > sizeof_string( ".254.169.in-addr.arpa" ), exit, err = WSASERVICE_NOT_FOUND );
- 
-		p = name + ( size - 1 );
-		p = ( *p == '.' ) ? ( p - sizeof_string( ".254.169.in-addr.arpa" ) ) : ( ( p - sizeof_string( ".254.169.in-addr.arpa" ) ) + 1 );
-	
-		require_action_quiet( ( ( p[ 0 ] == '.' )						 &&
-								( ( p[ 1 ] == '2' ) )							&&
-								( ( p[ 2 ] == '5' ) )							&&
-								( ( p[ 3 ] == '4' ) )							&&
-								( ( p[ 4 ] == '.' ) )							&&
-								( ( p[ 5 ] == '1' ) )							&&
-								( ( p[ 6 ] == '6' ) )							&&
-								( ( p[ 7 ] == '9' ) )							&&
-								( ( p[ 8 ] == '.' ) )							&&
-								( ( p[ 9 ] == 'I' ) || ( p[ 9 ] == 'i' ) )		&&
-								( ( p[ 10 ] == 'N' ) || ( p[ 10 ] == 'n' ) )	&&	
-								( ( p[ 11 ] == '-' ) )							&&
-								( ( p[ 12 ] == 'A' ) || ( p[ 12 ] == 'a' ) )	&&
-								( ( p[ 13 ] == 'D' ) || ( p[ 13 ] == 'd' ) )	&&
-								( ( p[ 14 ] == 'D' ) || ( p[ 14 ] == 'd' ) )	&&
-								( ( p[ 15 ] == 'R' ) || ( p[ 15 ] == 'r' ) )	&&
-								( ( p[ 16 ] == '.' ) )							&&
-								( ( p[ 17 ] == 'A' ) || ( p[ 17 ] == 'a' ) )	&&
-								( ( p[ 18 ] == 'R' ) || ( p[ 18 ] == 'r' ) )	&&
-								( ( p[ 19 ] == 'P' ) || ( p[ 19 ] == 'p' ) )	&&
-								( ( p[ 20 ] == 'A' ) || ( p[ 20 ] == 'a' ) ) ),
-								exit, err = WSASERVICE_NOT_FOUND );
-	}
-
-	// It's a reverse lookup
-
-	check( err == kNoErr );
-
-exit:
-
-	return err;
-}
-#endif

@@ -23,9 +23,6 @@
     Change History (most recent first):
     
 $Log: PrinterSetupWizardSheet.h,v $
-Revision 1.9  2005/04/13 17:46:22  shersche
-<rdar://problem/4082122> Generic PCL not selected when printers advertise multiple text records
-
 Revision 1.8  2005/02/08 18:53:33  shersche
 Remove qtotalDefined parameter from ParseTextRecord()
 
@@ -244,7 +241,7 @@ private:
 	StopResolve( Service * service );
 
 	OSStatus
-	ParseTextRecord( Service * service, Queue * q, uint16_t inTXTSize, const char * inTXT );
+	ParseTextRecord( Service * service, uint16_t inTXTSize, const char * inTXT, CString & qname, uint32_t & qpriority );
 
 	OSStatus
 	LoadPrinterNames();

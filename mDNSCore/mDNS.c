@@ -45,9 +45,6 @@
     Change History (most recent first):
 
 $Log: mDNS.c,v $
-Revision 1.523  2005/03/21 00:33:51  shersche
-<rdar://problem/4021486> Fix build warnings on Win32 platform
-
 Revision 1.522  2005/03/04 21:48:12  cheshire
 <rdar://problem/4037283> Fractional time rounded down instead of up on platforms with coarse clock granularity
 
@@ -3139,7 +3136,7 @@ mDNSlocal void SendResponses(mDNS *const m)
 					newptr = PutResourceRecordTTL(&m->omsg, responseptr, &m->omsg.h.numAnswers, &rr->resrec, m->SleepState ? 0 : rr->resrec.rroriginalttl);
 					rr->resrec.rrclass &= ~kDNSClass_UniqueRRSet;			// Make sure to clear cache flush bit back to normal state
 					if (!newptr && m->omsg.h.numAnswers) break;
-					rr->RequireGoodbye = (mDNSu8) (!m->SleepState);
+					rr->RequireGoodbye = !m->SleepState;
 					if (rr->LastAPTime == m->timenow) numAnnounce++; else numAnswer++;
 					responseptr = newptr;
 					}

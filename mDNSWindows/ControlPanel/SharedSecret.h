@@ -23,9 +23,6 @@
     Change History (most recent first):
 
 $Log: SharedSecret.h,v $
-Revision 1.3  2005/04/06 02:04:49  shersche
-<rdar://problem/4066485> Registering with shared secret doesn't work
-
 Revision 1.2  2005/03/03 19:55:21  shersche
 <rdar://problem/4034481> ControlPanel source code isn't saving CVS log info
 
@@ -54,7 +51,7 @@ public:
 	enum { IDD = IDR_SECRET };
 
 	void
-	Commit( CString zone );
+	Commit();
 
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
@@ -62,7 +59,6 @@ protected:
 	DECLARE_MESSAGE_MAP()
 
 public:
-
-	CString m_key;
 	CString m_secret;
+	CString m_secretName;
 };

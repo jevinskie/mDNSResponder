@@ -23,15 +23,6 @@
     Change History (most recent first):
     
 $Log: ThirdPage.cpp,v $
-Revision 1.23  2005/04/18 02:33:47  shersche
-<rdar://problem/4091216> Default printer option cannot be deselected
-
-Revision 1.22  2005/04/13 17:46:22  shersche
-<rdar://problem/4082122> Generic PCL not selected when printers advertise multiple text records
-
-Revision 1.21  2005/03/30 02:09:55  shersche
-Auto-resize the column width to account for differing fonts and font sizes
-
 Revision 1.20  2005/03/05 02:27:45  shersche
 <rdar://problem/4030388> Generic drivers don't do color
 
@@ -1048,27 +1039,20 @@ OSStatus CThirdPage::MatchPrinter(Manufacturers & manufacturers, Printer * print
 	CString					text;
 	OSStatus				err					=	kNoErr;
 
-	check( printer );
-	check( service );
-
-	Queue * q = service->SelectedQueue();
-
-	check( q );
-
 	//
 	// first look to see if we have a usb_MFG descriptor
 	//
-	if ( q->usb_MFG.GetLength() > 0)
+	if (service->usb_MFG.GetLength() > 0)
 	{
-		manufacturer = MatchManufacturer( manufacturers, ConvertToManufacturerName ( q->usb_MFG ) );
+		manufacturer = MatchManufacturer( manufacturers, ConvertToManufacturerName ( service->usb_MFG ) );
 	}
 
 	if ( manufacturer == NULL )
 	{
-		q->product.Remove('(');
-		q->product.Remove(')');
+		service->product.Remove('(');
+		service->product.Remove(')');
 
-		manufacturer = MatchManufacturer( manufacturers, ConvertToManufacturerName ( q->product ) );
+		manufacturer = MatchManufacturer( manufacturers, ConvertToManufacturerName ( service->product ) );
 	}
 	
 	//
@@ -1076,17 +1060,17 @@ OSStatus CThirdPage::MatchPrinter(Manufacturers & manufacturers, Printer * print
 	//
 	if ( manufacturer != NULL )
 	{
-		if ( q->usb_MDL.GetLength() > 0 )
+		if (service->usb_MDL.GetLength() > 0)
 		{
-			model = MatchModel ( manufacturer, ConvertToModelName ( q->usb_MDL ) );
+			model = MatchModel ( manufacturer, ConvertToModelName ( service->usb_MDL ) );
 		}
 
-		if ( ( model == NULL ) && ( q->product.GetLength() > 0 ) )
+		if ( ( model == NULL ) && ( service->product.GetLength() > 0 ) )
 		{
-			q->product.Remove('(');
-			q->product.Remove(')');
+			service->product.Remove('(');
+			service->product.Remove(')');
 
-			model = MatchModel ( manufacturer, ConvertToModelName ( q->product ) );
+			model = MatchModel ( manufacturer, ConvertToModelName ( service->product ) );
 		}
 
 		if ( model != NULL )
@@ -1270,18 +1254,12 @@ CThirdPage::MatchGeneric( Printer * printer, Service * service, Manufacturer ** 
 
 	DEBUG_UNUSED( printer );
 
-	check( service );
-
-	Queue * q = service->SelectedQueue();
-
-	check( q );
-
 	Manufacturers::iterator iter = m_manufacturers.find( kGenericManufacturer );
 	require_action_quiet( iter != m_manufacturers.end(), exit, ok = FALSE );
 
 	*manufacturer = iter->second;
 
-	pdl = q->pdl;
+	pdl = service->pdl;
 	pdl.MakeLower();
 
 	if ( pdl.Find( kPDLPCLKey ) != -1 )
@@ -1345,11 +1323,11 @@ OSStatus CThirdPage::OnInitPage()
 	// selection notice
 	//
 	header.LoadString(IDS_MANUFACTURER_HEADING);
-	m_manufacturerListCtrl.InsertColumn(0, header, LVCFMT_LEFT, -1 );
+	m_manufacturerListCtrl.InsertColumn(0, header, LVCFMT_LEFT, 138);
 	m_manufacturerSelected = NULL;
 
 	header.LoadString(IDS_MODEL_HEADING);
-	m_modelListCtrl.InsertColumn(0, header, LVCFMT_LEFT, -1 );
+	m_modelListCtrl.InsertColumn(0, header, LVCFMT_LEFT, 247);
 	m_modelSelected = NULL;
 
 	return (err);
@@ -1453,8 +1431,6 @@ CThirdPage::PopulateUI(Manufacturers & manufacturers)
 		nIndex = m_manufacturerListCtrl.InsertItem(0, manufacturer->name);
 
 		m_manufacturerListCtrl.SetItemData(nIndex, (DWORD_PTR) manufacturer);
-
-		m_manufacturerListCtrl.SetColumnWidth( 0, LVSCW_AUTOSIZE_USEHEADER );
 	}
 
 	return 0;
@@ -1495,8 +1471,6 @@ void CThirdPage::OnLvnItemchangedManufacturer(NMHDR *pNMHDR, LRESULT *pResult)
 			int nItem = m_modelListCtrl.InsertItem( 0, model->displayName );
 
 			m_modelListCtrl.SetItemData(nItem, (DWORD_PTR) model);
-
-			m_modelListCtrl.SetColumnWidth( 0, LVSCW_AUTOSIZE_USEHEADER );
 		}
 
 		m_modelListCtrl.SetRedraw(TRUE);
@@ -1557,7 +1531,7 @@ void CThirdPage::OnBnClickedDefaultPrinter()
 	printer = psheet->GetSelectedPrinter();
 	require_quiet( printer, exit );
 
-	printer->deflt = ( m_defaultPrinterCtrl.GetCheck() == BST_CHECKED ) ? true : false;
+	printer->deflt = m_defaultPrinterCtrl.GetState() ? true : false;
 
 exit:
 

@@ -35,11 +35,6 @@
 #pragma mark - DynDNS structures
 #endif
 
-#if WIN32
-// named type definition in parentheses 
-#	pragma warning( disable: 4115 ) 
-#endif
-
 typedef struct IPAddrListElem
 	{
 	mDNSAddr addr;

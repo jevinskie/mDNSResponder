@@ -24,11 +24,9 @@
     Change History (most recent first):
 
 $Log: dnsextd.c,v $
-Revision 1.35  2005/03/17 03:57:43  cheshire
-LEASE_OPT_SIZE is now LEASE_OPT_RDLEN; LLQ_OPT_SIZE is now LLQ_OPT_RDLEN
-
-Revision 1.34  2005/03/16 18:47:37  ksekar
-<rdar://problem/4046465> dnsextd doesn't clean up on exit
+Revision 1.33.2.1  2005/08/05 21:14:00  ksekar
+<rdar://problem/4012279> Long-lived queries not working on windows
+Change constant names
 
 Revision 1.33  2005/03/11 19:09:02  ksekar
 Fixed ZERO_LLQID macro
@@ -981,30 +979,37 @@ mDNSlocal void DeleteRecord(DaemonInfo *d, CacheRecord *rr, domainname *zone)
 	if (reply) free(reply);
 	}
 
-// iterate over table, deleting expired records (or all records if DeleteAll is true)
-mDNSlocal void DeleteRecords(DaemonInfo *d, mDNSBool DeleteAll)
+// iterate over table, deleting expired records
+mDNSlocal void DeleteExpiredRecords(DaemonInfo *d)
 	{
 	int i;
-	RRTableElem **ptr, *fptr;	
+	RRTableElem *ptr, *prev, *fptr;	
 	struct timeval now;
 
-	if (gettimeofday(&now, NULL)) { LogErr("DeleteRecords ", "gettimeofday"); return; }
-	if (pthread_mutex_lock(&d->tablelock)) { LogErr("DeleteRecords", "pthread_mutex_lock"); return; }
+	if (gettimeofday(&now, NULL)) { LogErr("DeleteExpiredRecords ", "gettimeofday"); return; }
+	if (pthread_mutex_lock(&d->tablelock)) { LogErr("DeleteExpiredRecords", "pthread_mutex_lock"); return; }
 	for (i = 0; i < d->nbuckets; i++)
 		{
-		ptr = &d->table[i];
-		while (*ptr)
+		ptr = d->table[i];
+		prev = NULL;
+		while (ptr)
 			{
-			if (DeleteAll || (*ptr)->expire - now.tv_sec < 0)
+			if (ptr->expire - now.tv_sec < 0)
 				{
 				// delete record from server
-				DeleteRecord(d, &(*ptr)->rr, &(*ptr)->zone);
-				fptr = *ptr;
-				*ptr = (*ptr)->next;
+				DeleteRecord(d, &ptr->rr, &ptr->zone);
+				if (prev) prev->next = ptr->next;
+				else d->table[i] = ptr->next;
+				fptr = ptr;
+				ptr = ptr->next;
 				free(fptr);
 				d->nelems--;
 				}
-			else ptr = &(*ptr)->next;
+			else
+				{
+				prev = ptr;
+				ptr = ptr->next;
+				}
 			}
 		}
 	pthread_mutex_unlock(&d->tablelock);
@@ -1413,28 +1418,6 @@ mDNSlocal void SendEvents(DaemonInfo *d, LLQEntry *e)
 	if (SendLLQ(d, &response, e->cli) < 0) LogMsg("Error: SendEvents - SendLLQ");		
 	}
 
-mDNSlocal void PrintLLQAnswers(DaemonInfo *d)
-	{
-	int i;
-	char rrbuf[80];
-	
-	Log("Printing LLQ Answer Table contents");
-
-	for (i = 0; i < LLQ_TABLESIZE; i++)
-		{
-		AnswerListElem *a = d->AnswerTable[i];
-		while(a)
-			{
-			int ancount = 0;
-			const CacheRecord *rr = a->KnownAnswers;
-			while (rr) { ancount++; rr = rr->next; }		
-			Log("%p : Question %##s;  type %d;  referenced by %d LLQs; %d answers:", a, a->name.c, a->type, a->refcount, ancount);
-			for (rr = a->KnownAnswers; rr; rr = rr->next) Log("\t%s", GetRRDisplayString_rdb(&rr->resrec, &rr->resrec.rdata->u, rrbuf));
-			a = a->next;
-			}
-		}
-	}
-
 mDNSlocal void PrintLLQTable(DaemonInfo *d)
 	{
 	LLQEntry *e;
@@ -1448,19 +1431,9 @@ mDNSlocal void PrintLLQTable(DaemonInfo *d)
 		e = d->LLQTable[i];
 		while(e)
 			{
-			char *state;
-			
-			switch (e->state)
-				{
-				case RequestReceived: state = "RequestReceived"; break;
-				case ChallengeSent:   state = "ChallengeSent";   break;
-				case Established:     state = "Established";     break;
-				default:              state = "unknown"; 					
-				}
-			inet_ntop(AF_INET, &e->cli.sin_addr, addr, 32);				
-			
-			Log("LLQ from %s in state %s; %##s; type %d; orig lease %d; remaining lease %d; AnswerList %p)",
-				addr, state, e->qname.c, e->qtype, e->lease, LLQLease(e), e->AnswerList);
+			inet_ntop(AF_INET, &e->cli.sin_addr, addr, 32);
+			Log("LLQ from %##s type %d lease %d (%d remaining)",
+				addr, e->qname.c, e->qtype, e->lease, LLQLease(e));
 			e = e->next;
 			}
 		}
@@ -2061,7 +2034,7 @@ mDNSlocal int ListenForUpdates(DaemonInfo *d)
 		if (gettimeofday(&timenow, NULL)) { LogErr("ListenForUpdates", "gettimeofday"); return -1; }
 		if (timenow.tv_sec >= NextTableCheck)
 			{
-			DeleteRecords(d, mDNSfalse);
+			DeleteExpiredRecords(d);
 			NextTableCheck = timenow.tv_sec + EXPIRATION_INTERVAL;
 			}
 		timeout.tv_sec = NextTableCheck - timenow.tv_sec;
@@ -2075,8 +2048,8 @@ mDNSlocal int ListenForUpdates(DaemonInfo *d)
 			{
 			if (errno == EINTR)
 				{
-				if (terminate) { DeleteRecords(d, mDNStrue); return 0; }
-				else if (dumptable) { PrintLeaseTable(d); PrintLLQTable(d); PrintLLQAnswers(d); dumptable = 0; }
+				if (terminate) { DeleteExpiredRecords(d); return 0; }
+				else if (dumptable) { PrintLeaseTable(d); PrintLLQTable(d); dumptable = 0; }
 				else Log("Received unhandled signal - continuing"); 
 				}
 			else { LogErr("ListenForUpdates", "select"); return -1; }

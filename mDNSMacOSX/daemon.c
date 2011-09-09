@@ -36,11 +36,8 @@
     Change History (most recent first):
 
 $Log: daemon.c,v $
-Revision 1.257  2005/03/28 19:28:55  cheshire
-Fix minor typos in LogOperation() messages
-
-Revision 1.256  2005/03/17 22:01:22  cheshire
-Tidy up alignment of lines to make code more readable
+Revision 1.255.2.1  2005/07/22 21:45:04  ksekar
+Fix GCC 4.0/Intel compiler warnings
 
 Revision 1.255  2005/03/09 00:48:43  cheshire
 <rdar://problem/4015157> QU packets getting sent too early on wake from sleep
@@ -905,8 +902,8 @@ mDNSlocal void AbortClient(mach_port_t ClientMachPort, void *m)
 		while (qptr)
 			{
 			if (m && m != x)
-				LogMsg("%5d: DNSServiceBrowse(%##s) STOP; WARNING m %p != x %p", ClientMachPort, qptr->q.qname.c, m, x);
-			else LogOperation("%5d: DNSServiceBrowse(%##s) STOP", ClientMachPort, qptr->q.qname.c);
+				LogMsg("%5d: DNSServiceBrowser(%##s) STOP; WARNING m %p != x %p", ClientMachPort, qptr->q.qname.c, m, x);
+			else LogOperation("%5d: DNSServiceBrowser(%##s) STOP", ClientMachPort, qptr->q.qname.c);
 			mDNS_StopBrowse(&mDNSStorage, &qptr->q);
 			freePtr = qptr;
 			qptr = qptr->next;
@@ -928,8 +925,8 @@ mDNSlocal void AbortClient(mach_port_t ClientMachPort, void *m)
 		DNSServiceResolver *x = *l;
 		*l = (*l)->next;
 		if (m && m != x)
-			LogMsg("%5d: DNSServiceResolve(%##s) STOP; WARNING m %p != x %p", ClientMachPort, x->i.name.c, m, x);
-		else LogOperation("%5d: DNSServiceResolve(%##s) STOP", ClientMachPort, x->i.name.c);
+			LogMsg("%5d: DNSServiceResolver(%##s) STOP; WARNING m %p != x %p", ClientMachPort, x->i.name.c, m, x);
+		else LogOperation("%5d: DNSServiceResolver(%##s) STOP", ClientMachPort, x->i.name.c);
 		mDNS_StopResolveService(&mDNSStorage, &x->q);
 		freeL("DNSServiceResolver", x);
 		return;
@@ -979,21 +976,19 @@ mDNSlocal void AbortClientWithLogMessage(mach_port_t c, char *reason, char *msg,
 	while (b && b->ClientMachPort != c) b = b->next;
 	while (l && l->ClientMachPort != c) l = l->next;
 	while (r && r->ClientMachPort != c) r = r->next;
-
-	if      (e) LogMsg("%5d: DomainEnumeration(%##s) %s%s",                   c, e->dom.qname.c,                reason, msg);
+	if      (e)     LogMsg("%5d: DomainEnumeration(%##s) %s%s",                   c, e->dom.qname.c,            reason, msg);
 	else if (b)
-			{
-			for (qptr = b->qlist; qptr; qptr = qptr->next)
-				LogMsg("%5d: Browser(%##s) %s%s",                             c, qptr->q.qname.c,               reason, msg);
-			}
-	else if (l) LogMsg("%5d: Resolver(%##s) %s%s",                            c, l->i.name.c,                   reason, msg);
+		{
+		for (qptr = b->qlist; qptr; qptr = qptr->next)
+			        LogMsg("%5d: Browser(%##s) %s%s",                             c, qptr->q.qname.c,              reason, msg);
+		}
+	else if (l)     LogMsg("%5d: Resolver(%##s) %s%s",                            c, l->i.name.c,               reason, msg);
 	else if (r)
-			{
-			ServiceInstance *si;
-			for (si = r->regs; si; si = si->next)
-				LogMsg("%5d: Registration(%##s) %s%s",                        c, si->srs.RR_SRV.resrec.name->c, reason, msg);
-			}
-	else        LogMsg("%5d: (%s) %s, but no record of client can be found!", c,                                reason, msg);
+		{
+		ServiceInstance *si;
+		for (si = r->regs; si; si = si->next) LogMsg("%5d: Registration(%##s) %s%s", c, si->srs.RR_SRV.resrec.name->c, reason, msg);
+		}
+	else            LogMsg("%5d: (%s) %s, but no record of client can be found!", c,                            reason, msg);
 
 	AbortClient(c, m);
 	}
@@ -1415,7 +1410,7 @@ mDNSexport kern_return_t provide_DNSServiceResolverResolve_rpc(mach_port_t unuse
 	DNSServiceResolverList = x;
 
 	// Do the operation
-	LogOperation("%5d: DNSServiceResolve(%##s) START", client, x->i.name.c);
+	LogOperation("%5d: DNSServiceResolver(%##s) START", client, x->i.name.c);
 	err = mDNS_StartResolveService(&mDNSStorage, &x->q, &x->i, FoundInstanceInfo, x);
 	if (err) { AbortClient(client, x); errormsg = "mDNS_StartResolveService"; goto fail; }
 
@@ -1893,8 +1888,8 @@ mDNSexport kern_return_t provide_DNSServiceRegistrationAddRecord_rpc(mach_port_t
 	uint32_t id;
 	mStatus err = mStatus_NoError;
 	const char *errormsg = "Unknown";
-	if (client == (mach_port_t)-1) { err = mStatus_Invalid;         errormsg = "Client id -1 invalid"; goto fail; }
 	DNSServiceRegistration *x = DNSServiceRegistrationList;
+	if (client == (mach_port_t)-1) { err = mStatus_Invalid;         errormsg = "Client id -1 invalid"; goto fail; }
 	ServiceInstance *si;
 	size_t size;
 	(void)unusedserver;		// Unused

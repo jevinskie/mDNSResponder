@@ -23,9 +23,6 @@
     Change History (most recent first):
 
 $Log: SharedSecret.cpp,v $
-Revision 1.3  2005/04/06 02:04:49  shersche
-<rdar://problem/4066485> Registering with shared secret doesn't work
-
 Revision 1.2  2005/03/03 19:55:22  shersche
 <rdar://problem/4034481> ControlPanel source code isn't saving CVS log info
 
@@ -64,8 +61,8 @@ IMPLEMENT_DYNAMIC(CSharedSecret, CDialog)
 
 CSharedSecret::CSharedSecret(CWnd* pParent /*=NULL*/)
 	: CDialog(CSharedSecret::IDD, pParent)
-	, m_key(_T(""))
 	, m_secret(_T(""))
+	, m_secretName(_T(""))
 {
 }
 
@@ -86,8 +83,8 @@ CSharedSecret::~CSharedSecret()
 void CSharedSecret::DoDataExchange(CDataExchange* pDX)
 {
 	CDialog::DoDataExchange(pDX);
-	DDX_Text(pDX, IDC_KEY, m_key );
-	DDX_Text(pDX, IDC_SECRET, m_secret );
+	DDX_Text(pDX, IDC_SECRET, m_secret);
+	DDX_Text(pDX, IDC_SECRET_NAME, m_secretName);
 }
 
 
@@ -101,33 +98,27 @@ END_MESSAGE_MAP()
 //---------------------------------------------------------------------------------------------------------------------------
 
 void
-CSharedSecret::Commit( CString zone )
+CSharedSecret::Commit()
 {
 	LSA_OBJECT_ATTRIBUTES	attrs;
 	LSA_HANDLE				handle = NULL;
 	NTSTATUS				res;
-	LSA_UNICODE_STRING		lucZoneName;
 	LSA_UNICODE_STRING		lucKeyName;
-	LSA_UNICODE_STRING		lucSecretName;
+	LSA_UNICODE_STRING		lucPrivateData;
 	BOOL					ok;
 	OSStatus				err;
 
 	// If there isn't a trailing dot, add one because the mDNSResponder
 	// presents names with the trailing dot.
 
-	if ( zone.ReverseFind( '.' ) != zone.GetLength() )
+	if ( m_secretName.ReverseFind( '.' ) != m_secretName.GetLength() )
 	{
-		zone += '.';
-	}
-
-	if ( m_key.ReverseFind( '.' ) != m_key.GetLength() )
-	{
-		m_key += '.';
+		m_secretName += '.';
 	}
 
 	// attrs are reserved, so initialize to zeroes.
 
-	ZeroMemory( &attrs, sizeof( attrs ) );
+	ZeroMemory(&attrs, sizeof( attrs ) );
 
 	// Get a handle to the Policy object on the local system
 
@@ -137,25 +128,17 @@ CSharedSecret::Commit( CString zone )
 
 	// Intializing PLSA_UNICODE_STRING structures
 
-	ok = InitLsaString( &lucZoneName, zone );
-	err = translate_errno( ok, errno_compat(), kUnknownErr );
-	require_noerr( err, exit );
- 
-	ok = InitLsaString( &lucKeyName, m_key );
+	ok = InitLsaString( &lucKeyName, m_secretName );
 	err = translate_errno( ok, errno_compat(), kUnknownErr );
 	require_noerr( err, exit );
 
-	ok = InitLsaString( &lucSecretName, m_secret );
+	ok = InitLsaString( &lucPrivateData, m_secret );
 	err = translate_errno( ok, errno_compat(), kUnknownErr );
 	require_noerr( err, exit );
 
 	// Store the private data.
 
-	res = LsaStorePrivateData( handle, &lucZoneName, &lucKeyName );
-	err = translate_errno( res == 0, LsaNtStatusToWinError( res ), kUnknownErr );
-	require_noerr( err, exit );
-
-	res = LsaStorePrivateData( handle, &lucKeyName, &lucSecretName );
+	res = LsaStorePrivateData( handle, &lucKeyName, &lucPrivateData );
 	err = translate_errno( res == 0, LsaNtStatusToWinError( res ), kUnknownErr );
 	require_noerr( err, exit );
 

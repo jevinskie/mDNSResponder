@@ -23,9 +23,6 @@
     Change History (most recent first):
     
 $Log: PrinterSetupWizardSheet.cpp,v $
-Revision 1.30  2005/04/13 17:46:22  shersche
-<rdar://problem/4082122> Generic PCL not selected when printers advertise multiple text records
-
 Revision 1.29  2005/02/14 20:48:37  shersche
 <rdar://problem/4003710> Default pdl key to "application/postscript"
 
@@ -448,7 +445,7 @@ CPrinterSetupWizardSheet::InstallPrinterPDLAndLPR(Printer * printer, Service * s
 	pInfo.pPortName				=	printer->portName.GetBuffer();
 	pInfo.pDriverName			=	printer->modelName.GetBuffer();
 	pInfo.pComment				=	printer->displayModelName.GetBuffer();
-	pInfo.pLocation				=	q->location.GetBuffer();
+	pInfo.pLocation				=	service->location.GetBuffer();
 	pInfo.pDevMode				=	NULL;
 	pInfo.pDevMode				=	NULL;
 	pInfo.pSepFile				=	L"";
@@ -492,12 +489,9 @@ CPrinterSetupWizardSheet::InstallPrinterIPP(Printer * printer, Service * service
 {
 	DEBUG_UNUSED( service );
 
-	Queue		*	q		 = service->SelectedQueue();
 	HANDLE			hPrinter = NULL;
 	PRINTER_INFO_2	pInfo;
 	OSStatus		err;
-
-	check( q );
 	
 	//
 	// add the printer
@@ -508,7 +502,7 @@ CPrinterSetupWizardSheet::InstallPrinterIPP(Printer * printer, Service * service
 	pInfo.pPortName			= printer->portName.GetBuffer();
 	pInfo.pDriverName		= printer->modelName.GetBuffer();
 	pInfo.pPrintProcessor	= L"winprint";
-	pInfo.pLocation			= q->location.GetBuffer();
+	pInfo.pLocation			= service->location.GetBuffer();
 	pInfo.pComment			= printer->displayModelName.GetBuffer();
 	pInfo.Attributes		= PRINTER_ATTRIBUTE_NETWORK | PRINTER_ATTRIBUTE_LOCAL;
 	
@@ -892,6 +886,8 @@ CPrinterSetupWizardSheet::OnResolve(
 	CPrinterSetupWizardSheet	*	self;
 	Service						*	service;
 	Queue						*	q;
+	uint32_t						qpriority = kDefaultPriority;
+	CString							qname;
 	int								idx;
 	OSStatus						err;
 
@@ -929,6 +925,13 @@ CPrinterSetupWizardSheet::OnResolve(
 	//
 	service->portNumber = ntohs(inPort);
 
+	//
+	// parse the text record.
+	//
+
+	err = self->ParseTextRecord( service, inTXTSize, inTXT, qname, qpriority );
+	require_noerr( err, exit );
+
 	if ( service->qtotal == 1 )
 	{	
 		//
@@ -945,13 +948,10 @@ CPrinterSetupWizardSheet::OnResolve(
 
 		require_action( q, exit, err = E_OUTOFMEMORY );
 
-		//
-		// parse the text record.
-		//
 
-		err = self->ParseTextRecord( service, q, inTXTSize, inTXT );
-		require_noerr( err, exit );
-
+		q->name		= qname;
+		q->priority = qpriority;
+		
 		service->queues.push_back( q );
 
 		//
@@ -1033,7 +1033,7 @@ CPrinterSetupWizardSheet::OnQuery(
 
 		require_action( q, exit, err = E_OUTOFMEMORY );
 
-		err = service->printer->window->ParseTextRecord( service, q, inRDLen, inTXT );
+		err = service->printer->window->ParseTextRecord( service, inRDLen, inTXT, q->name, q->priority );
 		require_noerr( err, exit );
 
 		//
@@ -1512,11 +1512,8 @@ exit:
 
 
 OSStatus
-CPrinterSetupWizardSheet::ParseTextRecord( Service * service, Queue * q, uint16_t inTXTSize, const char * inTXT )
+CPrinterSetupWizardSheet::ParseTextRecord( Service * service, uint16_t inTXTSize, const char * inTXT, CString & qname, uint32_t & qpriority )
 {
-	check( service );
-	check( q );
-
 	// <rdar://problem/3946587> Use TXTRecord APIs declared in dns_sd.h
 	
 	bool			qtotalDefined	= false;
@@ -1527,11 +1524,11 @@ CPrinterSetupWizardSheet::ParseTextRecord( Service * service, Queue * q, uint16_
 
 	// <rdar://problem/3987680> Default to queue "lp"
 
-	q->name = L"lp";
+	qname = L"lp";
 
 	// <rdar://problem/4003710> Default pdl key to be "application/postscript"
 
-	q->pdl = L"application/postscript";
+	service->pdl = L"application/postscript";
 
 	if ( ( val = TXTRecordGetValuePtr( inTXTSize, inTXT, "rp", &len ) ) != NULL )
 	{
@@ -1540,7 +1537,7 @@ CPrinterSetupWizardSheet::ParseTextRecord( Service * service, Queue * q, uint16_
 		memcpy( buf, val, len );
 		buf[len] = '\0';
 
-		err = UTF8StringToStringObject( buf, q->name );
+		err = UTF8StringToStringObject( buf, qname );
 		require_noerr( err, exit );
 	}
 	
@@ -1551,7 +1548,7 @@ CPrinterSetupWizardSheet::ParseTextRecord( Service * service, Queue * q, uint16_
 		memcpy( buf, val, len );
 		buf[len] = '\0';
 
-		err = UTF8StringToStringObject( buf, q->pdl );
+		err = UTF8StringToStringObject( buf, service->pdl );
 		require_noerr( err, exit );
 	}
 	
@@ -1563,7 +1560,7 @@ CPrinterSetupWizardSheet::ParseTextRecord( Service * service, Queue * q, uint16_
 		memcpy( buf, val, len );
 		buf[len] = '\0';
 
-		err = UTF8StringToStringObject( buf, q->usb_MFG );
+		err = UTF8StringToStringObject( buf, service->usb_MFG );
 		require_noerr( err, exit );
 	}
 	
@@ -1575,7 +1572,7 @@ CPrinterSetupWizardSheet::ParseTextRecord( Service * service, Queue * q, uint16_
 		memcpy( buf, val, len );
 		buf[len] = '\0';
 
-		err = UTF8StringToStringObject( buf, q->usb_MDL );
+		err = UTF8StringToStringObject( buf, service->usb_MDL );
 		require_noerr( err, exit );
 	}
 
@@ -1586,7 +1583,7 @@ CPrinterSetupWizardSheet::ParseTextRecord( Service * service, Queue * q, uint16_
 		memcpy( buf, val, len );
 		buf[len] = '\0';
 
-		err = UTF8StringToStringObject( buf, q->description );
+		err = UTF8StringToStringObject( buf, service->description );
 		require_noerr( err, exit );
 	}
 		
@@ -1597,7 +1594,7 @@ CPrinterSetupWizardSheet::ParseTextRecord( Service * service, Queue * q, uint16_
 		memcpy( buf, val, len );
 		buf[len] = '\0';
 
-		err = UTF8StringToStringObject( buf, q->product );
+		err = UTF8StringToStringObject( buf, service->product );
 		require_noerr( err, exit );
 	}
 
@@ -1608,7 +1605,7 @@ CPrinterSetupWizardSheet::ParseTextRecord( Service * service, Queue * q, uint16_
 		memcpy( buf, val, len );
 		buf[len] = '\0';
 
-		err = UTF8StringToStringObject( buf, q->location );
+		err = UTF8StringToStringObject( buf, service->location );
 		require_noerr( err, exit );
 	}
 
@@ -1630,20 +1627,20 @@ CPrinterSetupWizardSheet::ParseTextRecord( Service * service, Queue * q, uint16_
 		memcpy( buf, val, len );
 		buf[len] = '\0';
 
-		q->priority = atoi( buf );
+		qpriority = atoi( buf );
 	}
 
 exit:
 
 	// The following code is to fix a problem with older HP 
 	// printers that don't include "qtotal" in their text
-	// record.  We'll check to see if the q->name is "TEXT"
+	// record.  We'll check to see if the qname is "TEXT"
 	// and if so, we're going to modify it to be "lp" so
 	// that we don't use the wrong queue
 
-	if ( !err && !qtotalDefined && ( q->name == L"TEXT" ) )
+	if ( !err && !qtotalDefined && ( qname == L"TEXT" ) )
 	{
-		q->name = "lp";
+		qname = "lp";
 	}
 
 	return err;

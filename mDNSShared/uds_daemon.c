@@ -24,6 +24,9 @@
     Change History (most recent first):
 
 $Log: uds_daemon.c,v $
+Revision 1.183  2005/06/13 22:39:11  cheshire
+<rdar://problem/4144870> Missing return statement in handle_enum_request() error handling
+
 Revision 1.182  2005/03/21 00:39:31  shersche
 <rdar://problem/4021486> Fix build warnings on Win32 platform
 
@@ -2890,6 +2893,7 @@ static void handle_enum_request(request_state *rstate)
 		deliver_error(rstate, mStatus_BadParamErr);
 		abort_request(rstate);
 		unlink_request(rstate);
+		return;
     	}
 
     // allocate context structures

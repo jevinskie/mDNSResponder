@@ -13,7 +13,7 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\Debug\ExplorerPlugin.Resources"
+			OutputDirectory=".\Debug\Resources\ExplorerPlugin.dll.Resources"
 			IntermediateDirectory=".\Debug"
 			ConfigurationType="2"
 			UseOfMFC="1"
@@ -70,7 +70,8 @@
 			<Tool
 				Name="VCPreLinkEventTool"
 				Description="Building Output Directories"
-				CommandLine="if not exist Debug\ExplorerPlugin.Resources mkdir Debug\ExplorerPlugin.Resources"/>
+				CommandLine="if not exist Debug\Resources mkdir Debug\Resources
+if not exist Debug\Resources\ExplorerPlugin.dll.Resources mkdir Debug\Resources\ExplorerPlugin.dll.Resources"/>
 			<Tool
 				Name="VCResourceCompilerTool"
 				PreprocessorDefinitions="_DEBUG"
@@ -83,7 +84,7 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\Release\Root\Program Files\Bonjour\ExplorerPlugin.Resources"
+			OutputDirectory=".\Release\Root\Program Files\Bonjour\Resources\ExplorerPlugin.dll.Resources"
 			IntermediateDirectory=".\Release"
 			ConfigurationType="2"
 			UseOfMFC="1"
@@ -147,7 +148,8 @@
 				CommandLine="if not exist Release\Root mkdir Release\Root
 if not exist &quot;Release\Root\Program Files&quot; mkdir &quot;Release\Root\Program Files&quot;
 if not exist &quot;Release\Root\Program Files\Bonjour&quot; mkdir &quot;Release\Root\Program Files\Bonjour&quot;
-if not exist &quot;Release\Root\Program Files\Bonjour\ExplorerPlugin.Resources&quot; mkdir &quot;Release\Root\Program Files\Bonjour\ExplorerPlugin.Resources&quot;"/>
+if not exist &quot;Release\Root\Program Files\Bonjour\Resources&quot; mkdir &quot;Release\Root\Program Files\Bonjour\Resources&quot;
+if not exist &quot;Release\Root\Program Files\Bonjour\Resources\ExplorerPlugin.dll.Resources&quot; mkdir &quot;Release\Root\Program Files\Bonjour\Resources\ExplorerPlugin.dll.Resources&quot;"/>
 			<Tool
 				Name="VCResourceCompilerTool"
 				PreprocessorDefinitions="NDEBUG"
