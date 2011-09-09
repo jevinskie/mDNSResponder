@@ -54,8 +54,8 @@ Tool.c is an example client that uses the services of mDNS Core.
 
 ToolWin32.mcp is a CodeWarrior project (CodeWarrior for Windows version 8). 
 ToolWin32.vcproj is a Visual Studio .NET 7 project. These projects build 
-Tool.c to make rendezvous.exe, a small Windows command-line tool to do all 
-the standard Rendezvous stuff on Windows. It has the following features:
+Tool.c to make DNSServiceTest.exe, a small Windows command-line tool to do all 
+the standard DNS-SD stuff on Windows. It has the following features:
 
 - Browse for browsing and/or registration domains.
 - Browse for services.
@@ -67,11 +67,11 @@ For example, if you have a Windows machine running a Web server,
 then you can make it advertise that it is offering HTTP on port 80
 with the following command:
 
-rendezvous -rs "Windows Web Server" "_http._tcp." "local." 80 ""
+DNSServiceTest -rs "Windows Web Server" "_http._tcp." "local." 80 ""
 
 To search for AFP servers, use this:
 
-rendezvous -bs "_afpovertcp._tcp." "local."
+DNSServiceTest -bs "_afpovertcp._tcp." "local."
 
 You can also do multiple things at once (e.g. register a service and
 browse for it so one instance of the app can be used for testing).
@@ -79,7 +79,7 @@ Multiple instances can also be run on the same machine to discover each
 other. There is a -help command to show all the commands, their
 parameters, and some examples of using it.
 
-RendezvousBrowser contains the source code for a graphical browser application 
+DNSServiceBrowser contains the source code for a graphical browser application 
 for Windows CE/PocketPC. The Windows CE/PocketPC version requires Microsoft 
 eMbedded C++ 4.0 with SP2 installed and the PocketPC 2003 SDK.
 

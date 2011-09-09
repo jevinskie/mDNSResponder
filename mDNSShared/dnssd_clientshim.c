@@ -3,8 +3,6 @@
  * 
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -23,8 +21,8 @@
  * @APPLE_LICENSE_HEADER_END@
 
  * This file defines a simple shim layer between a client calling the "/usr/include/dns_sd.h" APIs
- * and an implementation of mDNSCore ("mDNSClientAPI.h" APIs) in the same address space.
- * When the client calls a dns_sd.h function, the shim calls the corresponding mDNSClientAPI.h
+ * and an implementation of mDNSCore ("mDNSEmbeddedAPI.h" APIs) in the same address space.
+ * When the client calls a dns_sd.h function, the shim calls the corresponding mDNSEmbeddedAPI.h
  * function, and when mDNSCore calls the shim's callback, we call through to the client's callback.
  * The shim is responsible for two main things:
  * - converting string parameters between C string format and native DNS format,
@@ -33,6 +31,23 @@
 	Change History (most recent first):
 
 $Log: dnssd_clientshim.c,v $
+Revision 1.7  2004/12/10 04:08:43  cheshire
+Added comments about autoname and autorename
+
+Revision 1.6  2004/10/19 21:33:22  cheshire
+<rdar://problem/3844991> Cannot resolve non-local registrations using the mach API
+Added flag 'kDNSServiceFlagsForceMulticast'. Passing through an interface id for a unicast name
+doesn't force multicast unless you set this flag to indicate explicitly that this is what you want
+
+Revision 1.5  2004/09/21 23:29:51  cheshire
+<rdar://problem/3680045> DNSServiceResolve should delay sending packets
+
+Revision 1.4  2004/09/17 01:08:55  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
 Revision 1.3  2004/05/27 06:26:31  cheshire
 Add shim for DNSServiceQueryRecord()
 
@@ -46,7 +61,7 @@ like Muse Research who want to be able to use mDNS/DNS-SD from GPL-licensed code
  */
 
 #include "dns_sd.h"				// Defines the interface to the client layer above
-#include "mDNSClientAPI.h"		// The interface we're building on top of
+#include "mDNSEmbeddedAPI.h"		// The interface we're building on top of
 extern mDNS mDNSStorage;		// We need to pass the address of this storage to the lower-layer functions
 
 #if MDNS_BUILDINGSHAREDLIBRARY || MDNS_BUILDINGSTUBLIBRARY
@@ -75,8 +90,8 @@ typedef struct
 	mDNS_DirectOP_Dispose  *disposefn;
 	DNSServiceRegisterReply callback;
 	void                   *context;
-	mDNSBool                autoname;
-	mDNSBool                autorename;
+	mDNSBool                autoname;		// Set if this name is tied to the Computer Name
+	mDNSBool                autorename;		// Set if we just got a name conflict and now need to automatically pick a new name
 	domainlabel             name;
 	ServiceRecordSet        s;
 	} mDNS_DirectOP_Register;
@@ -431,7 +446,7 @@ DNSServiceErrorType DNSServiceBrowse
 	x->q.QuestionContext = x;
 
 	// Do the operation
-	err = mDNS_StartBrowse(&mDNSStorage, &x->q, &t, &d, mDNSInterface_Any, FoundInstance, x);
+	err = mDNS_StartBrowse(&mDNSStorage, &x->q, &t, &d, mDNSInterface_Any, (flags & kDNSServiceFlagsForceMulticast) != 0, FoundInstance, x);
 	if (err) { mDNSPlatformMemFree(x); errormsg = "mDNS_StartBrowse"; goto fail; }
 
 	// Succeeded: Wrap up and return
@@ -524,6 +539,9 @@ DNSServiceErrorType DNSServiceResolve
 	AssignDomainName(x->qSRV.qname, srv);
 	x->qSRV.qtype               = kDNSType_SRV;
 	x->qSRV.qclass              = kDNSClass_IN;
+	x->qSRV.LongLived           = mDNSfalse;
+	x->qSRV.ExpectUnique        = mDNStrue;
+	x->qSRV.ForceMCast          = mDNSfalse;
 	x->qSRV.QuestionCallback    = FoundServiceInfo;
 	x->qSRV.QuestionContext     = x;
 
@@ -533,6 +551,9 @@ DNSServiceErrorType DNSServiceResolve
 	AssignDomainName(x->qTXT.qname, srv);
 	x->qTXT.qtype               = kDNSType_TXT;
 	x->qTXT.qclass              = kDNSClass_IN;
+	x->qTXT.LongLived           = mDNSfalse;
+	x->qTXT.ExpectUnique        = mDNStrue;
+	x->qTXT.ForceMCast          = mDNSfalse;
 	x->qTXT.QuestionCallback    = FoundServiceInfo;
 	x->qTXT.QuestionContext     = x;
 
@@ -652,6 +673,9 @@ DNSServiceErrorType DNSServiceQueryRecord
 	MakeDomainNameFromDNSNameString(&x->q.qname, fullname);
 	x->q.qtype               = rrtype;
 	x->q.qclass              = rrclass;
+	x->q.LongLived           = (flags & kDNSServiceFlagsLongLivedQuery) != 0;
+	x->q.ExpectUnique        = mDNSfalse;
+	x->q.ForceMCast          = (flags & kDNSServiceFlagsForceMulticast) != 0;
 	x->q.QuestionCallback    = DNSServiceQueryRecordResponse;
 	x->q.QuestionContext     = x;
 

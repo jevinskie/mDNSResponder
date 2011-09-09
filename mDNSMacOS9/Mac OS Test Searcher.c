@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,20 @@
     Change History (most recent first):
 
 $Log: Mac\040OS\040Test\040Searcher.c,v $
+Revision 1.20  2004/10/19 21:33:18  cheshire
+<rdar://problem/3844991> Cannot resolve non-local registrations using the mach API
+Added flag 'kDNSServiceFlagsForceMulticast'. Passing through an interface id for a unicast name
+doesn't force multicast unless you set this flag to indicate explicitly that this is what you want
+
+Revision 1.19  2004/09/17 01:08:50  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.18  2004/09/16 21:59:16  cheshire
+For consistency with zerov6Addr, rename zeroIPAddr to zerov4Addr
+
 Revision 1.17  2004/06/10 04:37:27  cheshire
 Add new parameter in mDNS_GetDomains()
 
@@ -51,7 +63,7 @@ Update to APSL 2.0
 #include <Events.h>						// For WaitNextEvent()
 #include <SIOUX.h>						// For SIOUXHandleOneEvent()
 
-#include "mDNSClientAPI.h"				// Defines the interface to the client layer above
+#include "mDNSEmbeddedAPI.h"			// Defines the interface to the client layer above
 #include "mDNSMacOS9.h"					// Defines the specific types needed to run mDNS on this platform
 
 typedef struct
@@ -155,7 +167,7 @@ static void FoundInstance(mDNS *const m, DNSQuestion *question, const ResourceRe
 	info->i.name          = answer->rdata->u.name;
 	info->i.InterfaceID   = answer->InterfaceID;
 	info->i.ip.type		  = mDNSAddrType_IPv4;
-	info->i.ip.ip.v4      = zeroIPAddr;
+	info->i.ip.ip.v4      = zerov4Addr;
 	info->i.port          = zeroIPPort;
 	info->add             = AddRecord;
 	info->dom             = mDNSfalse;
@@ -188,7 +200,7 @@ static void FoundDomain(mDNS *const m, DNSQuestion *question, const ResourceReco
 	info->i.name          = answer->rdata->u.name;
 	info->i.InterfaceID   = answer->InterfaceID;
 	info->i.ip.type		  = mDNSAddrType_IPv4;
-	info->i.ip.ip.v4      = zeroIPAddr;
+	info->i.ip.ip.v4      = zerov4Addr;
 	info->i.port          = zeroIPPort;
 	info->add             = AddRecord;
 	info->dom             = mDNStrue;
@@ -253,7 +265,7 @@ int main()
 			printf("\nSending mDNS service lookup queries and waiting for responses...\n\n");
 			MakeDomainNameFromDNSNameString(&srvtype, "_http._tcp.");
 			MakeDomainNameFromDNSNameString(&srvdom, "local.");
-			err = mDNS_StartBrowse(&mDNSStorage, &browsequestion, &srvtype, &srvdom, mDNSInterface_Any, FoundInstance, &services);
+			err = mDNS_StartBrowse(&mDNSStorage, &browsequestion, &srvtype, &srvdom, mDNSInterface_Any, mDNSfalse, FoundInstance, &services);
 			if (err) break;
 			err = mDNS_GetDomains(&mDNSStorage, &domainquestion, mDNS_DomainTypeBrowse, NULL, mDNSInterface_Any, FoundDomain, &services);
 			if (err) break;

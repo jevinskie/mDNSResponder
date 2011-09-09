@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,9 @@
     Change History (most recent first):
 
 $Log: DNSSDUnitTest.java,v $
+Revision 1.4  2004/08/04 01:07:43  rpantos
+Update unit test for <rdar://problems/3731579&3731582>.
+
 Revision 1.3  2004/05/26 01:41:58  cheshire
 Pass proper flags to DNSSD.enumerateDomains
 
@@ -67,19 +68,34 @@ class	DNSSDUnitTest
 		String		a;
 		
 		txtRecord.set( "path", "~/names");
+		txtRecord.set( "rw", (String) null);
+		txtRecord.set( "empty", "");
 		txtRecord.set( "ttl", "4");
 
 		byte[]	rawBytes = txtRecord.getRawBytes();
 		System.out.println( ( new String( rawBytes, 0, rawBytes.length)) + " has count " + 
 								String.valueOf( txtRecord.size()));
 
+		System.out.println( txtRecord);
 		boolean		ttlPresent = txtRecord.contains( "ttl");
 		System.out.println( "ttl is present: " + ( ttlPresent ? "true" : "false"));
 		boolean		timeoutPresent = txtRecord.contains( "timeout");
 		System.out.println( "timeout is present: " + ( timeoutPresent ? "true" : "false"));
 
-		for ( int i=0; null != ( a = txtRecord.getKey( i)); i++)
-			System.out.println( "attr/val " + String.valueOf( i) + ": " + a + "," + txtRecord.getValueAsString( i));
+		txtRecord.set( "path", "~/numbers");
+		System.out.println( txtRecord);
+
+		txtRecord.remove( "ttl");
+		System.out.println( txtRecord);
+
+		txtRecord.remove( "path");
+		System.out.println( txtRecord);
+
+		txtRecord.remove( "at");
+		System.out.println( txtRecord);
+
+		txtRecord.set( "rw", "1");
+		System.out.println( txtRecord);
 	}
 
 	public void	run() throws DNSSDException

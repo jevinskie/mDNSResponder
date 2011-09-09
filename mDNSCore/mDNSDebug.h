@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,9 @@
     Change History (most recent first):
 
 $Log: mDNSDebug.h,v $
+Revision 1.24  2004/09/16 01:58:21  cheshire
+Fix compiler warnings
+
 Revision 1.23  2004/05/18 23:51:25  cheshire
 Tidy up all checkin comments to use consistent "<rdar://problem/xxxxxxx>" format for bug numbers
 
@@ -88,6 +89,7 @@ Merge in license terms from Quinn's copy, in preparation for Darwin release
 // (If you edit the file here to turn on MDNS_DEBUGMSGS while you're debugging some code, be careful
 // not to accidentally check-in that change by mistake when you check in your other changes.)
 
+//#undef MDNS_DEBUGMSGS
 //#define MDNS_DEBUGMSGS 2
 
 // Set MDNS_CHECK_PRINTF_STYLE_FUNCTIONS to 1 to enable extra GCC compiler warnings
@@ -136,8 +138,8 @@ extern void verbosedebugf_(const char *format, ...) IS_A_PRINTF_STYLE_FUNCTION(1
 // LogMsg is used even in shipping code, to write truly serious error messages to syslog (or equivalent)
 extern int	mDNS_DebugMode;	// If non-zero, LogMsg() writes to stderr instead of syslog
 extern void LogMsg(const char *format, ...) IS_A_PRINTF_STYLE_FUNCTION(1,2);
-extern void LogMsgIdent(const char *ident, const char *format, ...);
-extern void LogMsgNoIdent(const char *format, ...);
+extern void LogMsgIdent(const char *ident, const char *format, ...) IS_A_PRINTF_STYLE_FUNCTION(2,3);
+extern void LogMsgNoIdent(const char *format, ...) IS_A_PRINTF_STYLE_FUNCTION(1,2);
 
 // Set this symbol to 1 to do extra debug checks on malloc() and free()
 // Set this symbol to 2 to write a log message for every malloc() and free()

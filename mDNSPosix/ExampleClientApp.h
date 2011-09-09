@@ -1,9 +1,8 @@
-/*
+/* -*- Mode: C; tab-width: 4 -*-
+ *
  * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
- * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -25,6 +24,9 @@
     Change History (most recent first):
 
 $Log: ExampleClientApp.h,v $
+Revision 1.6  2004/11/30 22:37:00  cheshire
+Update copyright dates and add "Mode: C; tab-width: 4" headers
+
 Revision 1.5  2003/08/12 19:56:26  cheshire
 Update to APSL 2.0
 

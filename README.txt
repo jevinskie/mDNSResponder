@@ -141,3 +141,26 @@ instead of embedding their own mDNSResponder.
 
 See ReadMe.txt in the mDNSPosix directory for specific details of
 building an mDNSResponder on a POSIX Operating System.
+
+
+Compiling on Older C Compilers
+------------------------------
+
+We go to some lengths to make the code portable, but //-style comments
+are one of the modern conveniences we can't live without.
+
+If your C compiler doesn't understand these comments, you can transform
+them into classical K&R /* style */ comments with a quick GREP
+search-and-replace pattern.
+
+In BBEdit on the Mac:
+1. Open the "Find" dialog window and make sure "Use Grep" is selected
+2. Search For  : ([^:])//(.*)
+3. Replace With: \1/*\2 */
+4. Drag your mDNSResponder source code folder to the Multi-File search pane
+5. Click "Replace All"
+
+For the more command-line oriented, cd into your mDNSResponder source code
+directory and execute the following command (all one line):
+
+find mDNSResponder \( -name \*.c\* -or -name \*.h \) -exec sed -i .orig -e 's,^//\(.*\),/*\1 */,' -e '/\/\*/\!s,\([^:]\)//\(.*\),\1/*\2 */,' {} \;

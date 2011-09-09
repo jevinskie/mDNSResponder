@@ -20,6 +20,12 @@
 # @APPLE_LICENSE_HEADER_END@
 #
 # $Log: Makefile,v $
+# Revision 1.6  2004/09/24 21:15:26  cheshire
+# <rdar://problem/3724985> Library "libmdns" misnamed; should be "libdns_sd"
+#
+# Revision 1.5  2004/09/02 17:32:45  cheshire
+# Look for headers in ../mDNSShared before we go to /usr/include
+#
 # Revision 1.4  2004/05/21 17:25:56  cheshire
 # Fixes to make sample client work on Linux
 #
@@ -43,9 +49,9 @@
 #############################################################################
 
 
-# If library /usr/lib/libmdns.* exists, then link it
-ifneq "$(wildcard /usr/lib/libmdns.*)" ""
-LIBS = -lmdns
+# If library /usr/lib/libdns_sd.* exists, then link it
+ifneq "$(wildcard /usr/lib/libdns_sd.*)" ""
+LIBS = -ldns_sd
 else
 LIBS =
 endif
@@ -59,4 +65,4 @@ build:
 	mkdir build
 
 build/dns-sd: build dns-sd.c
-	cc $(filter %.c %.o, $+) $(LIBS) -o $@
+	cc $(filter %.c %.o, $+) $(LIBS) -I../mDNSShared -o $@

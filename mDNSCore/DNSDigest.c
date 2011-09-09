@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,29 @@
     Change History (most recent first):
 
 $Log: DNSDigest.c,v $
+Revision 1.12  2004/12/03 07:20:50  ksekar
+<rdar://problem/3674208> Wide-Area: Registration of large TXT record fails
+
+Revision 1.11  2004/12/02 01:10:27  cheshire
+Fix to compile cleanly on 64-bit x86
+
+Revision 1.10  2004/11/01 20:36:04  ksekar
+<rdar://problem/3802395> mDNSResponder should not receive Keychain Notifications
+
+Revision 1.9  2004/10/26 09:00:12  cheshire
+Save a few bytes by creating HMAC_MD5_AlgName as a C string instead of a 256-byte object
+
+Revision 1.8  2004/09/17 01:08:48  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.7  2004/08/15 18:36:38  cheshire
+Don't use strcpy() and strlen() on "struct domainname" objects;
+use AssignDomainName() and DomainNameLength() instead
+(A "struct domainname" is a collection of packed pascal strings, not a C string.)
+
 Revision 1.6  2004/06/02 00:17:46  ksekar
 Referenced original OpenSSL license headers in source file description.
 
@@ -53,7 +74,7 @@ Support for TSIG signed dynamic updates.
 extern "C" {
 #endif
 
-#include "mDNSClientAPI.h"
+#include "mDNSEmbeddedAPI.h"
 #include "DNSCommon.h"
 
 // Disable certain benign warnings with Microsoft compilers
@@ -661,7 +682,7 @@ void md5_block_data_order (MD5_CTX *c, const void *p,int num);
  * Time for some action:-)
  */
 
-int HASH_UPDATE (HASH_CTX *c, const void *data_, mDNSu32 len)
+int HASH_UPDATE (HASH_CTX *c, const void *data_, unsigned long len)
 	{
 	const unsigned char *data=(const unsigned char *)data_;
 	register HASH_LONG * p;
@@ -1297,13 +1318,10 @@ mDNSexport mDNSs32 DNSDigest_Base64ToBin(const char *src, mDNSu8 *target, mDNSu3
 #define HMAC_OPAD   0x5c
 #define MD5_LEN     16
 
-static domainname HMAC_MD5_AlgName = { { '\010', 'h', 'm', 'a', 'c', '-', 'm', 'd', '5',
-										 '\007', 's', 'i', 'g', '-', 'a', 'l', 'g',
-										 '\003', 'r', 'e', 'g',
-										 '\003', 'i', 'n', 't',
-										 '\0' } };
+#define HMAC_MD5_AlgName (*(const domainname*) "\010" "hmac-md5" "\007" "sig-alg" "\003" "reg" "\003" "int")
+
 // Adapted from Appendix, RFC 2104
-mDNSexport void DNSDigest_ConstructHMACKey(uDNS_AuthInfo *info, mDNSu8 *key, mDNSu32 len)		
+mDNSexport void DNSDigest_ConstructHMACKey(uDNS_AuthInfo *info, const mDNSu8 *key, mDNSu32 len)		
 	{
 	MD5_CTX k;
 	mDNSu8 buf[MD5_LEN];
@@ -1354,11 +1372,10 @@ mDNSexport mDNSu8 *DNSDigest_SignMessage(DNSMessage *msg, mDNSu8 **end, mDNSu16 
 	// Construct TSIG RR, digesting variables as apporpriate
 	mDNSPlatformMemZero(&tsig, sizeof(AuthRecord));	
 	mDNS_SetupResourceRecord(&tsig, mDNSNULL, 0, kDNSType_TSIG, 0, kDNSRecordTypeKnownUnique, mDNSNULL, mDNSNULL);
-	rdata = tsig.resrec.rdata->u.data;
 
 	// key name
-	mDNSPlatformStrCopy(info->keyname.c, tsig.resrec.name.c);
-	MD5_Update(&c, info->keyname.c, mDNSPlatformStrLen(info->keyname.c)+1);
+	AssignDomainName(tsig.resrec.name, info->keyname);
+	MD5_Update(&c, info->keyname.c, DomainNameLength(&info->keyname));
 
 	// class
 	tsig.resrec.rrclass = kDNSQClass_ANY;
@@ -1370,9 +1387,9 @@ mDNSexport mDNSu8 *DNSDigest_SignMessage(DNSMessage *msg, mDNSu8 **end, mDNSu16 
 	MD5_Update(&c, (mDNSu8 *)&tsig.resrec.rroriginalttl, sizeof(tsig.resrec.rroriginalttl));
 	
 	// alg name
-	mDNSPlatformStrCopy(HMAC_MD5_AlgName.c, rdata);     
-	len = mDNSPlatformStrLen(HMAC_MD5_AlgName.c) + 1;
-	rdata += len;
+	AssignDomainName(tsig.resrec.rdata->u.name, HMAC_MD5_AlgName);
+	len = DomainNameLength(&HMAC_MD5_AlgName);
+	rdata = tsig.resrec.rdata->u.data + len;
 	MD5_Update(&c, HMAC_MD5_AlgName.c, len);
 
 	// time
@@ -1392,7 +1409,8 @@ mDNSexport mDNSu8 *DNSDigest_SignMessage(DNSMessage *msg, mDNSu8 **end, mDNSu16 
 
 	// fudge
 	buf = mDNSOpaque16fromIntVal(300);     // 300 sec is fudge recommended in RFC 2485
-	((mDNSOpaque16 *)rdata)->NotAnInteger = buf.NotAnInteger;
+	rdata[0] = buf.b[0];
+	rdata[1] = buf.b[1];
 	rdata += sizeof(mDNSOpaque16);
 	MD5_Update(&c, buf.b, sizeof(mDNSOpaque16));
 
@@ -1411,19 +1429,21 @@ mDNSexport mDNSu8 *DNSDigest_SignMessage(DNSMessage *msg, mDNSu8 **end, mDNSu16 
 	MD5_Final(digest, &c);
 
 	// set remaining rdata fields
-	*(mDNSOpaque16 *)rdata = mDNSOpaque16fromIntVal(MD5_LEN);             // MAC size	
+	rdata[0] = (mDNSu8)((MD5_LEN >> 8)  & 0xff);
+	rdata[1] = (mDNSu8)( MD5_LEN        & 0xff);
 	rdata += sizeof(mDNSOpaque16);
 	mDNSPlatformMemCopy(digest, rdata, MD5_LEN);                          // MAC
 	rdata += MD5_LEN;
-	((mDNSOpaque16 *)rdata)->NotAnInteger = msg->h.id.NotAnInteger;       // original ID
-	rdata += sizeof(mDNSOpaque16);
-	((mDNSOpaque16 *)rdata)->NotAnInteger = 0;                            // no error
-	rdata += sizeof(mDNSOpaque16);
-	((mDNSOpaque16 *)rdata)->NotAnInteger = 0;                            // other data len
-	rdata += sizeof(mDNSOpaque16);
+	rdata[0] = msg->h.id.b[0];                                            // original ID
+	rdata[1] = msg->h.id.b[1];
+	rdata[2] = 0;                                                         // no error
+	rdata[3] = 0;
+	rdata[4] = 0;                                                         // other data len
+	rdata[5] = 0;
+	rdata += 6;
 	
 	tsig.resrec.rdlength = (mDNSu16)(rdata - tsig.resrec.rdata->u.data);
-	*end = PutResourceRecordTTL(msg, ptr, numAdditionals, &tsig.resrec, 0);
+	*end = PutResourceRecordTTLJumbo(msg, ptr, numAdditionals, &tsig.resrec, 0);
 	if (!*end) { LogMsg("ERROR: DNSDigest_SignMessage - could not put TSIG"); return mDNSNULL; }
 
 	// update num additionals
@@ -1433,7 +1453,6 @@ mDNSexport mDNSu8 *DNSDigest_SignMessage(DNSMessage *msg, mDNSu8 **end, mDNSu16 
 
 	return *end;
 	}
-	
 
 #ifdef __cplusplus
 }

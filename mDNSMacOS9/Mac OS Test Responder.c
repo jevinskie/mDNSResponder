@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,16 @@
     Change History (most recent first):
 
 $Log: Mac\040OS\040Test\040Responder.c,v $
+Revision 1.23  2004/09/17 01:08:50  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.22  2004/08/13 23:25:01  cheshire
+Now that we do both uDNS and mDNS, global replace "m->hostname" with
+"m->MulticastHostname" for clarity
+
 Revision 1.21  2004/03/12 21:30:25  cheshire
 Build a System-Context Shared Library from mDNSCore, for the benefit of developers
 like Muse Research who want to be able to use mDNS/DNS-SD from GPL-licensed code.
@@ -53,7 +61,7 @@ Update to APSL 2.0
 #include <Events.h>						// For WaitNextEvent()
 #include <SIOUX.h>						// For SIOUXHandleOneEvent()
 
-#include "mDNSClientAPI.h"				// Defines the interface to the client layer above
+#include "mDNSEmbeddedAPI.h"			// Defines the interface to the client layer above
 
 #include "mDNSMacOS9.h"					// Defines the specific types needed to run mDNS on this platform
 
@@ -164,7 +172,7 @@ mDNSlocal OSStatus mDNSResponderTestSetup(mDNS *m)
 	char buffer[MAX_ESCAPED_DOMAIN_NAME];
 	mDNSv4Addr ip = m->HostInterfaces->ip.ip.v4;
 	
-	ConvertDomainNameToCString(&m->hostname, buffer);
+	ConvertDomainNameToCString(&m->MulticastHostname, buffer);
 	printf("Name %s\n", buffer);
 	printf("IP   %d.%d.%d.%d\n", ip.b[0], ip.b[1], ip.b[2], ip.b[3]);
 

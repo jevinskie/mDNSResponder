@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -31,6 +29,15 @@
     Change History (most recent first):
 
 $Log: mDNSDebug.c,v $
+Revision 1.5  2004/09/17 01:08:55  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.4  2004/06/11 22:36:51  cheshire
+Fixes for compatibility with Windows
+
 Revision 1.3  2004/01/28 21:14:23  cheshire
 Reconcile debug_mode and gDebugLogging into a single flag (mDNS_DebugMode)
 
@@ -45,9 +52,20 @@ Changes necessary to support mDNSResponder on Linux.
 #include "mDNSDebug.h"
 
 #include <stdio.h>
-#include <syslog.h>
 
-#include "mDNSClientAPI.h"
+#if defined(WIN32)
+// Need to add Windows syslog support here
+#define LOG_PID 0x01
+#define LOG_CONS 0x02
+#define LOG_PERROR 0x20
+#define openlog(A,B,C) (void)(A); (void)(B)
+#define syslog(A,B,C)
+#define closelog()
+#else
+#include <syslog.h>
+#endif
+
+#include "mDNSEmbeddedAPI.h"
 
 #if MDNS_DEBUGMSGS
 mDNSexport int mDNS_DebugMode = mDNStrue;
@@ -98,13 +116,7 @@ mDNSlocal void WriteLogMsg(const char *ident, const char *buffer, int logoptflag
 		}
 	}
 
-mDNSlocal void LogMsgWithIdent(const char *ident, const char *format, va_list ptr)
-	{
-	unsigned char buffer[512];
-	buffer[mDNS_vsnprintf((char *)buffer, sizeof(buffer), format, ptr)] = 0;
-	WriteLogMsg(ident, buffer, ident && *ident ? LOG_PID : 0);
-	}
-
+// Log message with default "mDNSResponder" ident string at the start
 mDNSexport void LogMsg(const char *format, ...)
 	{
 	unsigned char buffer[512];
@@ -115,18 +127,24 @@ mDNSexport void LogMsg(const char *format, ...)
 	WriteLogMsg("mDNSResponder", buffer, 0);
 	}
 
+// Log message with specified ident string at the start
 mDNSexport void LogMsgIdent(const char *ident, const char *format, ...)
 	{
+	unsigned char buffer[512];
 	va_list ptr;
 	va_start(ptr,format);
-	LogMsgWithIdent(ident, format, ptr);
+	buffer[mDNS_vsnprintf((char *)buffer, sizeof(buffer), format, ptr)] = 0;
 	va_end(ptr);
+	WriteLogMsg(ident, buffer, ident && *ident ? LOG_PID : 0);
 	}
 
+// Log message with no ident string at the start
 mDNSexport void LogMsgNoIdent(const char *format, ...)
 	{
+	unsigned char buffer[512];
 	va_list ptr;
 	va_start(ptr,format);
-	LogMsgWithIdent("", format, ptr);
+	buffer[mDNS_vsnprintf((char *)buffer, sizeof(buffer), format, ptr)] = 0;
 	va_end(ptr);
+	WriteLogMsg("", buffer, 0);
 	}

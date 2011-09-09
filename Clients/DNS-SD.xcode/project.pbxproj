@@ -151,7 +151,7 @@
 				GCC_WARN_ABOUT_MISSING_PROTOTYPES = NO;
 				GCC_WARN_FOUR_CHARACTER_CONSTANTS = NO;
 				GCC_WARN_UNKNOWN_PRAGMAS = NO;
-				HEADER_SEARCH_PATHS = "";
+				HEADER_SEARCH_PATHS = ../mDNSShared;
 				INSTALL_PATH = "$(HOME)/bin";
 				LIBRARY_SEARCH_PATHS = "";
 				OTHER_CFLAGS = "";
@@ -282,6 +282,7 @@
 				GCC_PREFIX_HEADER = "$(SYSTEM_LIBRARY_DIR)/Frameworks/AppKit.framework/Headers/AppKit.h";
 				GCC_WARN_FOUR_CHARACTER_CONSTANTS = NO;
 				GCC_WARN_UNKNOWN_PRAGMAS = NO;
+				HEADER_SEARCH_PATHS = ../mDNSShared;
 				INFOPLIST_FILE = "DNSServiceBrowser-Info.plist";
 				INSTALL_PATH = "$(USER_APPS_DIR)";
 				OTHER_CFLAGS = "";
@@ -396,7 +397,8 @@
 				GCC_PREFIX_HEADER = "$(SYSTEM_LIBRARY_DIR)/Frameworks/AppKit.framework/Headers/AppKit.h";
 				GCC_WARN_FOUR_CHARACTER_CONSTANTS = NO;
 				GCC_WARN_UNKNOWN_PRAGMAS = NO;
-				INFOPLIST_FILE = "DNSServiceRegistration-Info.plist";
+				HEADER_SEARCH_PATHS = ../mDNSShared;
+				INFOPLIST_FILE = "DNSServiceReg-Info.plist";
 				INSTALL_PATH = "$(USER_APPS_DIR)";
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "-framework Foundation -framework AppKit";
@@ -436,7 +438,7 @@
 	<key>CFBundleVersion</key>
 	<string>1.0.0d1</string>
 	<key>NSMainNibFile</key>
-	<string>DNSServiceRegistration</string>
+	<string>DNSServiceReg</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>
@@ -457,7 +459,7 @@
 			isa = PBXContainerItemProxy;
 			proxyType = 1;
 			remoteGlobalIDString = FF1E351206711B5C003DD5BC;
-			remoteInfo = DNSServiceRegistration;
+			remoteInfo = DNSServiceReg;
 		};
 		FF1E351806711B6A003DD5BC = {
 			isa = PBXTargetDependency;
@@ -468,7 +470,7 @@
 			fileEncoding = 4;
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
-			path = DNSServiceRegistration.m;
+			path = DNSServiceReg.m;
 			refType = 4;
 			sourceTree = "<group>";
 		};
@@ -481,7 +483,7 @@
 		FF1E352506711BD6003DD5BC = {
 			isa = PBXFileReference;
 			lastKnownFileType = wrapper.nib;
-			path = DNSServiceRegistration.nib;
+			path = DNSServiceReg.nib;
 			refType = 4;
 			sourceTree = "<group>";
 		};

@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -38,6 +36,12 @@
     Change History (most recent first):
 
 $Log: SamplemDNSClient.c,v $
+Revision 1.46  2004/11/02 01:32:34  cheshire
+<rdar://problem/3861705> Update code so it still compiles when DNSServiceDiscovery.h is deprecated
+
+Revision 1.45  2004/06/15 02:39:47  cheshire
+When displaying error message, only show command name, not entire path
+
 Revision 1.44  2004/05/28 02:20:06  cheshire
 If we allow dot or empty string for domain when resolving a service,
 it should be a synonym for "local"
@@ -80,6 +84,12 @@ Add checkin history header
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <CoreFoundation/CoreFoundation.h>
+
+// We already know this tool is using the old deprecated API (that's its purpose)
+// Since we compile with all warnings treated as errors, we have to turn off the warnings here or the project won't compile
+#include <AvailabilityMacros.h>
+#undef AVAILABLE_MAC_OS_X_VERSION_10_2_AND_LATER_BUT_DEPRECATED
+#define AVAILABLE_MAC_OS_X_VERSION_10_2_AND_LATER_BUT_DEPRECATED
 #include <DNSServiceDiscovery/DNSServiceDiscovery.h>
 
 //*************************************************************************************************************
@@ -322,6 +332,7 @@ static void reg_reply(DNSServiceRegistrationReplyErrorType errorCode, void *cont
 
 int main(int argc, char **argv)
 	{
+	const char *progname = strrchr(argv[0], '/') ? strrchr(argv[0], '/') + 1 : argv[0];
 	char *dom;
 	setlinebuf(stdout);				// Want to see lines as they appear, not block buffered
 
@@ -443,16 +454,16 @@ Exit:
 	return 0;
 
 Fail:
-	fprintf(stderr, "%s -E                  (Enumerate recommended registration domains)\n", argv[0]);
-	fprintf(stderr, "%s -F                      (Enumerate recommended browsing domains)\n", argv[0]);
-	fprintf(stderr, "%s -B        <Type> <Domain>        (Browse for services instances)\n", argv[0]);
-	fprintf(stderr, "%s -L <Name> <Type> <Domain>           (Look up a service instance)\n", argv[0]);
-	fprintf(stderr, "%s -R <Name> <Type> <Domain> <Port> [<TXT>...] (Register a service)\n", argv[0]);
-	fprintf(stderr, "%s -A                      (Test Adding/Updating/Deleting a record)\n", argv[0]);
-	fprintf(stderr, "%s -U                                  (Test updating a TXT record)\n", argv[0]);
-	fprintf(stderr, "%s -N                             (Test adding a large NULL record)\n", argv[0]);
-	fprintf(stderr, "%s -T                            (Test creating a large TXT record)\n", argv[0]);
-	fprintf(stderr, "%s -M      (Test creating a registration with multiple TXT records)\n", argv[0]);
-	fprintf(stderr, "%s -I   (Test registering and then immediately updating TXT record)\n", argv[0]);
+	fprintf(stderr, "%s -E                  (Enumerate recommended registration domains)\n", progname);
+	fprintf(stderr, "%s -F                      (Enumerate recommended browsing domains)\n", progname);
+	fprintf(stderr, "%s -B        <Type> <Domain>        (Browse for services instances)\n", progname);
+	fprintf(stderr, "%s -L <Name> <Type> <Domain>           (Look up a service instance)\n", progname);
+	fprintf(stderr, "%s -R <Name> <Type> <Domain> <Port> [<TXT>...] (Register a service)\n", progname);
+	fprintf(stderr, "%s -A                      (Test Adding/Updating/Deleting a record)\n", progname);
+	fprintf(stderr, "%s -U                                  (Test updating a TXT record)\n", progname);
+	fprintf(stderr, "%s -N                             (Test adding a large NULL record)\n", progname);
+	fprintf(stderr, "%s -T                            (Test creating a large TXT record)\n", progname);
+	fprintf(stderr, "%s -M      (Test creating a registration with multiple TXT records)\n", progname);
+	fprintf(stderr, "%s -I   (Test registering and then immediately updating TXT record)\n", progname);
 	return 0;
 	}

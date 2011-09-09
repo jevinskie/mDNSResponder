@@ -1,9 +1,8 @@
-/*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+/* -*- Mode: C; tab-width: 4 -*-
+ *
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
- * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -38,6 +37,41 @@
     Change History (most recent first):
 
 $Log: Identify.c,v $
+Revision 1.33  2004/11/30 22:37:00  cheshire
+Update copyright dates and add "Mode: C; tab-width: 4" headers
+
+Revision 1.32  2004/10/19 21:33:21  cheshire
+<rdar://problem/3844991> Cannot resolve non-local registrations using the mach API
+Added flag 'kDNSServiceFlagsForceMulticast'. Passing through an interface id for a unicast name
+doesn't force multicast unless you set this flag to indicate explicitly that this is what you want
+
+Revision 1.31  2004/10/16 00:17:00  cheshire
+<rdar://problem/3770558> Replace IP TTL 255 check with local subnet source address check
+
+Revision 1.30  2004/09/21 23:29:51  cheshire
+<rdar://problem/3680045> DNSServiceResolve should delay sending packets
+
+Revision 1.29  2004/09/17 01:08:53  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.28  2004/09/17 00:31:52  cheshire
+For consistency with ipv6, renamed rdata field 'ip' to 'ipv4'
+
+Revision 1.27  2004/09/16 01:58:22  cheshire
+Fix compiler warnings
+
+Revision 1.26  2004/08/24 21:55:07  cheshire
+Don't try to build IPv6 code on systems that don't have IPv6
+
+Revision 1.25  2004/07/20 23:42:37  cheshire
+Update to use only "_services._dns-sd._udp.local." meta-query for service enumeration
+
+Revision 1.24  2004/06/15 02:39:47  cheshire
+When displaying error message, only show command name, not entire path
+
 Revision 1.23  2004/05/18 23:51:26  cheshire
 Tidy up all checkin comments to use consistent "<rdar://problem/xxxxxxx>" format for bug numbers
 
@@ -137,7 +171,7 @@ Add mDNSIdentify tool, used to discover what version of mDNSResponder a particul
 #include <arpa/inet.h>
 #include <signal.h>
 
-#include "mDNSClientAPI.h"// Defines the interface to the mDNS core code
+#include "mDNSEmbeddedAPI.h"// Defines the interface to the mDNS core code
 #include "mDNSPosix.h"    // Defines the specific types needed to run mDNS on this platform
 #include "ExampleClientApp.h"
 
@@ -177,16 +211,16 @@ mDNSlocal mDNSu32 mprintf(const char *format, ...)
 
 mDNSexport void mDNSCoreReceive(mDNS *const m, DNSMessage *const msg, const mDNSu8 *const end,
 	const mDNSAddr *const srcaddr, const mDNSIPPort srcport, const mDNSAddr *const dstaddr, const mDNSIPPort dstport,
-	const mDNSInterfaceID InterfaceID, mDNSu8 ttl)
+	const mDNSInterfaceID InterfaceID)
 	{
+	(void)dstaddr; // Unused
 	// Snag copy of header ID, then call through
 	lastid = msg->h.id;
 	lastsrc = *srcaddr;
 
 	// We *want* to allow off-net unicast responses here.
-	// For now, the simplest way to allow that is to smash the TTL to 255 so that mDNSCore doesn't reject the packet
-	ttl = 255;
-	__MDNS__mDNSCoreReceive(m, msg, end, srcaddr, srcport, dstaddr, dstport, InterfaceID, ttl);
+	// For now, the simplest way to allow that is to pretend it was received via multicast so that mDNSCore doesn't reject the packet
+	__MDNS__mDNSCoreReceive(m, msg, end, srcaddr, srcport, &AllDNSLinkGroup_v4, dstport, InterfaceID);
 	}
 
 static void NameCallback(mDNS *const m, DNSQuestion *question, const ResourceRecord *const answer, mDNSBool AddRecord)
@@ -199,7 +233,7 @@ static void NameCallback(mDNS *const m, DNSQuestion *question, const ResourceRec
 		{
 		ConvertDomainNameToCString(&answer->rdata->u.name, hostname);
 		StopNow = 1;
-		mprintf("%##s %s %##s\n", answer->name.c, DNSTypeName(answer->rrtype), &answer->rdata->u.name.c);
+		mprintf("%##s %s %##s\n", answer->name.c, DNSTypeName(answer->rrtype), answer->rdata->u.name.c);
 		}
 	}
 
@@ -213,9 +247,9 @@ static void InfoCallback(mDNS *const m, DNSQuestion *question, const ResourceRec
 		if (!id.NotAnInteger) id = lastid;
 		NumAnswers++;
 		NumAddr++;
-		mprintf("%##s %s %.4a\n", answer->name.c, DNSTypeName(answer->rrtype), &answer->rdata->u.ip);
+		mprintf("%##s %s %.4a\n", answer->name.c, DNSTypeName(answer->rrtype), &answer->rdata->u.ipv4);
 		hostaddr.type = mDNSAddrType_IPv4;	// Prefer v4 target to v6 target, for now
-		hostaddr.ip.v4 = answer->rdata->u.ip;
+		hostaddr.ip.v4 = answer->rdata->u.ipv4;
 		}
 	else if (answer->rrtype == kDNSType_AAAA)
 		{
@@ -257,7 +291,7 @@ static void ServicesCallback(mDNS *const m, DNSQuestion *question, const Resourc
 		{
 		NumAnswers++;
 		NumAddr++;
-		mprintf("%##s %s %##s\n", answer->name.c, DNSTypeName(answer->rrtype), &answer->rdata->u.name.c);
+		mprintf("%##s %s %##s\n", answer->name.c, DNSTypeName(answer->rrtype), answer->rdata->u.name.c);
 		StopNow = 1;
 		}
 	}
@@ -295,9 +329,12 @@ mDNSlocal mStatus StartQuery(DNSQuestion *q, char *qname, mDNSu16 qtype, const m
 	q->Target           = target ? *target : zeroAddr;
 	q->TargetPort       = MulticastDNSPort;
 	q->TargetQID        = zeroID;
-	q->InterfaceID      = mDNSInterface_ForceMCast;
+	q->InterfaceID      = mDNSInterface_Any;
 	q->qtype            = qtype;
 	q->qclass           = kDNSClass_IN;
+	q->LongLived        = mDNSfalse;
+	q->ExpectUnique     = mDNStrue;
+	q->ForceMCast       = mDNStrue;		// Query via multicast, even for apparently uDNS names like 1.1.1.17.in-addr.arpa.
 	q->QuestionCallback = callback;
 	q->QuestionContext  = NULL;
 
@@ -333,17 +370,20 @@ mDNSlocal int DoQuery(DNSQuestion *q, char *qname, mDNSu16 qtype, const mDNSAddr
 mDNSlocal void HandleSIG(int signal)
 	{
 	(void)signal;	// Unused
-	debugf("");
+	debugf("%s","");
 	debugf("HandleSIG");
 	StopNow = 2;
 	}
 
 mDNSexport int main(int argc, char **argv)
 	{
+	const char *progname = strrchr(argv[0], '/') ? strrchr(argv[0], '/') + 1 : argv[0];
 	int this_arg = 1;
 	mStatus status;
 	struct in_addr s4;
+#if HAVE_IPV6
 	struct in6_addr s6;
+#endif
 	char buffer[256];
 	DNSQuestion q;
 
@@ -382,6 +422,7 @@ mDNSexport int main(int argc, char **argv)
 			DoQuery(&q, buffer, kDNSType_PTR, &target, NameCallback);
 			if (StopNow == 2) break;
 			}
+#if HAVE_IPV6
 		else if (inet_pton(AF_INET6, arg, &s6) == 1)
 			{
 			int i;
@@ -400,6 +441,7 @@ mDNSexport int main(int argc, char **argv)
 			DoQuery(&q, buffer, kDNSType_PTR, &target, NameCallback);
 			if (StopNow == 2) break;
 			}
+#endif
 		else
 			strcpy(hostname, arg);
 	
@@ -409,16 +451,14 @@ mDNSexport int main(int argc, char **argv)
 	
 		if (hardware[0] || software[0])
 			{
-			DNSQuestion q1, q2;
+			DNSQuestion q1;
 			printf("HINFO Hardware: %s\n", hardware);
 			printf("HINFO Software: %s\n", software);
 			// We need to make sure the services query is targeted
 			if (target.type == 0) target = hostaddr;
-			StartQuery(&q1, "_services._mdns._udp.local.",   kDNSQType_ANY, &target, ServicesCallback);
-			StartQuery(&q2, "_services._dns-sd._udp.local.", kDNSQType_ANY, &target, ServicesCallback);
+			StartQuery(&q1, "_services._dns-sd._udp.local.", kDNSQType_ANY, &target, ServicesCallback);
 			WaitForAnswer(&mDNSStorage, 4);
 			mDNS_StopQuery(&mDNSStorage, &q1);
-			mDNS_StopQuery(&mDNSStorage, &q2);
 			if (StopNow == 2) break;
 			}
 		else if (NumAnswers)
@@ -436,6 +476,6 @@ mDNSexport int main(int argc, char **argv)
 	return(0);
 
 usage:
-	fprintf(stderr, "%s <dot-local hostname> or <IPv4 address> or <IPv6 address> ...\n", argv[0]);
+	fprintf(stderr, "%s <dot-local hostname> or <IPv4 address> or <IPv6 address> ...\n", progname);
 	return(-1);
 	}

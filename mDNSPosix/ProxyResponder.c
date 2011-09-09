@@ -1,9 +1,8 @@
-/*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+/* -*- Mode: C; tab-width: 4 -*-
+ *
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
- * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -25,6 +24,31 @@
     Change History (most recent first):
 
 $Log: ProxyResponder.c,v $
+Revision 1.34  2004/12/01 04:27:28  cheshire
+<rdar://problem/3872803> Darwin patches for Solaris and Suse
+Don't use uint32_t, etc. -- they require stdint.h, which doesn't exist on FreeBSD 4.x, Solaris, etc.
+
+Revision 1.33  2004/11/30 22:37:01  cheshire
+Update copyright dates and add "Mode: C; tab-width: 4" headers
+
+Revision 1.32  2004/10/26 03:59:41  cheshire
+Update comments
+
+Revision 1.31  2004/09/17 01:08:53  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.30  2004/09/17 00:31:52  cheshire
+For consistency with ipv6, renamed rdata field 'ip' to 'ipv4'
+
+Revision 1.29  2004/09/16 01:58:22  cheshire
+Fix compiler warnings
+
+Revision 1.28  2004/06/25 00:26:27  rpantos
+Changes to fix the Posix build on Solaris.
+
 Revision 1.27  2004/03/12 08:03:14  cheshire
 Update comments
 
@@ -75,26 +99,31 @@ Revision 1.13  2003/04/18 22:46:12  cheshire
 Fix mistake in 1.8 -- INADDR_NONE is 0xFFFFFFFF, not 0
 
 Revision 1.12  2003/04/16 02:11:07  cheshire
-Fixed mDNS_RegisterNoSuchService non-existance function so that it works again
+Fixed mDNS_RegisterNoSuchService non-existence function so that it works again
 
 Revision 1.11  2003/03/31 22:49:35  cheshire
 Add "$Log" header
 
  */
 
-#include <stdio.h>			// For printf()
-#include <stdlib.h>			// For exit() etc.
-#include <string.h>			// For strlen() etc.
-#include <unistd.h>			// For select()
-#include <signal.h>			// For SIGINT, SIGTERM
-#include <errno.h>			// For errno, EINTR
-#include <arpa/inet.h>		// For inet_addr()
-#include <netinet/in.h>		// For INADDR_NONE
-#include <netdb.h>			// For gethostbyname()
+#include <stdio.h>				// For printf()
+#include <stdlib.h>				// For exit() etc.
+#include <string.h>				// For strlen() etc.
+#include <unistd.h>				// For select()
+#include <signal.h>				// For SIGINT, SIGTERM
+#include <errno.h>				// For errno, EINTR
+#include <arpa/inet.h>			// For inet_addr()
+#include <netinet/in.h>			// For INADDR_NONE
+#include <netdb.h>				// For gethostbyname()
 
-#include "mDNSClientAPI.h"  // Defines the interface to the client layer above
-#include "mDNSPosix.h"      // Defines the specific types needed to run mDNS on this platform
+#include "mDNSEmbeddedAPI.h"	// Defines the interface to the client layer above
+#include "mDNSPosix.h"			// Defines the specific types needed to run mDNS on this platform
 #include "ExampleClientApp.h"
+
+// Compatibility workaround: Solaris 2.5 has no INADDR_NONE
+#ifndef	INADDR_NONE
+#define	INADDR_NONE	(mDNSu32)0xffffffff
+#endif
 
 //*************************************************************************************************************
 // Globals
@@ -116,10 +145,10 @@ mDNSlocal void HostNameCallback(mDNS *const m, AuthRecord *const rr, mStatus res
 	{
 	ProxyHost *f = (ProxyHost*)rr->RecordContext;
 	if (result == mStatus_NoError)
-		debugf("Host name successfully registered: %##s", &rr->resrec.name);
+		debugf("Host name successfully registered: %##s", rr->resrec.name.c);
 	else
 		{
-		debugf("Host name conflict for %##s", &rr->resrec.name);
+		debugf("Host name conflict for %##s", rr->resrec.name.c);
 		mDNS_Deregister(m, &f->RR_A);
 		mDNS_Deregister(m, &f->RR_PTR);
 		exit(-1);
@@ -140,13 +169,13 @@ mDNSlocal mStatus mDNS_RegisterProxyHost(mDNS *m, ProxyHost *p)
 	mDNS_snprintf(buffer, sizeof(buffer), "%d.%d.%d.%d.in-addr.arpa.", p->ip.b[3], p->ip.b[2], p->ip.b[1], p->ip.b[0]);
 	MakeDomainNameFromDNSNameString(&p->RR_PTR.resrec.name, buffer);
 
-	p->RR_A.  resrec.rdata->u.ip   = p->ip;
+	p->RR_A.  resrec.rdata->u.ipv4 = p->ip;
 	p->RR_PTR.resrec.rdata->u.name = p->RR_A.resrec.name;
 
 	mDNS_Register(m, &p->RR_A);
 	mDNS_Register(m, &p->RR_PTR);
 
-	debugf("Made Proxy Host Records for %##s", &p->RR_A.resrec.name);
+	debugf("Made Proxy Host Records for %##s", p->RR_A.resrec.name.c);
 	
 	return(mStatus_NoError);
 	}
@@ -162,10 +191,10 @@ mDNSlocal void ServiceCallback(mDNS *const m, ServiceRecordSet *const sr, mStatu
 	{
 	switch (result)
 		{
-		case mStatus_NoError:      debugf("Callback: %##s Name Registered",   &sr->RR_SRV.resrec.name); break;
-		case mStatus_NameConflict: debugf("Callback: %##s Name Conflict",     &sr->RR_SRV.resrec.name); break;
-		case mStatus_MemFree:      debugf("Callback: %##s Memory Free",       &sr->RR_SRV.resrec.name); break;
-		default:                   debugf("Callback: %##s Unknown Result %d", &sr->RR_SRV.resrec.name, result); break;
+		case mStatus_NoError:      debugf("Callback: %##s Name Registered",    sr->RR_SRV.resrec.name.c); break;
+		case mStatus_NameConflict: debugf("Callback: %##s Name Conflict",      sr->RR_SRV.resrec.name.c); break;
+		case mStatus_MemFree:      debugf("Callback: %##s Memory Free",        sr->RR_SRV.resrec.name.c); break;
+		default:                   debugf("Callback: %##s Unknown Result %ld", sr->RR_SRV.resrec.name.c, result); break;
 		}
 
 	if (result == mStatus_NoError)
@@ -235,10 +264,10 @@ mDNSlocal void NoSuchServiceCallback(mDNS *const m, AuthRecord *const rr, mStatu
 	domainname *proxyhostname = (domainname *)rr->RecordContext;
 	switch (result)
 		{
-		case mStatus_NoError:      debugf("Callback: %##s Name Registered",   &rr->resrec.name); break;
-		case mStatus_NameConflict: debugf("Callback: %##s Name Conflict",     &rr->resrec.name); break;
-		case mStatus_MemFree:      debugf("Callback: %##s Memory Free",       &rr->resrec.name); break;
-		default:                   debugf("Callback: %##s Unknown Result %d", &rr->resrec.name, result); break;
+		case mStatus_NoError:      debugf("Callback: %##s Name Registered",    rr->resrec.name.c); break;
+		case mStatus_NameConflict: debugf("Callback: %##s Name Conflict",      rr->resrec.name.c); break;
+		case mStatus_MemFree:      debugf("Callback: %##s Memory Free",        rr->resrec.name.c); break;
+		default:                   debugf("Callback: %##s Unknown Result %ld", rr->resrec.name.c, result); break;
 		}
 
 	if (result == mStatus_NoError)

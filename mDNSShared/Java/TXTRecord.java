@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,15 @@
     Change History (most recent first):
 
 $Log: TXTRecord.java,v $
+Revision 1.5  2004/08/25 21:54:36  rpantos
+<rdar://problem/3773973> Fix getValue() for values containing '='.
+
+Revision 1.4  2004/08/04 01:04:50  rpantos
+<rdar://problems/3731579&3731582> Fix set(); add remove() & toString().
+
+Revision 1.3  2004/07/13 21:24:25  rpantos
+Fix for <rdar://problem/3701120>.
+
 Revision 1.2  2004/04/30 21:48:27  rpantos
 Change line endings for CVS.
 
@@ -42,7 +49,7 @@ package	com.apple.dnssd;
 
 /**	
 	Object used to construct and parse DNS-SD format TXT records.
-	For more info see <a href="http://www.zeroconf.org/Rendezvous/txtrecords.html">DNS-SD TXT record format</a>. 
+	For more info see <a href="http://files.dns-sd.org/draft-cheshire-dnsext-dns-sd.txt">DNS-Based Service Discovery</a>, section 6. 
 */
 
 public class	TXTRecord
@@ -90,10 +97,8 @@ public class	TXTRecord
 	*/
 	public void	set( String key, byte[] value)
 	{
-		byte[]	oldBytes = fBytes;
 		byte[]	keyBytes;
 		int		valLen = (value != null) ? value.length : 0;
-		byte	newLen;
 
 		try {
 			keyBytes = key.getBytes( "US-ASCII");
@@ -108,17 +113,66 @@ public class	TXTRecord
 
 		if ( keyBytes.length + valLen >= 255)
 			throw new ArrayIndexOutOfBoundsException();
-		newLen = (byte) ( keyBytes.length + valLen + (valLen > 0 ? 1 : 0));
 
-		fBytes = new byte[ oldBytes.length + newLen + 1];
-		System.arraycopy( oldBytes, 0, fBytes, 0, oldBytes.length);
-		fBytes[ oldBytes.length] = newLen;
-		System.arraycopy( keyBytes, 0, fBytes, oldBytes.length + 1, keyBytes.length);
-		if ( valLen > 0)
+		int		prevLoc = this.remove( key);
+		if ( prevLoc == -1)
+			prevLoc = this.size();
+
+		this.insert( keyBytes, value, prevLoc);
+	}
+
+	protected void	insert( byte[] keyBytes, byte[] value, int index)
+	// Insert a key-value pair at index
+	{
+		byte[]	oldBytes = fBytes;
+		int		valLen = (value != null) ? value.length : 0;
+		int		insertion = 0;
+		byte	newLen, avLen;
+	
+		// locate the insertion point
+		for ( int i=0; i < index && insertion < fBytes.length; i++)
+			insertion += fBytes[ insertion] + 1;
+	
+		avLen = (byte) ( keyBytes.length + valLen + (value != null ? 1 : 0));
+		newLen = (byte) ( avLen + oldBytes.length + 1);
+
+		fBytes = new byte[ newLen];
+		System.arraycopy( oldBytes, 0, fBytes, 0, insertion);
+		int secondHalfLen = oldBytes.length - insertion;
+		System.arraycopy( oldBytes, insertion, fBytes, newLen - secondHalfLen, secondHalfLen);
+		fBytes[ insertion] = avLen;
+		System.arraycopy( keyBytes, 0, fBytes, insertion + 1, keyBytes.length);
+		if ( value != null)
 		{
-			fBytes[ oldBytes.length + 1 + keyBytes.length] = kAttrSep;
-			System.arraycopy( value, 0, fBytes, oldBytes.length + keyBytes.length + 2, value.length);
+			fBytes[ insertion + 1 + keyBytes.length] = kAttrSep;
+			System.arraycopy( value, 0, fBytes, insertion + keyBytes.length + 2, valLen);
 		}
+	}
+
+	/** Remove a key/value pair from the TXT record. Returns index it was at, or -1 if not found. */
+	public int	remove( String key)
+	{
+		int		avStart = 0;
+
+		for ( int i=0; avStart < fBytes.length; i++)
+		{
+			int		avLen = fBytes[ avStart];
+			if ( key.length() <= avLen && 
+				 ( key.length() == avLen || fBytes[ avStart + key.length() + 1] == kAttrSep))
+			{
+				String	s = new String( fBytes, avStart + 1, key.length());
+				if ( 0 == key.compareToIgnoreCase( s))
+				{
+					byte[]	oldBytes = fBytes;
+					fBytes = new byte[ oldBytes.length - avLen - 1];
+					System.arraycopy( oldBytes, 0, fBytes, 0, avStart);
+					System.arraycopy( oldBytes, avStart + avLen + 1, fBytes, avStart, oldBytes.length - avStart - avLen - 1);
+					return i;
+				}
+			}
+			avStart += avLen + 1;
+		}
+		return -1;
 	}
 
 	/**	Return the number of keys in the TXT record. */
@@ -187,6 +241,7 @@ public class	TXTRecord
 				{
 					value = new byte[ avLen - aLen - 1];
 					System.arraycopy( fBytes, avStart + aLen + 2, value, 0, avLen - aLen - 1);
+					break;
 				}
 			}
 		}
@@ -234,5 +289,26 @@ public class	TXTRecord
 
 	/** Return the contents of the TXT record as raw bytes. */
 	public byte[]	getRawBytes() { return (byte[]) fBytes.clone(); }
+
+	/** Return a string representation of the object. */
+	public String	toString()
+	{
+		String		a, result = null;
+		
+		for ( int i=0; null != ( a = this.getKey( i)); i++)
+		{
+			String av = String.valueOf( i) + "={" + a;
+			String val = this.getValueAsString( i);
+			if ( val != null)
+				av += "=" + val + "}";
+			else
+				av += "}";
+			if ( result == null)
+				result = av;
+			else
+				result = result + ", " + av;
+		}
+		return result != null ? result : "";
+	}
 }
 

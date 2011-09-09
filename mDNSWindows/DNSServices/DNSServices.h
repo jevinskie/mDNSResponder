@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,9 @@
     Change History (most recent first):
     
 $Log: DNSServices.h,v $
+Revision 1.11  2004/07/13 21:24:28  rpantos
+Fix for <rdar://problem/3701120>.
+
 Revision 1.10  2004/01/30 02:56:34  bradley
 Updated to support full Unicode display. Added support for all services on www.dns-sd.org.
 
@@ -32,7 +33,7 @@ Revision 1.9  2003/10/31 12:16:03  bradley
 Added support for providing the resolved host name to the callback.
 
 Revision 1.8  2003/08/20 06:44:24  bradley
-Updated to latest internal version of the Rendezvous for Windows code: Added support for interface
+Updated to latest internal version of the mDNSCore code: Added support for interface
 specific registrations; Added support for no-such-service registrations; Added support for host
 name registrations; Added support for host proxy and service proxy registrations; Added support for
 registration record updates (e.g. TXT record updates); Added support for using either a single C
@@ -1322,7 +1323,7 @@ DNSStatus
 //---------------------------------------------------------------------------------------------------------------------------
 /*!	@function	DNSNoSuchServiceRegistrationCreate
 
-	@abstract	Creates a registration object and publish the registration to assert non-existance of a particular service.
+	@abstract	Creates a registration object and publish the registration to assert non-existence of a particular service.
 
 	@param		inFlags
 					Flags to control the registration process.

@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,12 @@
     Change History (most recent first):
 
 $Log: DNSSD.java,v $
+Revision 1.4  2004/12/11 03:00:59  rpantos
+<rdar://problem/3907498> Java DNSRecord API should be cleaned up
+
+Revision 1.3  2004/11/12 03:23:08  rpantos
+rdar://problem/3809541 implement getIfIndexForName, getNameForIfIndex.
+
 Revision 1.2  2004/05/20 17:43:18  cheshire
 Fix invalid UTF-8 characters in file
 
@@ -599,12 +603,12 @@ class	AppleDNSSD extends DNSSD
 
 	protected String			_getNameForIfIndex( int ifIndex)
 	{
-		return null;		// ••Fix me - RNP
+		return GetNameForIfIndex( ifIndex);
 	}
 
 	protected int				_getIfIndexForName( String ifName)
 	{
-		return 0;		// ••Fix me - RNP
+		return GetIfIndexForName( ifName);
 	}
 
 
@@ -612,6 +616,10 @@ class	AppleDNSSD extends DNSSD
 
 	protected native void	ReconfirmRecord( int flags, int ifIndex, String fullName, int rrtype, 
 										int rrclass, byte[] rdata);
+
+	protected native String	GetNameForIfIndex( int ifIndex);
+
+	protected native int	GetIfIndexForName( String ifName);
 
 	protected static native int	InitLibrary( int callerVersion);
 }
@@ -715,9 +723,38 @@ class	AppleResolver extends AppleService
 }
 
 // An AppleDNSRecord is a simple wrapper around a dns_sd DNSRecord.
-class	AppleDNSRecord extends DNSRecord
+class	AppleDNSRecord implements DNSRecord
 {
-	public int		fRecord;		// Really a DNSRecord; sizeof(int) == sizeof(void*) ?
+	public			AppleDNSRecord( AppleService owner) 
+	{ 
+		fOwner = owner; 
+		fRecord = 0; 		// record always starts out empty
+	}
+
+	public void			update( int flags, byte[] rData, int ttl)
+	throws DNSSDException
+	{
+		this.ThrowOnErr( this.Update( flags, rData, ttl));
+	}
+
+	public void			remove()
+	throws DNSSDException
+	{
+		this.ThrowOnErr( this.Remove());
+	}
+
+	protected int			fRecord;		// Really a DNSRecord; sizeof(int) == sizeof(void*) ?
+	protected AppleService	fOwner;
+
+	protected void			ThrowOnErr( int rc) throws DNSSDException
+	{
+		if ( rc != 0)
+			throw new AppleDNSSDException( rc);
+	}
+
+	protected native int	Update( int flags, byte[] rData, int ttl);
+
+	protected native int	Remove();
 }
 
 class	AppleRegistration extends AppleService implements DNSSDRegistration
@@ -735,23 +772,17 @@ class	AppleRegistration extends AppleService implements DNSSDRegistration
 	public DNSRecord	addRecord( int flags, int rrType, byte[] rData, int ttl)
 	throws DNSSDException
 	{
-		AppleDNSRecord	newRecord = new AppleDNSRecord();
+		AppleDNSRecord	newRecord = new AppleDNSRecord( this);
 
 		this.ThrowOnErr( this.AddRecord( flags, rrType, rData, ttl, newRecord));
 
 		return newRecord;
 	}
 
-	public void			updateRecord( DNSRecord record, int flags, byte[] rData, int ttl)
+	public DNSRecord	getTXTRecord()
 	throws DNSSDException
 	{
-		this.ThrowOnErr( this.UpdateRecord( (AppleDNSRecord) record, flags, rData, ttl));
-	}
-
-	public void			removeRecord( DNSRecord record, int flags)
-	throws DNSSDException
-	{
-		this.ThrowOnErr( this.RemoveRecord( (AppleDNSRecord) record, flags));
+		return new AppleDNSRecord( this);	// A record with ref 0 is understood to be primary TXT record
 	}
 
 	// Sets fNativeContext. Returns non-zero on error.
@@ -760,10 +791,6 @@ class	AppleRegistration extends AppleService implements DNSSDRegistration
 
 	// Sets fNativeContext. Returns non-zero on error.
 	protected native int	AddRecord( int flags, int rrType, byte[] rData, int ttl, AppleDNSRecord destObj);
-
-	protected native int	UpdateRecord( AppleDNSRecord destObj, int flags, byte[] rData, int ttl);
-
-	protected native int	RemoveRecord( AppleDNSRecord destObj, int flags);
 
 	protected RegisterListener	fClient;
 }

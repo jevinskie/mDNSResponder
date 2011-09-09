@@ -1,9 +1,8 @@
-/*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+/* -*- Mode: C; tab-width: 4 -*-
+ *
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
- * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -25,6 +24,20 @@
     Change History (most recent first):
 
 $Log: Client.c,v $
+Revision 1.14  2004/11/30 22:37:00  cheshire
+Update copyright dates and add "Mode: C; tab-width: 4" headers
+
+Revision 1.13  2004/10/19 21:33:20  cheshire
+<rdar://problem/3844991> Cannot resolve non-local registrations using the mach API
+Added flag 'kDNSServiceFlagsForceMulticast'. Passing through an interface id for a unicast name
+doesn't force multicast unless you set this flag to indicate explicitly that this is what you want
+
+Revision 1.12  2004/09/17 01:08:53  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
 Revision 1.11  2003/11/17 20:14:32  cheshire
 Typo: Wrote "domC" where it should have said "domainC"
 
@@ -70,7 +83,7 @@ First checkin
 #include <unistd.h>
 #include <stdlib.h>
 
-#include "mDNSClientAPI.h"// Defines the interface to the mDNS core code
+#include "mDNSEmbeddedAPI.h"// Defines the interface to the mDNS core code
 #include "mDNSPosix.h"    // Defines the specific types needed to run mDNS on this platform
 #include "ExampleClientApp.h"
 
@@ -236,7 +249,7 @@ int main(int argc, char **argv)
         MakeDomainNameFromDNSNameString(&type, gServiceType);
         MakeDomainNameFromDNSNameString(&domain, "local.");
 
-        status = mDNS_StartBrowse(&mDNSStorage, &question, &type, &domain, mDNSInterface_Any, BrowseCallback, NULL);
+        status = mDNS_StartBrowse(&mDNSStorage, &question, &type, &domain, mDNSInterface_Any, mDNSfalse, BrowseCallback, NULL);
     
         // Run the platform main event loop until the user types ^C. 
         // The BrowseCallback routine is responsible for printing 

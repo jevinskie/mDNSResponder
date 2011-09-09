@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,12 @@
     Change History (most recent first):
     
 $Log: DebugServices.c,v $
+Revision 1.5  2004/09/17 01:08:57  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
 Revision 1.4  2004/04/15 08:59:08  bradley
 Removed deprecated debug and log levels and replaced them with modern equivalents.
 
@@ -82,10 +86,10 @@ Debugging support for various platforms.
 	#include	<IOKit/IOLib.h>
 #endif
 
-// If MDNS_DEBUGMSGS is defined (even if defined 0), it is aware of mDNS and it is probably safe to include mDNSClientAPI.h.
+// If MDNS_DEBUGMSGS is defined (even if defined 0), it is aware of mDNS and it is probably safe to include mDNSEmbeddedAPI.h.
 
 #if( defined( MDNS_DEBUGMSGS ) )
-	#include	"mDNSClientAPI.h"
+	#include	"mDNSEmbeddedAPI.h"
 #endif
 
 #if 0
@@ -1178,8 +1182,8 @@ static pascal void
 //	Stolen from mDNS.c's mDNS_snprintf/mDNS_vsnprintf with the following changes:
 //
 //	Changed names to avoid name collisions with the mDNS versions.
-//	Changed types to standard C types since mDNSClientAPI.h may not be available.
-//	Conditionalized mDNS stuff so it can be used with or with mDNSClientAPI.h.
+//	Changed types to standard C types since mDNSEmbeddedAPI.h may not be available.
+//	Conditionalized mDNS stuff so it can be used with or with mDNSEmbeddedAPI.h.
 //	Added 64-bit support for %d (%lld), %i (%lli), %u (%llu), %o (%llo), %x (%llx), and %b (%llb).
 //	Added %@   - Cocoa/CoreFoundation object. Param is the object. Strings are used directly. Others use CFCopyDescription.
 //	Added %.8a - FIbre Channel address. Arg=ptr to address.
@@ -1391,7 +1395,7 @@ DEBUG_EXPORT size_t DebugSNPrintFVAList(char *sbuffer, size_t buflen, const char
 											default:                F.precision =  0; break;
 											}
 									#else
-										F.precision = 0;	// mDNSClientAPI.h not included so no mDNSAddr support
+										F.precision = 0;	// mDNSEmbeddedAPI.h not included so no mDNSAddr support
 									#endif
 									}
 								else if (F.altForm == 2)

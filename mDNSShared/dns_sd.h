@@ -1,84 +1,28 @@
 /*
- * Copyright (c) 2003-2004 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2003-2004, Apple Computer, Inc. All rights reserved.
  *
- * @APPLE_LICENSE_HEADER_START@
- * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
- * This file contains Original Code and/or Modifications of Original Code
- * as defined in and that are subject to the Apple Public Source License
- * Version 2.0 (the 'License'). You may not use this file except in
- * compliance with the License. Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this
- * file.
- * 
- * The Original Code and all software distributed under the License are
- * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
- * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
- * Please see the License for the specific language governing rights and
- * limitations under the License.
- * 
- * @APPLE_LICENSE_HEADER_END@
-
-    Change History (most recent first):
-
-$Log: dns_sd.h,v $
-Revision 1.17  2004/06/01 14:34:48  cheshire
-For compatibility with older compilers, change '//' comments to ' / * ... * / '
-
-Revision 1.16  2004/05/25 17:08:55  cheshire
-Fix compiler warning (doesn't make sense for function return type to be const)
-
-Revision 1.15  2004/05/21 21:41:35  cheshire
-Add TXT record building and parsing APIs
-
-Revision 1.14  2004/05/20 18:40:31  cheshire
-Remove trailing comma that breaks build on strict compilers
-
-Revision 1.13  2004/05/18 23:51:27  cheshire
-Tidy up all checkin comments to use consistent "<rdar://problem/xxxxxxx>" format for bug numbers
-
-Revision 1.12  2004/05/07 21:11:07  ksekar
-API Update: Exposed new core error codes.  Added constants for
-InterfaceIndexAny and InterfaceIndexLocalOnly.  Added flag for
-long-lived unicast queries via DNSServiceQueryRecord.
-
-Revision 1.11  2004/05/07 20:51:18  ksekar
-<rdar://problem/3608226>: dns_sd.h needs to direct developers to
-register their services at <http://www.dns-sd.org/ServiceTypes.html>
-
-Revision 1.10  2004/05/06 18:42:58  ksekar
-General dns_sd.h API cleanup, including the following radars:
-<rdar://problem/3592068>: Remove flags with zero value
-<rdar://problem/3479569>: Passing in NULL causes a crash.
-
-Revision 1.9  2004/03/20 05:43:39  cheshire
-Fix contributed by Terry Lambert & Alfred Perlstein:
-On FreeBSD 4.x we need to include <sys/types.h> instead of <stdint.h>
-
-Revision 1.8  2004/03/19 17:50:40  cheshire
-Clarify comment about kDNSServiceMaxDomainName
-
-Revision 1.7  2004/03/12 08:00:06  cheshire
-Minor comment changes, headers, and wrap file in extern "C" for the benefit of C++ clients
-
-Revision 1.6  2003/12/04 06:24:33  cheshire
-Clarify meaning of MoreComing/Finished flag
-
-Revision 1.5  2003/11/13 23:35:35  ksekar
-<rdar://problem/3483020>: Header doesn't say that add/remove are possible values for flags
-Bringing mDNSResponder project copy of dns_sd.h header up to date with
-Libinfo copy
-
-Revision 1.4  2003/10/13 23:50:53  ksekar
-Updated dns_sd clientstub files to bring copies in synch with
-top-of-tree Libinfo:  A memory leak in dnssd_clientstub.c is fixed,
-and comments in dns_sd.h are improved.
-
-Revision 1.3  2003/08/12 19:51:51  cheshire
-Update to APSL 2.0
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1.  Redistributions of source code must retain the above copyright notice, 
+ *     this list of conditions and the following disclaimer. 
+ * 2.  Redistributions in binary form must reproduce the above copyright notice, 
+ *     this list of conditions and the following disclaimer in the documentation 
+ *     and/or other materials provided with the distribution. 
+ * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of its 
+ *     contributors may be used to endorse or promote products derived from this 
+ *     software without specific prior written permission. 
+ *
+ * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY 
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+ * DISCLAIMED. IN NO EVENT SHALL APPLE OR ITS CONTRIBUTORS BE LIABLE FOR ANY 
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES 
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND 
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS 
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #ifndef _DNS_SD_H
@@ -88,9 +32,28 @@ Update to APSL 2.0
     extern "C" {
 #endif
 
-#if defined(__FreeBSD__) && (__FreeBSD_version < 500000)
+/* standard calling convention under Win32 is __stdcall */
+#if defined(_WIN32)
+#define DNSSD_API __stdcall
+#else
+#define DNSSD_API
+#endif
+
+#if defined(__FreeBSD_version) && (__FreeBSD_version < 500000)
 /* stdint.h does not exist on FreeBSD 4.x; its types are defined in sys/types.h instead */
 #include <sys/types.h>
+#elif defined(__sun__)
+#include <sys/types.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#define _UNUSED
+#define bzero(a, b) memset(a, 0, b)
+typedef UINT8       uint8_t;
+typedef INT8        int8_t;
+typedef UINT16      uint16_t;
+typedef INT16       int16_t;
+typedef UINT32      uint32_t;
+typedef INT32       int32_t;
 #else
 #include <stdint.h>
 #endif
@@ -155,9 +118,88 @@ enum
      * enumerates domains recommended for registration.
      */
 
-    kDNSServiceFlagsLongLivedQuery      = 0x100
+    kDNSServiceFlagsLongLivedQuery      = 0x100,
     /* Flag for creating a long-lived unicast query for the DNSServiceQueryRecord call. */
+
+    kDNSServiceFlagsAllowRemoteQuery    = 0x200,
+    /* Flag for creating a record for which we will answer remote queries
+     * (queries from hosts more than one hop away; hosts not directly connected to the local link).
+     */
+
+    kDNSServiceFlagsForceMulticast      = 0x400
+    /* Flag for signifying that a query or registration should be performed exclusively via multicast DNS,
+     * even for a name in a domain (e.g. foo.apple.com.) that would normally imply unicast DNS.
+     */
     };
+
+/*
+ * The values for DNS Classes and Types are listed in RFC 1035, and are available
+ * on every OS in its DNS header file. Unfortunately every OS does not have the
+ * same header file containing DNS Class and Type constants, and the names of
+ * the constants are not consistent. For example, BIND 8 uses "T_A",
+ * BIND 9 uses "ns_t_a", Windows uses "DNS_TYPE_A", etc.
+ * For this reason, these constants are also listed here, so that code using
+ * the DNS-SD programming APIs can use these constants, so that the same code
+ * can compile on all our supported platforms.
+ */
+
+enum
+    {
+    kDNSServiceClass_IN       = 1       /* Internet */
+    };
+
+enum
+    {
+    kDNSServiceType_A         = 1,      /* Host address. */
+    kDNSServiceType_NS        = 2,      /* Authoritative server. */
+    kDNSServiceType_MD        = 3,      /* Mail destination. */
+    kDNSServiceType_MF        = 4,      /* Mail forwarder. */
+    kDNSServiceType_CNAME     = 5,      /* Canonical name. */
+    kDNSServiceType_SOA       = 6,      /* Start of authority zone. */
+    kDNSServiceType_MB        = 7,      /* Mailbox domain name. */
+    kDNSServiceType_MG        = 8,      /* Mail group member. */
+    kDNSServiceType_MR        = 9,      /* Mail rename name. */
+    kDNSServiceType_NULL      = 10,     /* Null resource record. */
+    kDNSServiceType_WKS       = 11,     /* Well known service. */
+    kDNSServiceType_PTR       = 12,     /* Domain name pointer. */
+    kDNSServiceType_HINFO     = 13,     /* Host information. */
+    kDNSServiceType_MINFO     = 14,     /* Mailbox information. */
+    kDNSServiceType_MX        = 15,     /* Mail routing information. */
+    kDNSServiceType_TXT       = 16,     /* Text strings. */
+    kDNSServiceType_RP        = 17,     /* Responsible person. */
+    kDNSServiceType_AFSDB     = 18,     /* AFS cell database. */
+    kDNSServiceType_X25       = 19,     /* X_25 calling address. */
+    kDNSServiceType_ISDN      = 20,     /* ISDN calling address. */
+    kDNSServiceType_RT        = 21,     /* Router. */
+    kDNSServiceType_NSAP      = 22,     /* NSAP address. */
+    kDNSServiceType_NSAP_PTR  = 23,     /* Reverse NSAP lookup (deprecated). */
+    kDNSServiceType_SIG       = 24,     /* Security signature. */
+    kDNSServiceType_KEY       = 25,     /* Security key. */
+    kDNSServiceType_PX        = 26,     /* X.400 mail mapping. */
+    kDNSServiceType_GPOS      = 27,     /* Geographical position (withdrawn). */
+    kDNSServiceType_AAAA      = 28,     /* Ip6 Address. */
+    kDNSServiceType_LOC       = 29,     /* Location Information. */
+    kDNSServiceType_NXT       = 30,     /* Next domain (security). */
+    kDNSServiceType_EID       = 31,     /* Endpoint identifier. */
+    kDNSServiceType_NIMLOC    = 32,     /* Nimrod Locator. */
+    kDNSServiceType_SRV       = 33,     /* Server Selection. */
+    kDNSServiceType_ATMA      = 34,     /* ATM Address */
+    kDNSServiceType_NAPTR     = 35,     /* Naming Authority PoinTeR */
+    kDNSServiceType_KX        = 36,     /* Key Exchange */
+    kDNSServiceType_CERT      = 37,     /* Certification record */
+    kDNSServiceType_A6        = 38,     /* IPv6 address (deprecates AAAA) */
+    kDNSServiceType_DNAME     = 39,     /* Non-terminal DNAME (for IPv6) */
+    kDNSServiceType_SINK      = 40,     /* Kitchen sink (experimentatl) */
+    kDNSServiceType_OPT       = 41,     /* EDNS0 option (meta-RR) */
+    kDNSServiceType_TKEY      = 249,    /* Transaction key */
+    kDNSServiceType_TSIG      = 250,    /* Transaction signature. */
+    kDNSServiceType_IXFR      = 251,    /* Incremental zone transfer. */
+    kDNSServiceType_AXFR      = 252,    /* Transfer zone of authority. */
+    kDNSServiceType_MAILB     = 253,    /* Transfer mailbox records. */
+    kDNSServiceType_MAILA     = 254,    /* Transfer mail agent records. */
+    kDNSServiceType_ANY       = 255     /* Wildcard match. */
+    };
+
 
 /* possible error code values */
 enum
@@ -175,12 +217,16 @@ enum
     kDNSServiceErr_AlreadyRegistered   = -65547,
     kDNSServiceErr_NameConflict        = -65548,
     kDNSServiceErr_Invalid             = -65549,
+    kDNSServiceErr_Firewall            = -65550,
     kDNSServiceErr_Incompatible        = -65551,        /* client library incompatible with daemon */
     kDNSServiceErr_BadInterfaceIndex   = -65552,
     kDNSServiceErr_Refused             = -65553,
     kDNSServiceErr_NoSuchRecord        = -65554,
     kDNSServiceErr_NoAuth              = -65555,
-    kDNSServiceErr_NoSuchKey           = -65556
+    kDNSServiceErr_NoSuchKey           = -65556,
+    kDNSServiceErr_NATTraversal        = -65557,
+    kDNSServiceErr_DblNAT              = -65558,
+    kDNSServiceErr_BadTime             = -65559
     /* mDNS Error codes are in the range
      * FFFE FF00 (-65792) to FFFE FFFF (-65537) */
     };
@@ -191,13 +237,91 @@ enum
 
 #define kDNSServiceMaxDomainName 1005
 
-/* Constants for specifying an interface index.  Specific interface indexes are
- * identified via a 32-bit unsigned integer returned by the if_nametoindex()
- * family of calls
+/*
+ * Notes on DNS Name Escaping
+ *   -- or --
+ * "Why is kDNSServiceMaxDomainName 1005, when the maximum legal domain name is 255 bytes?"
+ *
+ * All strings used in DNS-SD are UTF-8 strings.
+ * With few exceptions, most are also escaped using standard DNS escaping rules:
+ *
+ *   '\\' represents a single literal '\' in the name
+ *   '\.' represents a single literal '.' in the name
+ *   '\ddd', where ddd is a three-digit decimal value from 000 to 255,
+ *        represents a single literal byte with that value.
+ *   A bare unescaped '.' is a label separator, marking a boundary between domain and subdomain.
+ *
+ * The exceptions, that do not use escaping, are the routines where the full
+ * DNS name of a resource is broken, for convenience, into servicename/regtype/domain.
+ * In these routines, the "servicename" is NOT escaped. It does not need to be, since
+ * it is, by definition, just a single literal string. Any characters in that string
+ * represent exactly what they are. The "regtype" portion is, technically speaking,
+ * escaped, but since legal regtypes are only allowed to contain letters, digits,
+ * and hyphens, the issue is moot. The "domain" portion is also escaped, though
+ * most domains in use on the public Internet today, like regtypes, don't contain
+ * any characters that need to be escaped. As DNS-SD becomes more popular, rich-text
+ * domains for service discovery will become common, so software should be written
+ * to cope with domains with escaping.
+ *
+ * For most software, these issues are transparent. When browsing, the discovered
+ * servicenames should simply be displayed as-is. When resolving, the discovered
+ * servicename/regtype/domain are simply passed unchanged to DNSServiceResolve().
+ * When a DNSServiceResolve() succeeds, the returned fullname is already in
+ * the correct format to pass to standard system DNS APIs such as res_query().
+ * For converting from servicename/regtype/domain to a single properly-escaped
+ * full DNS name, the helper function DNSServiceConstructFullName() is provided.
+ *
+ * The following (highly contrived) example illustrates the escaping process.
+ * Suppose you have an service called "Dr. Smith\Dr. Johnson", of type "_ftp._tcp"
+ * in subdomain "4th. Floor" of subdomain "Building 2" of domain "apple.com."
+ * The full (escaped) DNS name of this service's SRV record would be:
+ * Dr\.\032Smith\\Dr\.\032Johnson._ftp._tcp.4th\.\032Floor.Building\0322.apple.com.
+ */
+
+
+/* 
+ * Constants for specifying an interface index
+ *
+ * Specific interface indexes are identified via a 32-bit unsigned integer returned
+ * by the if_nametoindex() family of calls.
+ * 
+ * If the client passes 0 for interface index, that means "do the right thing",
+ * which (at present) means, "if the name is in an mDNS local multicast domain
+ * (e.g. 'local.', '254.169.in-addr.arpa.', '0.8.E.F.ip6.arpa.') then multicast
+ * on all applicable interfaces, otherwise send via unicast to the appropriate
+ * DNS server." Normally, most clients will use 0 for interface index to
+ * automatically get the default sensible behaviour.
+ * 
+ * If the client passes a positive interface index, then for multicast names that
+ * indicates to do the operation only on that one interface. For unicast names the
+ * interface index is ignored unless kDNSServiceFlagsForceMulticast is also set.
+ * 
+ * If the client passes kDNSServiceInterfaceIndexLocalOnly when registering
+ * a service, then that service will be found *only* by other local clients
+ * on the same machine that pass kDNSServiceInterfaceIndexLocalOnly when browsing.
+ * If a client has a 'private' service, accessible only to other processes
+ * running on the same machine, this allows the client to advertise that service
+ * in a way such that it does not inadvertently appear in service lists on
+ * all the other machines on the network.
+ * Note that to discover these special non-public services, the browsing
+ * client also has to explicitly use kDNSServiceInterfaceIndexLocalOnly in its
+ * DNSServiceBrowse() call. These special non-public services are not reported to
+ * other clients on the same machine using interface index 0 or other index values.
+ * 
+ * If the client passes kDNSServiceInterfaceIndexLocalOnly when browsing
+ * then it will find only records registered on that same local machine.
+ * Note that this is *not* exactly symmetrical with the registering case:
+ * Services advertised using LocalOnly are ONLY discovered by clients browsing
+ * on LocalOnly; in contrast, clients browsing on LocalOnly find ALL services
+ * advertised by this machine, not only those advertised on LocalOnly.
+ * Clients explicitly wishing to discover only LocalOnly services can
+ * accomplish this by inspecting the interfaceIndex of each service reported
+ * to their DNSServiceBrowseReply() callback function, and discarding those
+ * where the interface index is not kDNSServiceInterfaceIndexLocalOnly.
  */
 
 #define kDNSServiceInterfaceIndexAny 0
-#define kDNSServiceInterfaceIndexLocalOnly ( (uint32_t) ~0 )
+#define kDNSServiceInterfaceIndexLocalOnly ( (uint32_t) -1 )
 
 
 typedef uint32_t DNSServiceFlags;
@@ -232,7 +356,7 @@ typedef int32_t DNSServiceErrorType;
  *                  error.
  */
 
-int DNSServiceRefSockFD(DNSServiceRef sdRef);
+int DNSSD_API DNSServiceRefSockFD(DNSServiceRef sdRef);
 
 
 /* DNSServiceProcessResult()
@@ -253,7 +377,7 @@ int DNSServiceRefSockFD(DNSServiceRef sdRef);
  *                  an error code indicating the specific failure that occurred.
  */
 
-DNSServiceErrorType DNSServiceProcessResult(DNSServiceRef sdRef);
+DNSServiceErrorType DNSSD_API DNSServiceProcessResult(DNSServiceRef sdRef);
 
 
 /* DNSServiceRefDeallocate()
@@ -282,7 +406,7 @@ DNSServiceErrorType DNSServiceProcessResult(DNSServiceRef sdRef);
  *
  */
 
-void DNSServiceRefDeallocate(DNSServiceRef sdRef);
+void DNSSD_API DNSServiceRefDeallocate(DNSServiceRef sdRef);
 
 
 /*********************************************************************************************
@@ -294,11 +418,16 @@ void DNSServiceRefDeallocate(DNSServiceRef sdRef);
 /* DNSServiceEnumerateDomains()
  *
  * Asynchronously enumerate domains available for browsing and registration.
- * Currently, the only domain returned is "local.", but other domains will be returned in future.
  *
  * The enumeration MUST be cancelled via DNSServiceRefDeallocate() when no more domains
  * are to be found.
  *
+ * Note that the names returned are (like all of DNS-SD) UTF-8 strings,
+ * and are escaped using standard DNS escaping rules.
+ * (See "Notes on DNS Name Escaping" earlier in this file for more details.)
+ * A graphical browser displaying a hierarchical tree-structured view should cut
+ * the names at the bare dots to yield individual labels, then de-escape each
+ * label according to the escaping rules, and then display the resulting UTF-8 text.
  *
  * DNSServiceDomainEnumReply Callback Parameters:
  *
@@ -321,7 +450,7 @@ void DNSServiceRefDeallocate(DNSServiceRef sdRef);
  *
  */
 
-typedef void (*DNSServiceDomainEnumReply)
+typedef void (DNSSD_API *DNSServiceDomainEnumReply)
     (
     DNSServiceRef                       sdRef,
     DNSServiceFlags                     flags,
@@ -335,8 +464,10 @@ typedef void (*DNSServiceDomainEnumReply)
 /* DNSServiceEnumerateDomains() Parameters:
  *
  *
- * sdRef:           A pointer to an uninitialized DNSServiceRef.  May be passed to
- *                  DNSServiceRefDeallocate() to cancel the enumeration.
+ * sdRef:           A pointer to an uninitialized DNSServiceRef. If the call succeeds 
+ *                  then it initializes the DNSServiceRef, returns kDNSServiceErr_NoError,
+ *                  and the enumeration operation will run indefinitely until the client
+ *                  terminates it by passing this DNSServiceRef to DNSServiceRefDeallocate().
  *
  * flags:           Possible values are:
  *                  kDNSServiceFlagsBrowseDomains to enumerate domains recommended for browsing.
@@ -346,7 +477,7 @@ typedef void (*DNSServiceDomainEnumReply)
  * interfaceIndex:  If non-zero, specifies the interface on which to look for domains.
  *                  (the index for a given interface is determined via the if_nametoindex()
  *                  family of calls.)  Most applications will pass 0 to enumerate domains on
- *                  all interfaces.
+ *                  all interfaces. See "Constants for specifying an interface index" for more details.
  *
  * callBack:        The function to be called when a domain is found or the call asynchronously
  *                  fails.
@@ -360,7 +491,7 @@ typedef void (*DNSServiceDomainEnumReply)
  *                  is not initialized.)
  */
 
-DNSServiceErrorType DNSServiceEnumerateDomains
+DNSServiceErrorType DNSSD_API DNSServiceEnumerateDomains
     (
     DNSServiceRef                       *sdRef,
     DNSServiceFlags                     flags,
@@ -403,7 +534,7 @@ DNSServiceErrorType DNSServiceEnumerateDomains
  *
  */
 
-typedef void (*DNSServiceRegisterReply)
+typedef void (DNSSD_API *DNSServiceRegisterReply)
     (
     DNSServiceRef                       sdRef,
     DNSServiceFlags                     flags,
@@ -417,15 +548,15 @@ typedef void (*DNSServiceRegisterReply)
 
 /* DNSServiceRegister()  Parameters:
  *
- * sdRef:           A pointer to an uninitialized DNSServiceRef.  If this call succeeds, the reference
- *                  may be passed to
- *                  DNSServiceRefDeallocate() to deregister the service.
+ * sdRef:           A pointer to an uninitialized DNSServiceRef. If the call succeeds 
+ *                  then it initializes the DNSServiceRef, returns kDNSServiceErr_NoError,
+ *                  and the registration will remain active indefinitely until the client
+ *                  terminates it by passing this DNSServiceRef to DNSServiceRefDeallocate().
  *
  * interfaceIndex:  If non-zero, specifies the interface on which to register the service
  *                  (the index for a given interface is determined via the if_nametoindex()
  *                  family of calls.)  Most applications will pass 0 to register on all
- *                  available interfaces.  Pass -1 to register a service only on the local
- *                  machine (service will not be visible to remote hosts.)
+ *                  available interfaces. See "Constants for specifying an interface index" for more details.
  *
  * flags:           Indicates the renaming behavior on name conflict (most applications
  *                  will pass 0).  See flag definitions above for details.
@@ -478,7 +609,7 @@ typedef void (*DNSServiceRegisterReply)
  *
  */
 
-DNSServiceErrorType DNSServiceRegister
+DNSServiceErrorType DNSSD_API DNSServiceRegister
     (
     DNSServiceRef                       *sdRef,
     DNSServiceFlags                     flags,
@@ -514,19 +645,19 @@ DNSServiceErrorType DNSServiceRegister
  *
  * flags:           Currently ignored, reserved for future use.
  *
- * rrtype:          The type of the record (e.g. TXT, SRV, etc), as defined in nameser.h.
+ * rrtype:          The type of the record (e.g. kDNSServiceType_TXT, kDNSServiceType_SRV, etc)
  *
  * rdlen:           The length, in bytes, of the rdata.
  *
  * rdata:           The raw rdata to be contained in the added resource record.
  *
- * ttl:             The time to live of the resource record, in seconds.
+ * ttl:             The time to live of the resource record, in seconds.  Pass 0 to use a default value.
  *
  * return value:    Returns kDNSServiceErr_NoError on success, otherwise returns an
  *                  error code indicating the error that occurred (the RecordRef is not initialized).
  */
 
-DNSServiceErrorType DNSServiceAddRecord
+DNSServiceErrorType DNSSD_API DNSServiceAddRecord
     (
     DNSServiceRef                       sdRef,
     DNSRecordRef                        *RecordRef,
@@ -566,7 +697,7 @@ DNSServiceErrorType DNSServiceAddRecord
  *                  error code indicating the error that occurred.
  */
 
-DNSServiceErrorType DNSServiceUpdateRecord
+DNSServiceErrorType DNSSD_API DNSServiceUpdateRecord
     (
     DNSServiceRef                       sdRef,
     DNSRecordRef                        RecordRef,     /* may be NULL */
@@ -598,7 +729,7 @@ DNSServiceErrorType DNSServiceUpdateRecord
  *                  error code indicating the error that occurred.
  */
 
-DNSServiceErrorType DNSServiceRemoveRecord
+DNSServiceErrorType DNSSD_API DNSServiceRemoveRecord
     (
     DNSServiceRef                 sdRef,
     DNSRecordRef                  RecordRef,
@@ -629,19 +760,29 @@ DNSServiceErrorType DNSServiceRemoveRecord
  *                  indicate the failure that occurred.  Other parameters are undefined if
  *                  the errorCode is nonzero.
  *
- * serviceName:     The service name discovered.
+ * serviceName:     The discovered service name. This name should be displayed to the user,
+ *                  and stored for subsequent use in the DNSServiceResolve() call.
  *
- * regtype:         The service type, as passed in to DNSServiceBrowse().
+ * regtype:         The service type, which is usually (but not always) the same as was passed
+ *                  to DNSServiceBrowse(). One case where the discovered service type may
+ *                  not be the same as the requested service type is when using subtypes:
+ *                  The client may want to browse for only those ftp servers that allow
+ *                  anonymous connections. The client will pass the string "_ftp._tcp,_anon"
+ *                  to DNSServiceBrowse(), but the type of the service that's discovered
+ *                  is simply "_ftp._tcp". The regtype for each discovered service instance
+ *                  should be stored along with the name, so that it can be passed to
+ *                  DNSServiceResolve() when the service is later resolved.
  *
- * domain:          The domain on which the service was discovered (if the application did not
- *                  specify a domain in DNSServicBrowse(), this indicates the domain on which the
- *                  service was discovered.)
+ * domain:          The domain of the discovered service instance. This may or may not be the
+ *                  same as the domain that was passed to DNSServiceBrowse(). The domain for each
+ *                  discovered service instance should be stored along with the name, so that
+ *                  it can be passed to DNSServiceResolve() when the service is later resolved.
  *
  * context:         The context pointer that was passed to the callout.
  *
  */
 
-typedef void (*DNSServiceBrowseReply)
+typedef void (DNSSD_API *DNSServiceBrowseReply)
     (
     DNSServiceRef                       sdRef,
     DNSServiceFlags                     flags,
@@ -656,15 +797,17 @@ typedef void (*DNSServiceBrowseReply)
 
 /* DNSServiceBrowse() Parameters:
  *
- * sdRef:           A pointer to an uninitialized DNSServiceRef.  May be passed to
- *                  DNSServiceRefDeallocate() to terminate the browse.
+ * sdRef:           A pointer to an uninitialized DNSServiceRef. If the call succeeds 
+ *                  then it initializes the DNSServiceRef, returns kDNSServiceErr_NoError,
+ *                  and the browse operation will run indefinitely until the client
+ *                  terminates it by passing this DNSServiceRef to DNSServiceRefDeallocate().
  *
  * flags:           Currently ignored, reserved for future use.
  *
  * interfaceIndex:  If non-zero, specifies the interface on which to browse for services
  *                  (the index for a given interface is determined via the if_nametoindex()
  *                  family of calls.)  Most applications will pass 0 to browse on all available
- *                  interfaces.  Pass -1 to only browse for services provided on the local host.
+ *                  interfaces. See "Constants for specifying an interface index" for more details.
  *
  * regtype:         The service type being browsed for followed by the protocol, separated by a
  *                  dot (e.g. "_ftp._tcp").  The transport protocol must be "_tcp" or "_udp".
@@ -685,7 +828,7 @@ typedef void (*DNSServiceBrowseReply)
  *                  is not initialized.)
  */
 
-DNSServiceErrorType DNSServiceBrowse
+DNSServiceErrorType DNSSD_API DNSServiceBrowse
     (
     DNSServiceRef                       *sdRef,
     DNSServiceFlags                     flags,
@@ -725,12 +868,10 @@ DNSServiceErrorType DNSServiceBrowse
  *                  the errorCode is nonzero.
  *
  * fullname:        The full service domain name, in the form <servicename>.<protocol>.<domain>.
- *                  (Any literal dots (".") are escaped with a backslash ("\."), and literal
- *                  backslashes are escaped with a second backslash ("\\"), e.g. a web server
- *                  named "Dr. Pepper" would have the fullname  "Dr\.\032Pepper._http._tcp.local.").
- *                  This is the appropriate format to pass to standard system DNS APIs such as
- *                  res_query(), or to the special-purpose functions included in this API that
- *                  take fullname parameters.
+ *                  (This name is escaped following standard DNS rules, making it suitable for
+ *                  passing to standard system DNS APIs such as res_query(), or to the
+ *                  special-purpose functions included in this API that take fullname parameters.
+ *                  See "Notes on DNS Name Escaping" earlier in this file for more details.)
  *
  * hosttarget:      The target hostname of the machine providing the service.  This name can
  *                  be passed to functions like gethostbyname() to identify the host's IP address.
@@ -746,7 +887,7 @@ DNSServiceErrorType DNSServiceBrowse
  *
  */
 
-typedef void (*DNSServiceResolveReply)
+typedef void (DNSSD_API *DNSServiceResolveReply)
     (
     DNSServiceRef                       sdRef,
     DNSServiceFlags                     flags,
@@ -763,23 +904,29 @@ typedef void (*DNSServiceResolveReply)
 
 /* DNSServiceResolve() Parameters
  *
- * sdRef:           A pointer to an uninitialized DNSServiceRef.  May be passed to
- *                  DNSServiceRefDeallocate() to terminate the resolve.
+ * sdRef:           A pointer to an uninitialized DNSServiceRef. If the call succeeds 
+ *                  then it initializes the DNSServiceRef, returns kDNSServiceErr_NoError,
+ *                  and the resolve operation will run indefinitely until the client
+ *                  terminates it by passing this DNSServiceRef to DNSServiceRefDeallocate().
  *
  * flags:           Currently ignored, reserved for future use.
  *
- * interfaceIndex:  The interface on which to resolve the service.  The client should
- *                  pass the interface on which the servicename was discovered, i.e.
- *                  the interfaceIndex passed to the DNSServiceBrowseReply callback,
- *                  or 0 to resolve the named service on all available interfaces.
+ * interfaceIndex:  The interface on which to resolve the service. If this resolve call is
+ *                  as a result of a currently active DNSServiceBrowse() operation, then the
+ *                  interfaceIndex should be the index reported in the DNSServiceBrowseReply
+ *                  callback. If this resolve call is using information previously saved
+ *                  (e.g. in a preference file) for later use, then use interfaceIndex 0, because
+ *                  the desired service may now be reachable via a different physical interface.
+ *                  See "Constants for specifying an interface index" for more details.
  *
- * name:            The servicename to be resolved.
+ * name:            The name of the service instance to be resolved, as reported to the
+ *                  DNSServiceBrowseReply() callback.
  *
- * regtype:         The service type being resolved followed by the protocol, separated by a
- *                  dot (e.g. "_ftp._tcp").  The transport protocol must be "_tcp" or "_udp".
+ * regtype:         The type of the service instance to be resolved, as reported to the
+ *                  DNSServiceBrowseReply() callback.
  *
- * domain:          The domain on which the service is registered, i.e. the domain passed
- *                  to the DNSServiceBrowseReply callback.
+ * domain:          The domain of the service instance to be resolved, as reported to the
+ *                  DNSServiceBrowseReply() callback.
  *
  * callBack:        The function to be called when a result is found, or if the call
  *                  asynchronously fails.
@@ -793,7 +940,7 @@ typedef void (*DNSServiceResolveReply)
  *                  is not initialized.)
  */
 
-DNSServiceErrorType DNSServiceResolve
+DNSServiceErrorType DNSSD_API DNSServiceResolve
     (
     DNSServiceRef                       *sdRef,
     DNSServiceFlags                     flags,
@@ -812,28 +959,6 @@ DNSServiceErrorType DNSServiceResolve
  *
  *********************************************************************************************/
 
-/* Note on DNS Naming Conventions:
- *
- * The functions below refer to resource records by their full domain name, unlike the
- * functions above which divide the name into servicename/regtype/domain fields.  In the
- * functions above, a dot (".") is considered to be a literal dot in the servicename field
- * (e.g. "Dr. Pepper") and a label separator in the regtype ("_ftp._tcp") or domain
- * ("apple.com") fields.  Literal dots in the domain field would be escaped with a backslash,
- * and literal backslashes would be escaped with a second backslash (this is generally not an
- * issue, as domain names on the Internet today almost never use characters other than
- * letters, digits, or hyphens, and the dots are label separators.) Furthermore, this is
- * transparent to the caller, so long as the fields are passed between functions without
- * manipulation.  However, the following, special-purpose calls use a single, full domain
- * name.  As such, all dots are considered to be label separators, unless escaped, and all
- * backslashes are considered to be escape characters, unless preceded by a second backslash.
- * For example, the name "Dr. Smith \ Dr. Johnson" could be passed literally as a service
- * name parameter in the above calls, but in the special purpose calls, the dots and backslash
- * would have to be escaped (e.g. "Dr\. Smith \\ Dr\. Johnson._ftp._tcp.apple.com" for an ftp
- * service on the apple.com domain.) The function DNSServiceConstructFullName() is provided
- * to aid in this conversion from servicename/regtype/domain to a single fully-qualified DNS
- * name with proper escaping.
- */
-
 /* DNSServiceCreateConnection()
  *
  * Create a connection to the daemon allowing efficient registration of
@@ -851,7 +976,7 @@ DNSServiceErrorType DNSServiceResolve
  *                  case the DNSServiceRef is not initialized).
  */
 
-DNSServiceErrorType DNSServiceCreateConnection(DNSServiceRef *sdRef);
+DNSServiceErrorType DNSSD_API DNSServiceCreateConnection(DNSServiceRef *sdRef);
 
 
 /* DNSServiceRegisterRecord
@@ -881,7 +1006,7 @@ DNSServiceErrorType DNSServiceCreateConnection(DNSServiceRef *sdRef);
  *
  */
 
- typedef void (*DNSServiceRegisterRecordReply)
+ typedef void (DNSSD_API *DNSServiceRegisterRecordReply)
     (
     DNSServiceRef                       sdRef,
     DNSRecordRef                        RecordRef,
@@ -907,21 +1032,19 @@ DNSServiceErrorType DNSServiceCreateConnection(DNSServiceRef *sdRef);
  * interfaceIndex:  If non-zero, specifies the interface on which to register the record
  *                  (the index for a given interface is determined via the if_nametoindex()
  *                  family of calls.)  Passing 0 causes the record to be registered on all interfaces.
- *                  Passing -1 causes the record to only be visible on the local host.
+ *                  See "Constants for specifying an interface index" for more details.
  *
  * fullname:        The full domain name of the resource record.
  *
- * rrtype:          The numerical type of the resource record (e.g. PTR, SRV, etc), as defined
- *                  in nameser.h.
+ * rrtype:          The numerical type of the resource record (e.g. kDNSServiceType_PTR, kDNSServiceType_SRV, etc)
  *
- * rrclass:         The class of the resource record, as defined in nameser.h (usually 1 for the
- *                  Internet class).
+ * rrclass:         The class of the resource record (usually kDNSServiceClass_IN)
  *
  * rdlen:           Length, in bytes, of the rdata.
  *
  * rdata:           A pointer to the raw rdata, as it is to appear in the DNS record.
  *
- * ttl:             The time to live of the resource record, in seconds.
+ * ttl:             The time to live of the resource record, in seconds.  Pass 0 to use a default value.
  *
  * callBack:        The function to be called when a result is found, or if the call
  *                  asynchronously fails (e.g. because of a name conflict.)
@@ -935,7 +1058,7 @@ DNSServiceErrorType DNSServiceCreateConnection(DNSServiceRef *sdRef);
  *                  not initialized.)
  */
 
-DNSServiceErrorType DNSServiceRegisterRecord
+DNSServiceErrorType DNSSD_API DNSServiceRegisterRecord
     (
     DNSServiceRef                       sdRef,
     DNSRecordRef                        *RecordRef,
@@ -967,6 +1090,7 @@ DNSServiceErrorType DNSServiceRegisterRecord
  *
  * interfaceIndex:  The interface on which the query was resolved (the index for a given
  *                  interface is determined via the if_nametoindex() family of calls).
+ *                  See "Constants for specifying an interface index" for more details.
  *
  * errorCode:       Will be kDNSServiceErr_NoError on success, otherwise will
  *                  indicate the failure that occurred.  Other parameters are undefined if
@@ -974,9 +1098,9 @@ DNSServiceErrorType DNSServiceRegisterRecord
  *
  * fullname:        The resource record's full domain name.
  *
- * rrtype:          The resource record's type (e.g. PTR, SRV, etc) as defined in nameser.h.
+ * rrtype:          The resource record's type (e.g. kDNSServiceType_PTR, kDNSServiceType_SRV, etc)
  *
- * rrclass:         The class of the resource record, as defined in nameser.h (usually 1).
+ * rrclass:         The class of the resource record (usually kDNSServiceClass_IN).
  *
  * rdlen:           The length, in bytes, of the resource record rdata.
  *
@@ -988,7 +1112,7 @@ DNSServiceErrorType DNSServiceRegisterRecord
  *
  */
 
-typedef void (*DNSServiceQueryRecordReply)
+typedef void (DNSSD_API *DNSServiceQueryRecordReply)
     (
     DNSServiceRef                       DNSServiceRef,
     DNSServiceFlags                     flags,
@@ -1006,7 +1130,10 @@ typedef void (*DNSServiceQueryRecordReply)
 
 /* DNSServiceQueryRecord() Parameters:
  *
- * sdRef:           A pointer to an uninitialized DNSServiceRef.
+ * sdRef:           A pointer to an uninitialized DNSServiceRef. If the call succeeds 
+ *                  then it initializes the DNSServiceRef, returns kDNSServiceErr_NoError,
+ *                  and the query operation will run indefinitely until the client
+ *                  terminates it by passing this DNSServiceRef to DNSServiceRefDeallocate().
  *
  * flags:           Pass kDNSServiceFlagsLongLivedQuery to create a "long-lived" unicast
  *                  query in a non-local domain.  Without setting this flag, unicast queries
@@ -1018,16 +1145,14 @@ typedef void (*DNSServiceQueryRecordReply)
  * interfaceIndex:  If non-zero, specifies the interface on which to issue the query
  *                  (the index for a given interface is determined via the if_nametoindex()
  *                  family of calls.)  Passing 0 causes the name to be queried for on all
- *                  interfaces.  Passing -1 causes the name to be queried for only on the
- *                  local host.
+ *                  interfaces. See "Constants for specifying an interface index" for more details.
  *
  * fullname:        The full domain name of the resource record to be queried for.
  *
- * rrtype:          The numerical type of the resource record to be queried for (e.g. PTR, SRV, etc)
- *                  as defined in nameser.h.
+ * rrtype:          The numerical type of the resource record to be queried for
+ *                  (e.g. kDNSServiceType_PTR, kDNSServiceType_SRV, etc)
  *
- * rrclass:         The class of the resource record, as defined in nameser.h
- *                  (usually 1 for the Internet class).
+ * rrclass:         The class of the resource record (usually kDNSServiceClass_IN).
  *
  * callBack:        The function to be called when a result is found, or if the call
  *                  asynchronously fails.
@@ -1041,7 +1166,7 @@ typedef void (*DNSServiceQueryRecordReply)
  *                  is not initialized.)
  */
 
-DNSServiceErrorType DNSServiceQueryRecord
+DNSServiceErrorType DNSSD_API DNSServiceQueryRecord
     (
     DNSServiceRef                       *sdRef,
     DNSServiceFlags                     flags,
@@ -1065,11 +1190,14 @@ DNSServiceErrorType DNSServiceQueryRecord
  *
  * flags:           Currently unused, reserved for future use.
  *
+ * interfaceIndex:  If non-zero, specifies the interface of the record in question.
+ *                  Passing 0 causes all instances of this record to be reconfirmed.
+ *
  * fullname:        The resource record's full domain name.
  *
- * rrtype:          The resource record's type (e.g. PTR, SRV, etc) as defined in nameser.h.
+ * rrtype:          The resource record's type (e.g. kDNSServiceType_PTR, kDNSServiceType_SRV, etc)
  *
- * rrclass:         The class of the resource record, as defined in nameser.h (usually 1).
+ * rrclass:         The class of the resource record (usually kDNSServiceClass_IN).
  *
  * rdlen:           The length, in bytes, of the resource record rdata.
  *
@@ -1077,7 +1205,7 @@ DNSServiceErrorType DNSServiceQueryRecord
  *
  */
 
-void DNSServiceReconfirmRecord
+void DNSSD_API DNSServiceReconfirmRecord
     (
     DNSServiceFlags                    flags,
     uint32_t                           interfaceIndex,
@@ -1107,21 +1235,21 @@ void DNSServiceReconfirmRecord
  *                  The buffer must be kDNSServiceMaxDomainName (1005) bytes in length to
  *                  accommodate the longest legal domain name without buffer overrun.
  *
- * service:         The service name - any dots or slashes must NOT be escaped.
+ * service:         The service name - any dots or backslashes must NOT be escaped.
  *                  May be NULL (to construct a PTR record name, e.g.
- *                  "_ftp._tcp.apple.com").
+ *                  "_ftp._tcp.apple.com.").
  *
  * regtype:         The service type followed by the protocol, separated by a dot
  *                  (e.g. "_ftp._tcp").
  *
- * domain:          The domain name, e.g. "apple.com".  Any literal dots or backslashes
- *                  must be escaped.
+ * domain:          The domain name, e.g. "apple.com.".  Literal dots or backslashes,
+ *                  if any, must be escaped, e.g. "1st\. Floor.apple.com."
  *
  * return value:    Returns 0 on success, -1 on error.
  *
  */
 
-int DNSServiceConstructFullName
+int DNSSD_API DNSServiceConstructFullName
     (
     char                            *fullName,
     const char                      *service,      /* may be NULL */
@@ -1157,7 +1285,7 @@ int DNSServiceConstructFullName
  * Note: Represents a DNS-SD TXT record.
  */
 
-typedef struct _TXTRecordRef_t { char private[16]; } TXTRecordRef;
+typedef struct _TXTRecordRef_t { char privatedata[16]; } TXTRecordRef;
 
 
 /* TXTRecordCreate()
@@ -1187,6 +1315,11 @@ typedef struct _TXTRecordRef_t { char private[16]; } TXTRecordRef;
  * Recommended size limits for DNS-SD TXT Records are discussed in
  * <http://files.dns-sd.org/draft-cheshire-dnsext-dns-sd.txt>
  *
+ * Note: When passing parameters to and from these TXT record APIs,
+ * the key name does not include the '=' character. The '=' character
+ * is the separator between the key and value in the on-the-wire
+ * packet format; it is not part of either the key or the value.
+ *
  * txtRecord:       A pointer to an uninitialized TXTRecordRef.
  *
  * bufferLen:       The size of the storage provided in the "buffer" parameter.
@@ -1196,7 +1329,7 @@ typedef struct _TXTRecordRef_t { char private[16]; } TXTRecordRef;
  *                  the TXTRecordRef.
  */
 
-void TXTRecordCreate
+void DNSSD_API TXTRecordCreate
     (
     TXTRecordRef     *txtRecord,
     uint16_t         bufferLen,
@@ -1214,7 +1347,7 @@ void TXTRecordCreate
  *
  */
 
-void TXTRecordDeallocate
+void DNSSD_API TXTRecordDeallocate
     (
     TXTRecordRef     *txtRecord
     );
@@ -1237,7 +1370,7 @@ void TXTRecordDeallocate
  *
  * key:             A null-terminated string which only contains printable ASCII
  *                  values (0x20-0x7E), excluding '=' (0x3D). Keys should be
- *                  14 characters or less (not counting the terminating null).
+ *                  8 characters or less (not counting the terminating null).
  *
  * valueSize:       The size of the value.
  *
@@ -1257,7 +1390,7 @@ void TXTRecordDeallocate
  *                  exceed the available storage.
  */
 
-DNSServiceErrorType TXTRecordSetValue
+DNSServiceErrorType DNSSD_API TXTRecordSetValue
     (
     TXTRecordRef     *txtRecord,
     const char       *key,
@@ -1281,7 +1414,7 @@ DNSServiceErrorType TXTRecordSetValue
  *
  */
 
-DNSServiceErrorType TXTRecordRemoveValue
+DNSServiceErrorType DNSSD_API TXTRecordRemoveValue
     (
     TXTRecordRef     *txtRecord,
     const char       *key
@@ -1301,7 +1434,7 @@ DNSServiceErrorType TXTRecordRemoveValue
  *
  */
 
-uint16_t TXTRecordGetLength
+uint16_t DNSSD_API TXTRecordGetLength
     (
     const TXTRecordRef *txtRecord
     );
@@ -1319,7 +1452,7 @@ uint16_t TXTRecordGetLength
  *
  */
 
-const void * TXTRecordGetBytesPtr
+const void * DNSSD_API TXTRecordGetBytesPtr
     (
     const TXTRecordRef *txtRecord
     );
@@ -1374,7 +1507,7 @@ const void * TXTRecordGetBytesPtr
  *
  */
 
-int TXTRecordContainsKey
+int DNSSD_API TXTRecordContainsKey
     (
     uint16_t         txtLen,
     const void       *txtRecord,
@@ -1403,7 +1536,7 @@ int TXTRecordContainsKey
  *                  For non-empty value, valueLen will be length of value data.
  */
 
-const void * TXTRecordGetValuePtr
+const void * DNSSD_API TXTRecordGetValuePtr
     (
     uint16_t         txtLen,
     const void       *txtRecord,
@@ -1425,7 +1558,7 @@ const void * TXTRecordGetValuePtr
  *
  */
 
-uint16_t TXTRecordGetCount
+uint16_t DNSSD_API TXTRecordGetCount
     (
     uint16_t         txtLen,
     const void       *txtRecord
@@ -1456,7 +1589,7 @@ uint16_t TXTRecordGetCount
  * key:             A string buffer used to store the key name.
  *                  On return, the buffer contains a null-terminated C string
  *                  giving the key name. DNS-SD TXT keys are usually
- *                  14 characters or less. To hold the maximum possible
+ *                  8 characters or less. To hold the maximum possible
  *                  key name, the buffer should be 256 bytes long.
  *
  * valueLen:        On output, will be set to the size of the "value" data.
@@ -1470,7 +1603,7 @@ uint16_t TXTRecordGetCount
  *                  TXTRecordGetCount()-1.
  */
 
-DNSServiceErrorType TXTRecordGetItemAtIndex
+DNSServiceErrorType DNSSD_API TXTRecordGetItemAtIndex
     (
     uint16_t         txtLen,
     const void       *txtRecord,
@@ -1481,6 +1614,39 @@ DNSServiceErrorType TXTRecordGetItemAtIndex
     const void       **value
     );
 
+#ifdef __APPLE_API_PRIVATE
+
+/*
+ * Mac OS X specific functionality
+ * 3rd party clients of this API should not depend on future support or availability of this routine
+ */
+
+/* DNSServiceSetDefaultDomainForUser()
+ *
+ * Set the default domain for the caller's UID.  Future browse and registration
+ * calls by this user that do not specify an explicit domain will browse and
+ * register in this wide-area domain in addition to .local.  In addition, this
+ * domain will be returned as a Browse domain via domain enumeration calls.
+ * 
+ *
+ * Parameters:
+ *
+ * flags:           Pass kDNSServiceFlagsAdd to add a domain for a user.  Call without
+ *                  this flag set to clear a previously added domain.
+ *
+ * domain:          The domain to be used for the caller's UID.
+ *
+ * return value:    Returns kDNSServiceErr_NoError on succeses, otherwise returns
+ *                  an error code indicating the error that occurred
+ */
+
+DNSServiceErrorType DNSSD_API DNSServiceSetDefaultDomainForUser
+    (
+    DNSServiceFlags                    flags,
+    const char                         *domain
+    );	
+	
+#endif //__APPLE_API_PRIVATE
 
 #ifdef  __cplusplus
     }

@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,45 @@
     Change History (most recent first):
 
 $Log: mDNSLibraryResources.r,v $
+Revision 1.17  2004/12/13 21:54:30  cheshire
+mDNSResponder-87
+
+Revision 1.16  2004/12/06 19:09:47  cheshire
+mDNSResponder-86
+
+Revision 1.15  2004/11/29 23:36:15  cheshire
+mDNSResponder-85
+
+Revision 1.14  2004/11/23 03:46:31  cheshire
+mDNSResponder-84
+
+Revision 1.13  2004/10/26 20:30:30  cheshire
+mDNSResponder-82
+
+Revision 1.12  2004/10/14 23:38:04  cheshire
+mDNSResponder-80
+
+Revision 1.11  2004/10/07 21:49:15  cheshire
+mDNSResponder-79
+
+Revision 1.10  2004/09/25 02:52:09  cheshire
+mDNSResponder-78
+
+Revision 1.9  2004/09/22 22:52:07  cheshire
+mDNSResponder-77
+
+Revision 1.8  2004/09/21 00:20:52  cheshire
+mDNSResponder-76
+
+Revision 1.7  2004/09/15 19:45:06  cheshire
+mDNSResponder-75
+
+Revision 1.6  2004/09/09 23:32:35  cheshire
+mDNSResponder-74
+
+Revision 1.5  2004/08/10 21:51:45  cheshire
+mDNSResponder-69
+
 Revision 1.4  2004/06/10 20:28:16  cheshire
 Update version string to 1.0a66
 
@@ -55,15 +92,15 @@ like Muse Research who want to be able to use mDNS/DNS-SD from GPL-licensed code
 
 resource 'vers' (1, purgeable)
 	{
-   0x01, 0x00, alpha, 66, verUS,
-   "1.0a66",
-   "Multicast DNS & DNS Service Discovery 1.0a66"
+   0x01, 0x00, alpha, 87, verUS,
+   "1.0a87",
+   "Multicast DNS & DNS Service Discovery 1.0a87"
 	};
 
 resource 'vers' (2, purgeable)
 	{
-   0x01, 0x00, alpha, 66, verUS,
-   "1.0a66",
+   0x01, 0x00, alpha, 87, verUS,
+   "1.0a87",
    "developer.apple.com/darwin/projects/rendezvous/"
 	};
 

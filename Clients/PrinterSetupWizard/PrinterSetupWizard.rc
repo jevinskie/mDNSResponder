@@ -1,0 +1,346 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+#include "WinVersRes.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// Russian resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_RUS)
+#ifdef _WIN32
+LANGUAGE LANG_RUSSIAN, SUBLANG_DEFAULT
+#pragma code_page(1251)
+#endif //_WIN32
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "#include ""WinVersRes.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "#define _AFX_NO_SPLITTER_RESOURCES\r\n"
+    "#define _AFX_NO_OLE_RESOURCES\r\n"
+    "#define _AFX_NO_TRACKER_RESOURCES\r\n"
+    "#define _AFX_NO_PROPERTY_RESOURCES\r\n"
+    "\r\n"
+    "#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)\r\n"
+    "LANGUAGE 9, 1\r\n"
+    "#pragma code_page(1252)\r\n"
+    "#include ""res\\PrinterSetupWizard.rc2""  // non-Microsoft Visual C++ edited resources\r\n"
+    "#include ""afxres.rc""         // Standard components\r\n"
+    "#endif\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+#endif    // Russian resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDR_MAINFRAME           ICON                    "res\\Print.ico"
+IDI_INFO                ICON                    "res\\Info.ico"
+IDI_PRINTER             ICON                    "res\\NetworkPrinter.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDB_WATERMARK           BITMAP                  "res\\watermark.bmp"
+IDB_BANNER_ICON         BITMAP                  "res\\banner_icon.bmp"
+IDB_ABOUT               BITMAP                  "res\\about.bmp"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_ABOUTBOX DIALOGEX 0, 0, 235, 55
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | 
+    WS_SYSMENU
+CAPTION "About Printer Setup Wizard"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    ICON            IDR_MAINFRAME,IDC_STATIC,11,17,20,20
+    LTEXT           "Printer Setup Wizard Version 1.0",IDC_STATIC,40,10,119,
+                    8,SS_NOPREFIX
+    LTEXT           "Copyright (C) 2002",IDC_STATIC,40,25,119,8
+    DEFPUSHBUTTON   "OK",IDOK,178,7,50,16,WS_GROUP
+END
+
+IDD_PRINTERSETUPWIZARD_DIALOG DIALOGEX 0, 0, 320, 200
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE | 
+    WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "Printer Setup Wizard"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,263,7,50,16
+    PUSHBUTTON      "Cancel",IDCANCEL,263,25,50,16
+    PUSHBUTTON      "Start Wizard",IDC_BUTTON1,100,86,109,35
+END
+
+IDD_SECOND_PAGE DIALOGEX 0, 0, 290, 154
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_DISABLED | WS_CAPTION
+CAPTION "Rendezvous Printer Wizard"
+FONT 8, "MS Shell Dlg", 0, 0, 0x0
+BEGIN
+    LTEXT           "Shared Printers:",IDC_STATIC,3,0,171,8
+    CONTROL         "",IDC_BROWSE_LIST,"SysTreeView32",TVS_DISABLEDRAGDROP | 
+                    TVS_SHOWSELALWAYS | TVS_FULLROWSELECT | WS_BORDER | 
+                    WS_TABSTOP,2,11,286,142
+END
+
+IDD_FIRST_PAGE DIALOGEX 0, 0, 290, 199
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_DISABLED | WS_CAPTION
+CAPTION "Rendezvous Printer Wizard"
+FONT 8, "MS Shell Dlg", 0, 0, 0x0
+BEGIN
+    LTEXT           "Welcome to the Rendezvous Printer Setup Wizard",IDC_GREETING,
+                    114,7,171,46
+    LTEXT           "Click next to continue.",IDC_STATIC,115,188,143,8
+    LTEXT           "This wizard helps you connect to a shared printer using Rendezvous.  Make sure your printer is turned on and connected to your network.",
+                    IDC_STATIC,146,60,139,62
+    ICON            IDI_INFO,IDC_STATIC,118,60,21,20,SS_REALSIZEIMAGE,
+                    WS_EX_TRANSPARENT
+END
+
+IDD_THIRD_PAGE DIALOGEX 0, 0, 290, 154
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | 
+    WS_SYSMENU
+CAPTION "Rendezvous Printer Wizard"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_PRINTER_MODEL,"SysListView32",LVS_REPORT | 
+                    LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_SORTASCENDING | 
+                    LVS_ALIGNLEFT | WS_BORDER | WS_TABSTOP,110,58,178,76
+    CONTROL         "",IDC_PRINTER_MANUFACTURER,"SysListView32",LVS_REPORT | 
+                    LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_SORTASCENDING | 
+                    LVS_ALIGNLEFT | WS_BORDER | WS_TABSTOP,2,58,105,76
+    ICON            IDI_PRINTER,IDC_PRINTER_IMAGE,1,0,21,20,SS_REALSIZEIMAGE
+    LTEXT           "",IDC_PRINTER_NAME,40,5,173,8
+    LTEXT           "The Rendezvous Printer Wizard has auto-selected the following printer settings.  Click 'Next' to continue installing this printer.",
+                    IDC_PRINTER_SELECTION_TEXT,40,23,243,26
+    CONTROL         "Use this printer as the default printer",
+                    IDC_DEFAULT_PRINTER,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,3,142,224,10
+    PUSHBUTTON      "Have Disk...",IDC_HAVE_DISK,238,140,50,14
+END
+
+IDD_FOURTH_PAGE DIALOGEX 0, 0, 290, 199
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_DISABLED | WS_CAPTION
+CAPTION "Rendezvous Printer Wizard"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "Completing the Rendezvous Printer Wizard",IDC_GOODBYE,
+                    116,7,171,27
+    LTEXT           "You have successfully completed the Rendezvous Printer Wizard.  The printer has the following settings:",
+                    IDC_STATIC,116,42,158,31
+    LTEXT           "Name:",IDC_STATIC,116,78,22,8
+    LTEXT           "Manufacturer:",IDC_STATIC,116,91,47,8
+    LTEXT           "Model:",IDC_STATIC,116,104,22,8
+    LTEXT           "Port:",IDC_STATIC,116,117,17,8
+    LTEXT           "Default:",IDC_STATIC,116,130,27,8
+    LTEXT           "",IDC_PRINTER_NAME,172,79,113,8
+    LTEXT           "",IDC_PRINTER_MANUFACTURER,172,91,113,8
+    LTEXT           "",IDC_PRINTER_MODEL,172,103,113,8
+    LTEXT           "",IDC_PRINTER_PORT,172,116,113,8
+    LTEXT           "",IDC_PRINTER_DEFAULT,172,130,113,8
+    LTEXT           "To close this wizard, click Finish.",IDC_STATIC,116,187,
+                    103,8
+END
+
+IDD_DIALOG1 DIALOGEX 0, 0, 265, 130
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | 
+    WS_SYSMENU
+CAPTION "Dialog"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         138,IDC_STATIC,"Static",SS_BITMAP | SS_REALSIZEIMAGE,0,0,
+                    265,131
+    LTEXT           "Static",IDC_STATIC,77,12,19,8
+    LTEXT           "Static",IDC_STATIC,71,46,19,8
+    LTEXT           "Static",IDC_STATIC,71,89,19,8
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION MASTER_PROD_VERS
+ PRODUCTVERSION MASTER_PROD_VERS
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904e4"
+        BEGIN
+            VALUE "CompanyName", "Apple Computer, Inc."
+            VALUE "FileDescription", "Rendezvous Printer Wizard"
+            VALUE "FileVersion", MASTER_PROD_VERS_STR
+            VALUE "InternalName", "RendezvousPrinterWizard.exe"
+            VALUE "LegalCopyright", "Copyright (C) 2003-2004 Apple Computer, Inc."
+            VALUE "OriginalFilename", "RendezvousPrinterWizard.exe"
+            VALUE "ProductName", MASTER_PROD_NAME
+            VALUE "ProductVersion", MASTER_PROD_VERS_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO 
+BEGIN
+    IDD_SECOND_PAGE, DIALOG
+    BEGIN
+        BOTTOMMARGIN, 153
+    END
+
+    IDD_FIRST_PAGE, DIALOG
+    BEGIN
+        RIGHTMARGIN, 285
+        BOTTOMMARGIN, 196
+    END
+
+    IDD_FOURTH_PAGE, DIALOG
+    BEGIN
+        RIGHTMARGIN, 285
+        BOTTOMMARGIN, 197
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// RT_MANIFEST
+//
+
+IDR_MANIFEST            RT_MANIFEST             "res\\PrinterSetupWizard.manifest"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE 
+BEGIN
+    IDS_ABOUTBOX            "&About Printer Setup Wizard..."
+    IDS_GOODBYE             "Completing the Rendezvous Printer Setup Wizard."
+    IDS_GREETING            "Welcome to the Rendezvous Printer Setup Wizard"
+    IDS_BROWSE_TITLE        "Browse for Rendezvous Printers"
+    IDS_BROWSE_SUBTITLE     "Select the printer you want to use from the list below."
+    IDS_CAPTION             "Rendezvous Printer Wizard"
+    IDS_GOODBYE_GOOD1       "You have successfully completed the Rendezvous Printer Wizard.  The printer has the following settings:"
+    IDS_SEARCHING           "Searching for printers..."
+    IDS_GOODBYTE_GOOD2      "To close this wizard, click Finish."
+    IDS_INSTALL_TITLE       "Install Rendezvous Printer"
+    IDS_INSTALL_SUBTITLE    "The manufacturer and model determine which printer software to use."
+END
+
+STRINGTABLE 
+BEGIN
+    IDS_ERROR_SELECTING_PRINTER_TEXT 
+                            "There was an error selecting this printer."
+    IDS_ERROR_SELECTING_PRINTER_CAPTION "Error"
+    IDS_INSTALL_ERROR_CAPTION "Error"
+    IDS_INSTALL_ERROR_MESSAGE 
+                            "You do not have sufficient access to your computer to connect to the selected printer."
+    IDS_MANUFACTURER_HEADING "Manufacturer"
+    IDS_MODEL_HEADING       "Model"
+    IDS_NO_RENDEZVOUS_PRINTERS "No Rendezvous Printers are available"
+    IDS_NO_MDNSRESPONDER_SERVICE_TEXT "Rendezvous Service is not available"
+    IDS_NO_MDNSRESPONDER_SERVICE_CAPTION "Error"
+    IDS_PRINTER_MATCH_GOOD  "The Rendezvous Printer Wizard has auto-selected the following printer settings.  Click 'Next' to continue installing this printer."
+    IDS_PRINTER_MATCH_BAD   "The Rendezvous Printer Wizard cannot find a driver for this printer.  Manually select from the list, or click 'Have Disk' if your printer came with an installation disk. "
+    IDS_YES                 "Yes"
+    IDS_NO                  "No"
+    IDS_LARGE_FONT          "MS Sans Serif"
+END
+
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+#define _AFX_NO_SPLITTER_RESOURCES
+#define _AFX_NO_OLE_RESOURCES
+#define _AFX_NO_TRACKER_RESOURCES
+#define _AFX_NO_PROPERTY_RESOURCES
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE 9, 1
+#pragma code_page(1252)
+#include "res\PrinterSetupWizard.rc2"  // non-Microsoft Visual C++ edited resources
+#include "afxres.rc"         // Standard components
+#endif
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

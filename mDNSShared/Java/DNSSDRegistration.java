@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,9 @@
     Change History (most recent first):
 
 $Log: DNSSDRegistration.java,v $
+Revision 1.2  2004/12/11 03:01:00  rpantos
+<rdar://problem/3907498> Java DNSRecord API should be cleaned up
+
 Revision 1.1  2004/04/30 16:32:34  rpantos
 First checked in.
 
@@ -41,10 +42,20 @@ package	com.apple.dnssd;
 
 public interface	DNSSDRegistration extends DNSSDService
 {
+	/** Get a reference to the primary TXT record of a registered service.<P> 
+		The record can be updated by sending it an update() message.<P>
+
+		<P>
+		@return		A {@link DNSRecord}. 
+					If {@link DNSSDRegistration#stop} is called, the DNSRecord is also 
+					invalidated and may not be used further.
+	*/
+	DNSRecord		getTXTRecord()
+	throws DNSSDException;
+
 	/** Add a record to a registered service.<P> 
 		The name of the record will be the same as the registered service's name.<P>
-		The record can later be updated or deregistered by passing the DNSRecord returned 
-		by this function to updateRecord() or removeRecord().<P>
+		The record can be updated or deregistered by sending it an update() or remove() message.<P>
 
 		@param	flags
 					Currently unused, reserved for future use.
@@ -63,38 +74,6 @@ public interface	DNSSDRegistration extends DNSSDService
 					invalidated and may not be used further.
 	*/
 	DNSRecord		addRecord( int flags, int rrType, byte[] rData, int ttl)
-	throws DNSSDException;
-
-	/** Update a registered resource record.<P> 
-		The record must either be the primary txt record of a service registered via DNSSD.register(), 
-		or a record added to a registered service via addRecord().<P>
-
-		@param	record
-					A DNSRecord initialized by addRecord(), or null to update the
-					service's primary txt record.
-		<P>
-		@param	flags
-					Currently unused, reserved for future use.
-		<P>
-		@param	rData
-					The new rdata to be contained in the updated resource record.
-		<P>
-		@param	ttl
-					The time to live of the updated resource record, in seconds.
-	*/
-	void			updateRecord( DNSRecord record, int flags, byte[] rData, int ttl)
-	throws DNSSDException;
-
-	/** Remove a registered resource record.<P> 
-		The record must have been previously added to a service record set via via addRecord().<P>
-
-		@param	record
-					A DNSRecord initialized by addRecord().
-		<P>
-		@param	flags
-					Currently unused, reserved for future use.
-	*/
-	void			removeRecord( DNSRecord record, int flags)
 	throws DNSSDException;
 } 
 

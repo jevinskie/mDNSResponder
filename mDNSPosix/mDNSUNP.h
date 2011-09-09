@@ -1,9 +1,8 @@
-/*
- * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+/* -*- Mode: C; tab-width: 4 -*-
+ *
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
  * @APPLE_LICENSE_HEADER_START@
- * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
  * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
@@ -25,6 +24,16 @@
     Change History (most recent first):
 
 $Log: mDNSUNP.h,v $
+Revision 1.16  2004/12/01 04:25:05  cheshire
+<rdar://problem/3872803> Darwin patches for Solaris and Suse
+Provide daemon() for platforms that don't have it
+
+Revision 1.15  2004/11/30 22:37:01  cheshire
+Update copyright dates and add "Mode: C; tab-width: 4" headers
+
+Revision 1.14  2004/10/16 00:17:01  cheshire
+<rdar://problem/3770558> Replace IP TTL 255 check with local subnet source address check
+
 Revision 1.13  2004/03/20 05:37:09  cheshire
 Fix contributed by Terry Lambert & Alfred Perlstein:
 Don't use uint8_t -- it requires stdint.h, which doesn't exist on FreeBSD 4.x
@@ -128,6 +137,7 @@ struct ifi_info {
   short   ifi_myflags;          /* our own IFI_xxx flags */
   int     ifi_index;            /* interface index */
   struct sockaddr  *ifi_addr;   /* primary address */
+  struct sockaddr  *ifi_netmask;
   struct sockaddr  *ifi_brdaddr;/* broadcast address */
   struct sockaddr  *ifi_dstaddr;/* destination address */
   struct ifi_info  *ifi_next;   /* next of these structures */
@@ -144,6 +154,10 @@ extern struct ifi_info  *get_ifi_info(int family, int doaliases);
 /* 'The free_ifi_info function, which takes a pointer that was */
 /* returned by get_ifi_info and frees all the dynamic memory.' */
 extern void             free_ifi_info(struct ifi_info *);
+
+#ifdef NOT_HAVE_DAEMON
+extern int daemon(int nochdir, int noclose)
+#endif
 
 #ifdef  __cplusplus
     }

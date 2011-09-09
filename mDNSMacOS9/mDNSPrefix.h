@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,9 @@
     Change History (most recent first):
 
 $Log: mDNSPrefix.h,v $
+Revision 1.3  2004/06/11 00:03:28  cheshire
+Add code for testing avail/busy subtypes
+
 Revision 1.2  2004/05/21 01:57:08  cheshire
 Add macros for malloc() and free() so that dnssd_clientlib.c can use them
 
@@ -46,26 +47,32 @@ like Muse Research who want to be able to use mDNS/DNS-SD from GPL-licensed code
 // the standalone application samples that have their own event loop -- don't try
 // to build the System Extension with MDNS_ONLYSYSTEMTASK set because it won't work.)
 
-#if   __ide_target("Standalone TestResponder")           || __ide_target("Standalone TestSearcher")
+#if   __ide_target("Standalone TestResponder")           || __ide_target("Standalone TestSearcher")           || __ide_target("Standalone SubTypeTester")
 #define TARGET_API_MAC_CARBON 1
 #define OTCARBONAPPLICATION 1
 #define MDNS_ONLYSYSTEMTASK 0
 #define MDNS_DEBUGMSGS 0
+
 #elif __ide_target("Standalone TestResponder (Debug)")   || __ide_target("Standalone TestSearcher (Debug)")
 #define TARGET_API_MAC_CARBON 1
 #define OTCARBONAPPLICATION 1
 #define MDNS_ONLYSYSTEMTASK 1
 #define MDNS_DEBUGMSGS 1
+
 #elif __ide_target("Standalone TestResponder (Classic)") || __ide_target("Standalone TestSearcher (Classic)")
 #define MDNS_ONLYSYSTEMTASK 0
 #define MDNS_DEBUGMSGS 0
+
 #elif __ide_target("CFM Library for Extensions Folder")
 #define MDNS_BUILDINGSHAREDLIBRARY 2
+
 #elif __ide_target("CFM Library for Extensions (Debug)")
 #define MDNS_DEBUGMSGS 0
 #define MDNS_BUILDINGSHAREDLIBRARY 1
+
 #elif __ide_target("CFM Stub for clients to link against")
 #define MDNS_BUILDINGSTUBLIBRARY 1
+
 #else
 #error Options for this target not found in prefix file
 #endif

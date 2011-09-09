@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,54 @@
     Change History (most recent first):
 
 $Log: DNSCommon.h,v $
+Revision 1.28  2004/12/06 21:15:22  ksekar
+<rdar://problem/3884386> mDNSResponder crashed in CheckServiceRegistrations
+
+Revision 1.27  2004/12/03 07:20:50  ksekar
+<rdar://problem/3674208> Wide-Area: Registration of large TXT record fails
+
+Revision 1.26  2004/12/03 05:18:33  ksekar
+<rdar://problem/3810596> mDNSResponder needs to return more specific TSIG errors
+
+Revision 1.25  2004/10/26 03:52:02  cheshire
+Update checkin comments
+
+Revision 1.24  2004/10/23 01:16:00  cheshire
+<rdar://problem/3851677> uDNS operations not always reliable on multi-homed hosts
+
+Revision 1.23  2004/10/03 23:18:58  cheshire
+Move address comparison macros from DNSCommon.h to mDNSEmbeddedAPI.h
+
+Revision 1.22  2004/09/30 00:24:56  ksekar
+<rdar://problem/3695802> Dynamically update default registration domains on config change
+
+Revision 1.21  2004/09/17 01:08:48  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.20  2004/09/17 00:49:51  cheshire
+Get rid of now-unused GetResourceRecord -- the correct (safe) routine to use
+is GetLargeResourceRecord
+
+Revision 1.19  2004/09/16 21:59:15  cheshire
+For consistency with zerov6Addr, rename zeroIPAddr to zerov4Addr
+
+Revision 1.18  2004/09/16 02:29:39  cheshire
+Moved mDNS_Lock/mDNS_Unlock to DNSCommon.c; Added necessary locking around
+uDNS_ReceiveMsg, uDNS_StartQuery, uDNS_UpdateRecord, uDNS_RegisterService
+
+Revision 1.17  2004/09/14 23:27:46  cheshire
+Fix compile errors
+
+Revision 1.16  2004/08/13 23:46:58  cheshire
+"asyncronous" -> "asynchronous"
+
+Revision 1.15  2004/08/10 23:19:14  ksekar
+<rdar://problem/3722542>: DNS Extension daemon for Wide Area Rendezvous
+Moved routines/constants to allow extern access for garbage collection daemon
+
 Revision 1.14  2004/05/28 23:42:36  ksekar
 <rdar://problem/3258021>: Feature: DNS server->client notification on record changes (#7805)
 
@@ -48,16 +94,16 @@ Basic Dynamic Update support via mDNS_Register (dissabled via
 UNICAST_REGISTRATION #define)
 
 Revision 1.7  2004/02/03 19:47:36  ksekar
-Added an asyncronous state machine mechanism to uDNS.c, including
+Added an asynchronous state machine mechanism to uDNS.c, including
 calls to find the parent zone for a domain name.  Changes include code
-in repository previously dissabled via "#if 0 //incomplete".  Codepath
+in repository previously dissabled via "#if 0 incomplete".  Codepath
 is currently unused, and will be called to create update records, etc.
 
 Revision 1.6  2004/01/27 20:15:22  cheshire
 <rdar://problem/3541288>: Time to prune obsolete code for listening on port 53
 
 Revision 1.5  2004/01/24 03:40:56  cheshire
-Move mDNSAddrIsDNSMulticast() from DNSCommon.h to mDNSClientAPI.h so clients can use it
+Move mDNSAddrIsDNSMulticast() from DNSCommon.h to mDNSEmbeddedAPI.h so embedded clients can use it
 
 Revision 1.4  2004/01/24 03:38:27  cheshire
 Fix minor syntactic error: Headers should use "extern" declarations, not "mDNSexport"
@@ -77,7 +123,7 @@ Revision 1.1  2003/12/13 03:05:27  ksekar
 #ifndef __DNSCOMMON_H_
 #define __DNSCOMMON_H_
 
-#include "mDNSClientAPI.h"
+#include "mDNSEmbeddedAPI.h"
 
 #ifdef	__cplusplus
 	extern "C" {
@@ -127,6 +173,13 @@ typedef enum
 	kDNSFlag1_RC_NotZone  = 0x0A
 	} DNS_Flags;
 
+typedef enum
+	{
+	TSIG_ErrBadSig  = 16,
+	TSIG_ErrBadKey  = 17,
+	TSIG_ErrBadTime = 18
+	} TSIG_ErrorCode;
+	
 // ***************************************************************************
 #if COMPILER_LIKES_PRAGMA_MARK
 #pragma mark -
@@ -138,41 +191,18 @@ extern mDNSInterfaceID GetNextActiveInterfaceID(const NetworkInterfaceInfo *intf
 
 extern mDNSu32 mDNSRandom(mDNSu32 max);
 
-#define mDNSSameIPv4Address(A,B) ((A).NotAnInteger == (B).NotAnInteger)
-#define mDNSSameIPv6Address(A,B) ((A).l[0] == (B).l[0] && (A).l[1] == (B).l[1] && (A).l[2] == (B).l[2] && (A).l[3] == (B).l[3])
-
-#define mDNSIPv4AddressIsZero(A) mDNSSameIPv4Address((A), zeroIPAddr)
-#define mDNSIPv6AddressIsZero(A) mDNSSameIPv6Address((A), zerov6Addr)
-
-#define mDNSIPv4AddressIsOnes(A) mDNSSameIPv4Address((A), onesIPv4Addr)
-#define mDNSIPv6AddressIsOnes(A) mDNSSameIPv6Address((A), onesIPv6Addr)
-
-#define mDNSAddressIsZero(X) (                                              \
-	((X)->type == mDNSAddrType_IPv4 && mDNSIPv4AddressIsZero((X)->ip.v4)) || \
-	((X)->type == mDNSAddrType_IPv6 && mDNSIPv6AddressIsZero((X)->ip.v6))    )
-
-#define mDNSAddressIsOnes(X) (                                              \
-	((X)->type == mDNSAddrType_IPv4 && mDNSIPv4AddressIsOnes((X)->ip.v4)) || \
-	((X)->type == mDNSAddrType_IPv6 && mDNSIPv6AddressIsOnes((X)->ip.v6))    )
-
-#define mDNSAddressIsValid(X) (                                                                                             \
-	((X)->type == mDNSAddrType_IPv4) ? !(mDNSIPv4AddressIsZero((X)->ip.v4) || mDNSIPv4AddressIsOnes((X)->ip.v4)) :          \
-	((X)->type == mDNSAddrType_IPv6) ? !(mDNSIPv6AddressIsZero((X)->ip.v6) || mDNSIPv6AddressIsOnes((X)->ip.v6)) : mDNSfalse)
-
-
 
 // ***************************************************************************
 #if COMPILER_LIKES_PRAGMA_MARK
 #pragma mark -
 #pragma mark - Domain Name Utility Functions
 #endif
-
+	
 #define mdnsIsDigit(X)     ((X) >= '0' && (X) <= '9')
 #define mDNSIsUpperCase(X) ((X) >= 'A' && (X) <= 'Z')
 #define mDNSIsLowerCase(X) ((X) >= 'a' && (X) <= 'z')
 #define mdnsIsLetter(X)    (mDNSIsUpperCase(X) || mDNSIsLowerCase(X))
-
-
+	
 #define mdnsValidHostChar(X, notfirst, notlast) (mdnsIsLetter(X) || mdnsIsDigit(X) || ((notfirst) && (notlast) && (X) == '-') )
 
 extern mDNSu16 CompressedDomainNameLength(const domainname *const name, const domainname *parent);
@@ -196,7 +226,8 @@ extern mDNSBool SameRData(const ResourceRecord *const r1, const ResourceRecord *
 
 extern mDNSBool ResourceRecordAnswersQuestion(const ResourceRecord *const rr, const DNSQuestion *const q);
 
-
+extern mDNSBool SameResourceRecord(ResourceRecord *r1, ResourceRecord *r2);
+	
 extern mDNSu16 GetRDLength(const ResourceRecord *const rr, mDNSBool estimate);
 
 #define GetRRDomainNameTarget(RR) (                                                                          \
@@ -221,13 +252,32 @@ extern mDNSu8 *putDomainNameAsLabels(const DNSMessage *const msg, mDNSu8 *ptr, c
 	
 extern mDNSu8 *putRData(const DNSMessage *const msg, mDNSu8 *ptr, const mDNSu8 *const limit, ResourceRecord *rr);
 
-extern mDNSu8 *PutResourceRecordTTL(DNSMessage *const msg, mDNSu8 *ptr, mDNSu16 *count, ResourceRecord *rr, mDNSu32 ttl);
+// If we have a single large record to put in the packet, then we allow the packet to be up to 9K bytes,
+// but in the normal case we try to keep the packets below 1500 to avoid IP fragmentation on standard Ethernet	
 
+extern mDNSu8 *PutResourceRecordTTLWithLimit(DNSMessage *const msg, mDNSu8 *ptr, mDNSu16 *count, ResourceRecord *rr, mDNSu32 ttl, const mDNSu8 *limit);
+
+#define PutResourceRecordTTL(msg, ptr, count, rr, ttl) PutResourceRecordTTLWithLimit((msg), (ptr), (count), (rr), (ttl), \
+	((msg)->h.numAnswers || (msg)->h.numAuthorities || (msg)->h.numAdditionals) ? (msg)->data + NormalMaxDNSMessageData : (msg)->data + AbsoluteMaxDNSMessageData)
+
+#define PutResourceRecordTTLJumbo(msg, ptr, count, rr, ttl) PutResourceRecordTTLWithLimit((msg), (ptr), (count), (rr), (ttl), \
+	(msg)->data + AbsoluteMaxDNSMessageData)
+			
 extern mDNSu8 *PutResourceRecordCappedTTL(DNSMessage *const msg, mDNSu8 *ptr, mDNSu16 *count, ResourceRecord *rr, mDNSu32 maxttl);
 
 extern mDNSu8 *putEmptyResourceRecord(DNSMessage *const msg, mDNSu8 *ptr, const mDNSu8 *const limit, mDNSu16 *count, const AuthRecord *rr);
 
 extern mDNSu8 *putQuestion(DNSMessage *const msg, mDNSu8 *ptr, const mDNSu8 *const limit, const domainname *const name, mDNSu16 rrtype, mDNSu16 rrclass);
+
+extern mDNSu8 *putZone(DNSMessage *const msg, mDNSu8 *ptr, mDNSu8 *limit, const domainname *zone, mDNSOpaque16 zoneClass);
+
+extern mDNSu8 *putPrereqNameNotInUse(domainname *name, DNSMessage *msg, mDNSu8 *ptr, mDNSu8 *end);
+
+extern mDNSu8 *putDeletionRecord(DNSMessage *msg, mDNSu8 *ptr, ResourceRecord *rr);
+
+extern mDNSu8 *putDeleteAllRRSets(DNSMessage *msg, mDNSu8 *ptr, const domainname *name);
+	
+extern mDNSu8 *putUpdateLease(DNSMessage *msg, mDNSu8 *end, mDNSu32 lease);
 	
 #define PutResourceRecord(MSG, P, C, RR) PutResourceRecordTTL((MSG), (P), (C), (RR), (RR)->rroriginalttl)
 
@@ -250,8 +300,8 @@ extern const mDNSu8 *getDomainName(const DNSMessage *const msg, const mDNSu8 *pt
 	
 extern const mDNSu8 *skipResourceRecord(const DNSMessage *msg, const mDNSu8 *ptr, const mDNSu8 *end);
 
-extern const mDNSu8 *GetResourceRecord(mDNS *const m, const DNSMessage * const msg, const mDNSu8 *ptr, 
-    const mDNSu8 * const end, const mDNSInterfaceID InterfaceID, mDNSu8 RecordType, CacheRecord *rr, RData *RDataStorage);
+extern const mDNSu8 *GetLargeResourceRecord(mDNS *const m, const DNSMessage * const msg, const mDNSu8 *ptr, 
+    const mDNSu8 * const end, const mDNSInterfaceID InterfaceID, mDNSu8 RecordType, LargeCacheRecord *largecr);
 
 extern const mDNSu8 *skipQuestion(const DNSMessage *msg, const mDNSu8 *ptr, const mDNSu8 *end);
 
@@ -264,9 +314,6 @@ extern const mDNSu8 *LocateAuthorities(const DNSMessage *const msg, const mDNSu8
 
 extern const mDNSu8 *LocateAdditionals(const DNSMessage *const msg, const mDNSu8 *const end);
 
-#define GetLargeResourceRecord(m, msg, p, e, i, t, L) \
-	(((L)->r.rdatastorage.MaxRDLength = MaximumRDSize), GetResourceRecord((m), (msg), (p), (e), (i), (t), &(L)->r, (RData*)&(L)->r.rdatastorage))
-
 // ***************************************************************************
 #if COMPILER_LIKES_PRAGMA_MARK
 #pragma mark -
@@ -274,11 +321,17 @@ extern const mDNSu8 *LocateAdditionals(const DNSMessage *const msg, const mDNSu8
 #pragma mark - Packet Sending Functions
 #endif
 
-extern mStatus mDNSSendDNSMessage(const mDNS *const m, DNSMessage *const msg, mDNSu8 * end, mDNSInterfaceID InterfaceID, const mDNSAddr *dst, mDNSIPPort dstport);
-extern mStatus mDNSSendDNSMessage_tcp(const mDNS *const m, DNSMessage *const msg, mDNSu8 * end, int sd);
-extern mStatus mDNSSendSignedDNSMessage(const mDNS *const m, DNSMessage *const msg, mDNSu8 *end,
-    mDNSInterfaceID InterfaceID, const mDNSAddr *dst, mDNSIPPort dstport, uDNS_AuthInfo *authInfo);
-extern mStatus mDNSSendSignedDNSMessage_tcp(const mDNS *const m, DNSMessage *const msg, mDNSu8 * end, int sd, uDNS_AuthInfo *authInfo);
+extern mStatus mDNSSendDNSMessage(const mDNS *const m, DNSMessage *const msg, mDNSu8 *end,
+	mDNSInterfaceID InterfaceID, const mDNSAddr *dst, mDNSIPPort dstport, int sd, uDNS_AuthInfo *authInfo);
+
+// ***************************************************************************
+#if COMPILER_LIKES_PRAGMA_MARK
+#pragma mark -
+#pragma mark - RR List Management & Task Management
+#endif
+
+extern void mDNS_Lock(mDNS *const m);
+extern void mDNS_Unlock(mDNS *const m);
 	
 #ifdef	__cplusplus
 	}

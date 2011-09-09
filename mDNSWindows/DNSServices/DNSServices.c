@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,26 @@
     Change History (most recent first):
     
 $Log: DNSServices.c,v $
+Revision 1.31  2004/10/19 21:33:23  cheshire
+<rdar://problem/3844991> Cannot resolve non-local registrations using the mach API
+Added flag 'kDNSServiceFlagsForceMulticast'. Passing through an interface id for a unicast name
+doesn't force multicast unless you set this flag to indicate explicitly that this is what you want
+
+Revision 1.30  2004/09/17 01:08:58  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.29  2004/09/17 00:31:53  cheshire
+For consistency with ipv6, renamed rdata field 'ip' to 'ipv4'
+
+Revision 1.28  2004/09/16 01:58:25  cheshire
+Fix compiler warnings
+
+Revision 1.27  2004/07/13 21:24:28  rpantos
+Fix for <rdar://problem/3701120>.
+
 Revision 1.26  2004/06/05 00:04:27  cheshire
 <rdar://problem/3668639>: wide-area domains should be returned in reg. domain enumeration
 
@@ -49,10 +67,10 @@ Fix code that should use buffer size MAX_ESCAPED_DOMAIN_NAME (1005) instead of 2
 
 Revision 1.19  2003/11/14 20:59:10  cheshire
 Clients can't use AssignDomainName macro because mDNSPlatformMemCopy is defined in mDNSPlatformFunctions.h.
-Best solution is just to combine mDNSClientAPI.h and mDNSPlatformFunctions.h into a single file.
+Best solution is just to combine mDNSEmbeddedAPI.h and mDNSPlatformFunctions.h into a single file.
 
 Revision 1.18  2003/11/14 19:18:34  cheshire
-Move AssignDomainName macro to mDNSClientAPI.h to that client layers can use it too
+Move AssignDomainName macro to mDNSEmbeddedAPI.h to that client layers can use it too
 
 Revision 1.17  2003/10/31 12:16:03  bradley
 Added support for providing the resolved host name to the callback.
@@ -61,7 +79,7 @@ Revision 1.16  2003/10/16 09:16:39  bradley
 Unified address copying to fix a problem with IPv6 resolves not being passed up as IPv6.
 
 Revision 1.15  2003/08/20 06:44:24  bradley
-Updated to latest internal version of the Rendezvous for Windows code: Added support for interface
+Updated to latest internal version of the mDNSCore code: Added support for interface
 specific registrations; Added support for no-such-service registrations; Added support for host
 name registrations; Added support for host proxy and service proxy registrations; Added support for
 registration record updates (e.g. TXT record updates); Added support for using either a single C
@@ -138,7 +156,7 @@ DNS Services for Windows
 	#include	<CoreServices/CoreServices.h>
 #endif
 
-#include	"mDNSClientAPI.h"
+#include	"mDNSEmbeddedAPI.h"
 
 #include	"DNSServices.h"
 
@@ -871,7 +889,7 @@ DNSStatus
 	MakeDomainNameFromDNSNameString( &type, inType );
 	MakeDomainNameFromDNSNameString( &domain, inDomain );
 	
-	err = mDNS_StartBrowse( gMDNSPtr, &inRef->serviceBrowseQuestion, &type, &domain, mDNSInterface_Any, 
+	err = mDNS_StartBrowse( gMDNSPtr, &inRef->serviceBrowseQuestion, &type, &domain, mDNSInterface_Any, mDNSfalse,
 							DNSBrowserPrivateCallBack, inRef );
 	require_noerr( err, exit );
 	
@@ -1123,11 +1141,11 @@ mDNSlocal void
 			break;
 		
 		case kDNSResolverEventTypeRelease:
-			verbosedebugf( DEBUG_NAME "private resolver callback: release (ref=0x%08X)", inRef );
+			verbosedebugf( DEBUG_NAME "private resolver callback: release (ref=0x%p)", inRef );
 			break;
 		
 		default:
-			verbosedebugf( DEBUG_NAME "private resolver callback: unknown event (ref=0x%08X, event=%ld)", inRef, inEvent->type );
+			verbosedebugf( DEBUG_NAME "private resolver callback: unknown event (ref=0x%p, event=%ld)", inRef, inEvent->type );
 			break;
 	}
 
@@ -2417,7 +2435,7 @@ DNSStatus
 	mDNS_snprintf( buffer, sizeof( buffer ), "%d.%d.%d.%d.in-addr.arpa.", ip.b[ 3 ], ip.b[ 2 ], ip.b[ 1 ], ip.b[ 0 ] );
 	MakeDomainNameFromDNSNameString( &object->RR_PTR.resrec.name, buffer );
 	
-	object->RR_A.resrec.rdata->u.ip = ip;
+	object->RR_A.resrec.rdata->u.ipv4 = ip;
 	AssignDomainName( object->RR_PTR.resrec.rdata->u.name, object->RR_A.resrec.name );
 	
 	// Add the object to the list.

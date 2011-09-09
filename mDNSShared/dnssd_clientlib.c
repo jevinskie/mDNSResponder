@@ -1,30 +1,47 @@
 /*
- * Copyright (c) 2004 Apple Computer, Inc. All rights reserved.
+ * Copyright (c) 2004, Apple Computer, Inc. All rights reserved.
  *
- * @APPLE_LICENSE_HEADER_START@
- * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
- * This file contains Original Code and/or Modifications of Original Code
- * as defined in and that are subject to the Apple Public Source License
- * Version 2.0 (the 'License'). You may not use this file except in
- * compliance with the License. Please obtain a copy of the License at
- * http://www.opensource.apple.com/apsl/ and read it before using this
- * file.
- * 
- * The Original Code and all software distributed under the License are
- * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
- * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
- * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
- * Please see the License for the specific language governing rights and
- * limitations under the License.
- * 
- * @APPLE_LICENSE_HEADER_END@
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1.  Redistributions of source code must retain the above copyright notice, 
+ *     this list of conditions and the following disclaimer. 
+ * 2.  Redistributions in binary form must reproduce the above copyright notice, 
+ *     this list of conditions and the following disclaimer in the documentation 
+ *     and/or other materials provided with the distribution. 
+ * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of its 
+ *     contributors may be used to endorse or promote products derived from this 
+ *     software without specific prior written permission. 
+ *
+ * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY 
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+ * DISCLAIMED. IN NO EVENT SHALL APPLE OR ITS CONTRIBUTORS BE LIABLE FOR ANY 
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES 
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND 
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS 
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
    Change History (most recent first):
 
 $Log: dnssd_clientlib.c,v $
+Revision 1.9  2004/10/06 02:22:19  cheshire
+Changed MacRoman copyright symbol (should have been UTF-8 in any case :-) to ASCII-compatible "(c)"
+
+Revision 1.8  2004/10/01 22:15:55  rpantos
+rdar://problem/3824265: Replace APSL in client lib with BSD license.
+
+Revision 1.7  2004/06/26 03:16:34  shersche
+clean up warning messages on Win32 platform
+
+Submitted by: herscher
+
+Revision 1.6  2004/06/12 01:09:45  cheshire
+To be callable from the broadest range of clients on Windows (e.g. Visual Basic, C#, etc.)
+API routines have to be declared as "__stdcall", instead of the C default, "__cdecl"
+
 Revision 1.5  2004/05/25 18:29:33  cheshire
 Move DNSServiceConstructFullName() from dnssd_clientstub.c to dnssd_clientlib.c,
 so that it's also accessible to dnssd_clientshim.c (single address space) clients.
@@ -51,6 +68,11 @@ like Muse Research who want to be able to use mDNS/DNS-SD from GPL-licensed code
 
 #if MDNS_BUILDINGSHAREDLIBRARY || MDNS_BUILDINGSTUBLIBRARY
 #pragma export on
+#endif
+
+#if defined(_WIN32)
+// disable warning "conversion from <data> to uint16_t"
+#pragma warning(disable:4244)
 #endif
 
 /*********************************************************************************************
@@ -86,7 +108,7 @@ static uint8_t *InternalTXTRecordSearch
 	{
 	uint8_t *p = (uint8_t*)txtRecord;
 	uint8_t *e = p + txtLen;
-	*keylen = strlen(key);
+	*keylen = (unsigned long) strlen(key);
 	while (p<e)
 		{
 		uint8_t *x = p;
@@ -103,7 +125,7 @@ static uint8_t *InternalTXTRecordSearch
  *
  *********************************************************************************************/
 
-int DNSServiceConstructFullName
+int DNSSD_API DNSServiceConstructFullName
 	(
 	char                      *fullName,
 	const char                *service,      /* may be NULL */
@@ -137,7 +159,7 @@ int DNSServiceConstructFullName
 		}
 
 	if (!regtype) return -1;
-	len = strlen(regtype);
+	len = (unsigned long) strlen(regtype);
 	if (DomainEndsInDot(regtype)) len--;
 	if (len < 6) return -1; // regtype must be at least "x._udp" or "x._tcp"
 	if (strncmp((regtype + len - 4), "_tcp", 4) && strncmp((regtype + len - 4), "_udp", 4)) return -1;

@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,43 @@
     Change History (most recent first):
 
 $Log: mDNSMacOSX.h,v $
+Revision 1.48  2004/12/07 01:31:31  cheshire
+mDNSMacOSXSystemBuildNumber() returns int, not mDNSBool
+
+Revision 1.47  2004/11/30 03:24:03  cheshire
+<rdar://problem/3854544> Defer processing network configuration changes until configuration has stabilized
+
+Revision 1.46  2004/11/03 03:45:16  cheshire
+<rdar://problem/3863627> mDNSResponder does not inform user of Computer Name collisions
+
+Revision 1.45  2004/10/28 00:53:57  cheshire
+Export mDNSMacOSXNetworkChanged() so it's callable from outside this mDNSMacOSX.c;
+Add LogOperation() call to record when we get network change events
+
+Revision 1.44  2004/10/23 01:16:01  cheshire
+<rdar://problem/3851677> uDNS operations not always reliable on multi-homed hosts
+
+Revision 1.43  2004/10/15 23:00:18  ksekar
+<rdar://problem/3799242> Need to update LLQs on location changes
+
+Revision 1.42  2004/10/04 05:56:04  cheshire
+<rdar://problem/3824730> mDNSResponder doesn't respond to certain AirPort changes
+
+Revision 1.41  2004/09/30 00:24:59  ksekar
+<rdar://problem/3695802> Dynamically update default registration domains on config change
+
+Revision 1.40  2004/09/17 01:08:52  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.39  2004/08/18 17:35:41  ksekar
+<rdar://problem/3651443>: Feature #9586: Need support for Legacy NAT gateways
+
+Revision 1.38  2004/07/13 21:24:25  rpantos
+Fix for <rdar://problem/3701120>.
+
 Revision 1.37  2004/06/04 08:58:30  ksekar
 <rdar://problem/3668624>: Keychain integration for secure dynamic update
 
@@ -36,7 +71,7 @@ Tidy up all checkin comments to use consistent "<rdar://problem/xxxxxxx>" format
 
 Revision 1.34  2004/05/12 22:03:09  ksekar
 Made GetSearchDomainList a true platform-layer call (declaration moved
-from mDNSMacOSX.h to mDNSClientAPI.h), impelemted to return "local"
+from mDNSMacOSX.h to mDNSEmbeddedAPI.h), impelemted to return "local"
 only on non-OSX platforms.  Changed call to return a copy of the list
 to avoid shared memory issues.  Added a routine to free the list.
 
@@ -116,10 +151,10 @@ Revision 1.11  2003/07/02 21:19:51  cheshire
 <rdar://problem/3313413> Update copyright notices, etc., in source code comments
 
 Revision 1.10  2003/06/25 23:42:19  ksekar
-<rdar://problem/3249292>: Feature: New Rendezvous APIs (#7875)
+<rdar://problem/3249292>: Feature: New DNS-SD APIs (#7875)
 Reviewed by: Stuart Cheshire
 Added files necessary to implement Unix domain sockets based enhanced
-Rendezvous APIs, and integrated with existing Mach-port based daemon.
+DNS-SD APIs, and integrated with existing Mach-port based daemon.
 
 Revision 1.9  2003/06/10 01:14:11  cheshire
 <rdar://problem/3286004> New APIs require a mDNSPlatformInterfaceIDfromInterfaceIndex() call
@@ -167,7 +202,7 @@ Defines mDNS_PlatformSupport_struct for OS X
 #include <IOKit/pwr_mgt/IOPMLib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include "mDNSClientAPI.h"  // for domain name structure
+#include "mDNSEmbeddedAPI.h"  // for domain name structure
 	
 
 typedef struct NetworkInterfaceInfoOSX_struct NetworkInterfaceInfoOSX;
@@ -192,6 +227,7 @@ struct NetworkInterfaceInfoOSX_struct
 												// 2 = exists, but McastTxRx state changed
 	char                    *ifa_name;			// Memory for this is allocated using malloc
 	mDNSu32                  scope_id;			// interface index / IPv6 scope ID
+	mDNSEthAddr              BSSID;				// BSSID of 802.11 base station, if applicable
 	u_short                  sa_family;
 	mDNSBool                 Multicast;
 	CFSocketSet              ss;
@@ -202,6 +238,9 @@ struct mDNS_PlatformSupport_struct
     NetworkInterfaceInfoOSX *InterfaceList;
     CFSocketSet              unicastsockets;
     domainlabel              userhostlabel;
+    domainlabel              usernicelabel;
+    mDNSs32                  NotifyUser;
+    mDNSs32                  NetworkChanged;
     SCDynamicStoreRef        Store;
     CFRunLoopSourceRef       StoreRLS;
     io_connect_t             PowerConnection;
@@ -209,10 +248,19 @@ struct mDNS_PlatformSupport_struct
     CFRunLoopSourceRef       PowerRLS;
     };
 
-extern mDNSBool mDNSMacOSXSystemBuildNumber(char *HINFO_SWstring);
+extern void mDNSMacOSXNetworkChanged(mDNS *const m);
+extern int mDNSMacOSXSystemBuildNumber(char *HINFO_SWstring);
 
 extern const char mDNSResponderVersionString[];
 
+// Legacy NAT Traversal Support Setup/Teardown
+extern int LegacyNATDestroy(void);
+extern int LegacyNATInit(void);
+
+// Allow platform layer to tell daemon when default registration/browse domains
+extern void DefaultRegDomainChanged(const domainname *d, mDNSBool add);
+extern void DefaultBrowseDomainChanged(const domainname *d, mDNSBool add);
+	
 #ifdef  __cplusplus
     }
 #endif

@@ -1,25 +1,93 @@
-# Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
+# Copyright (c) 2002-2004, Apple Computer, Inc. All rights reserved.
 #
-# @APPLE_LICENSE_HEADER_START@
-# 
-# This file contains Original Code and/or Modifications of Original Code
-# as defined in and that are subject to the Apple Public Source License
-# Version 2.0 (the 'License'). You may not use this file except in
-# compliance with the License. Please obtain a copy of the License at
-# http://www.opensource.apple.com/apsl/ and read it before using this
-# file.
-# 
-# The Original Code and all software distributed under the License are
-# distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
-# EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
-# INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
-# Please see the License for the specific language governing rights and
-# limitations under the License.
-# 
-# @APPLE_LICENSE_HEADER_END@
+# Redistribution and use in source and binary forms, with or without 
+# modification, are permitted provided that the following conditions are met:
+#
+# 1.  Redistributions of source code must retain the above copyright notice, 
+#     this list of conditions and the following disclaimer. 
+# 2.  Redistributions in binary form must reproduce the above copyright notice, 
+#     this list of conditions and the following disclaimer in the documentation 
+#     and/or other materials provided with the distribution. 
+# 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of its 
+#     contributors may be used to endorse or promote products derived from this 
+#     software without specific prior written permission. 
+#
+# THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY 
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+# DISCLAIMED. IN NO EVENT SHALL APPLE OR ITS CONTRIBUTORS BE LIABLE FOR ANY 
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES 
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; 
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND 
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS 
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # $Log: Makefile,v $
+# Revision 1.53  2004/12/01 20:04:31  cheshire
+# Tidy up alignment
+#
+# Revision 1.52  2004/12/01 19:46:12  cheshire
+# Add install case for Suse 9 (rc*.d directories *inside* the init.d directory)
+#
+# Revision 1.51  2004/12/01 03:30:29  cheshire
+# <rdar://problem/3889346> Add Unicast DNS support to mDNSPosix
+#
+# Revision 1.50  2004/12/01 01:14:20  cheshire
+# Add $(LIBFLAGS) to cc command to build dnsextd (required for Solaris)
+#
+# Revision 1.49  2004/11/11 01:44:52  cheshire
+# Updated error message
+#
+# Revision 1.48  2004/10/06 02:22:19  cheshire
+# Changed MacRoman copyright symbol (should have been UTF-8 in any case :-) to ASCII-compatible "(c)"
+#
+# Revision 1.47  2004/10/01 22:15:54  rpantos
+# rdar://problem/3824265: Replace APSL in client lib with BSD license.
+#
+# Revision 1.46  2004/09/24 21:15:25  cheshire
+# <rdar://problem/3724985> Library "libmdns" misnamed; should be "libdns_sd"
+#
+# Revision 1.45  2004/09/22 16:23:41  cheshire
+# Modify installation for compatibility with Gentoo Linux
+# (Thanks to David Black for this information)
+#
+# Revision 1.44  2004/09/17 01:08:53  cheshire
+# Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+#   The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+#   declared in that file are ONLY appropriate to single-address-space embedded applications.
+#   For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+#
+# Revision 1.43  2004/09/17 00:30:11  cheshire
+# Added some '@' signs to make build output less verbose --
+# when there's too much on the screen it's easy to miss build errors and warnings
+#
+# Revision 1.42  2004/08/24 22:04:37  cheshire
+# Need to specify -lpthread for building dnsextd
+#
+# Revision 1.41  2004/08/11 00:43:26  ksekar
+# <rdar://problem/3722542>: DNS Extension daemon for DNS Update Lease
+#
+# Revision 1.40  2004/07/08 21:45:55  cheshire
+# Make nss_mdns only build on Linux. We can add it to other targets (Solaris,
+# FreeBSD, etc., as we verify them). In particular, NSS is NOT supported on
+# OS X, so including it for "os=jaguar" or "os=panther" broke those builds.
+#
+# Revision 1.39  2004/06/29 03:34:28  cheshire
+# Add 'dot-local' Name Service Switch support from Andrew White at NICTA
+#
+# Revision 1.38  2004/06/25 02:19:40  rpantos
+# And FreeBSD...
+#
+# Revision 1.37  2004/06/25 00:51:09  rpantos
+# And fix the Java build for Posix on Solaris, too.
+#
+# Revision 1.36  2004/06/25 00:26:27  rpantos
+# Changes to fix the Posix build on Solaris.
+#
+# Revision 1.35  2004/06/18 18:51:31  cheshire
+# Add (commented out) "-pedantic" for when we want to check for "mixed declarations and code" warnings
+#
 # Revision 1.34  2004/05/25 18:29:33  cheshire
 # Move DNSServiceConstructFullName() from dnssd_clientstub.c to dnssd_clientlib.c,
 # so that it's also accessible to dnssd_clientshim.c (single address space) clients.
@@ -85,7 +153,7 @@
 #
 # Revision 1.14  2003/11/14 20:59:09  cheshire
 # Clients can't use AssignDomainName macro because mDNSPlatformMemCopy is defined in mDNSPlatformFunctions.h.
-# Best solution is just to combine mDNSClientAPI.h and mDNSPlatformFunctions.h into a single file.
+# Best solution is just to combine mDNSEmbeddedAPI.h and mDNSPlatformFunctions.h into a single file.
 #
 # Revision 1.13  2003/08/06 18:20:51  cheshire
 # Makefile cleanup
@@ -114,13 +182,13 @@
 # Added NetMonitor.c
 #
 
-# This Makefile builds an mDNSResponder daemon and a libmdns.so shared library 
+# This Makefile builds an mDNSResponder daemon and a libdns_sd.so shared library 
 # for Linux. It also builds several example programs for embedded systems. 
 #
 # Make with no arguments to build all production targets.
 # 'make DEBUG=1' to build debugging targets.
 # 'make clean' or 'make clean DEBUG=1' to delete prod/debug objects & targets
-# 'sudo make install [DEBUG=1]' to install mdnsd daemon and libmdns.
+# 'sudo make install [DEBUG=1]' to install mdnsd daemon and libdns_sd.
 #
 # Notes:
 # $@ means "The file name of the target of the rule"
@@ -137,15 +205,16 @@ COREDIR = ../mDNSCore
 SHAREDDIR = ../mDNSShared
 JDK = /usr/jdk
 
-CC = cc
-LD = ld
+CC = @cc
+LD = ld -shared
 CP = cp
 RM = rm
 LN = ln -s -f
 CFLAGS_COMMON = -I. -I$(COREDIR) -I$(SHAREDDIR) -W -Wall -DPID_FILE=\"/var/run/mdnsd.pid\"
-LDFLAGS = -shared
+LIBFLAGS =
+DNSEXT_FLAGS = -D_REENTRANT -g -Wall -lpthread
 LDSUFFIX = so
-JAVACFLAGS_OS = -fPIC -shared -lmdns
+JAVACFLAGS_OS = -fPIC -shared -ldns_sd
 
 # Set up diverging paths for debug vs. prod builds
 DEBUG=0
@@ -155,7 +224,7 @@ OBJDIR = objects/debug
 BUILDDIR = build/debug
 STRIP = echo 
 else
-CFLAGS_DEBUG = -Os -DMDNS_DEBUGMSGS=0 
+CFLAGS_DEBUG = -O0 -DMDNS_DEBUGMSGS=0 
 OBJDIR = objects/prod
 BUILDDIR = build/prod
 STRIP = strip -S 
@@ -163,16 +232,29 @@ endif
 
 # Configure per-OS peculiarities
 ifeq ($(os),solaris)
-CFLAGS_OS = -DNOT_HAVE_DAEMON -DNOT_HAVE_SA_LEN -D_XPG4_2 -D__EXTENSIONS__ -DHAVE_BROKEN_RECVIF_NAME -lsocket -lnsl
+CFLAGS_OS = -DNOT_HAVE_DAEMON -DNOT_HAVE_SA_LEN -DNOT_HAVE_SOCKLEN_T -DNOT_HAVE_IF_NAMETOINDEX \
+	 -DLOG_PERROR=0 -D_XPG4_2 -D__EXTENSIONS__ -DHAVE_BROKEN_RECVIF_NAME -DUSE_TCP_LOOPBACK
+CC = gcc
+LD = gcc -shared
+LIBFLAGS = -lsocket -lnsl
+JAVACFLAGS_OS += -I$(JDK)/include/solaris
+ifneq ($(DEBUG),1)
+STRIP = strip
+endif
 else
+
 ifeq ($(os),linux)
 CFLAGS_OS = -DNOT_HAVE_SA_LEN -DUSES_NETLINK
 JAVACFLAGS_OS += -I$(JDK)/include/linux
+OPTIONALTARG = nss_mdns
+OPTINSTALL   = InstalledNSS
 else
+
 ifeq ($(os),netbsd)
 CFLAGS_OS =
 LDCONFIG = ldconfig
 else
+
 ifeq ($(os),freebsd)
 # If not already defined, set LOCALBASE to /usr/local
 # FreeBSD requires the startup script to end in ".sh"
@@ -180,29 +262,35 @@ LOCALBASE?=/usr/local
 INSTBASE=$(LOCALBASE)
 STARTUPSCRIPTNAME=mdns.sh
 CFLAGS_OS =
+JAVACFLAGS_OS += -I$(JDK)/include/freebsd
 LDCONFIG = ldconfig
 else
+
 ifeq ($(os),openbsd)
 CFLAGS_OS = -DHAVE_BROKEN_RECVDSTADDR
 LDCONFIG = ldconfig
 else
+
 ifeq ($(os),jaguar)
 CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp -DNOT_HAVE_SOCKLEN_T
-LD = libtool
-LDFLAGS = -dynamic -lSystem
+LD = libtool -dynamic
+LIBFLAGS = -lSystem
 LDSUFFIX = dylib
 JDK = /System/Library/Frameworks/JavaVM.framework/Home
 JAVACFLAGS_OS = -dynamiclib -I/System/Library/Frameworks/JavaVM.framework/Headers -framework JavaVM 
 else
+
 ifeq ($(os),panther)
-CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp
-LD = libtool
-LDFLAGS = -dynamic -lSystem
+CFLAGS_OS = -DHAVE_IPV6 -no-cpp-precomp #-pedantic
+LD = libtool -dynamic
+LIBFLAGS = -lSystem
 LDSUFFIX = dylib
 JDK = /System/Library/Frameworks/JavaVM.framework/Home
 JAVACFLAGS_OS = -dynamiclib -I/System/Library/Frameworks/JavaVM.framework/Headers -framework JavaVM 
 else
-$(error ERROR: Must specify target OS on command-line: "make os={jaguar,panther,linux,netbsd,freebsd,openbsd,solaris} [target]") 
+
+$(error ERROR: Must specify target OS on command-line, e.g. "make os=panther [target]".\
+Supported operating systems include: jaguar, panther, linux, netbsd, freebsd, openbsd, solaris) 
 endif
 endif
 endif
@@ -210,6 +298,12 @@ endif
 endif
 endif
 endif
+
+NSSLIBNAME  := libnss_mdns
+NSSVERSION  := 0.2
+NSSLIBFILE  := $(NSSLIBNAME)-$(NSSVERSION).so
+NSSLINKNAME := $(NSSLIBNAME).so.2
+NSSINSTPATH := /lib
 
 # If not otherwise defined, we install into /usr/lib and /usr/include
 # and our startup script is called mdns (e.g. /etc/init.d/mdns)
@@ -224,7 +318,19 @@ CFLAGS_OS += -DHAVE_IPV6=0
 endif
 endif
 
-# If directory /etc/rc.d/init.d/ exists, then we install into that (old Linux)
+# If directory /usr/share/man exists, then we install man pages into that, else /usr/man
+ifeq ($(wildcard /usr/share/man), /usr/share/man)
+MANPATH := /usr/share/man
+else
+MANPATH := /usr/man
+endif
+
+# If directories /etc/init.d/rc*.d exist, then we install into that (Suse)
+ifeq ($(wildcard /etc/init.d/rc2.d/), /etc/init.d/rc2.d/)
+STARTUPSCRIPTDIR = /etc/init.d
+RUNLEVELSCRIPTSDIR = /etc/init.d
+else
+# else if directory /etc/rc.d/init.d/ exists, then we install into that (old Linux)
 ifeq ($(wildcard /etc/rc.d/init.d/), /etc/rc.d/init.d/)
 STARTUPSCRIPTDIR = /etc/rc.d/init.d
 RUNLEVELSCRIPTSDIR = /etc/rc.d
@@ -238,14 +344,15 @@ else
 STARTUPSCRIPTDIR = $(INSTBASE)/etc/rc.d
 endif
 endif
+endif
 
 CFLAGS = $(CFLAGS_COMMON) $(CFLAGS_OS) $(CFLAGS_DEBUG)
 
 #############################################################################
 
-all: setup Daemon libmdns Client Responder ProxyResponder Identify NetMonitor
+all: setup Daemon libdns_sd Client Responder ProxyResponder Identify NetMonitor dnsextd $(OPTIONALTARG)
 
-install: setup InstalledDaemon InstalledLib InstalledStartup
+install: setup InstalledDaemon InstalledLib InstalledStartup InstalledManPages $(OPTINSTALL)
 
 # 'setup' sets up the build directory structure the way we want
 setup:
@@ -264,41 +371,57 @@ clean:
 # daemon target builds the daemon
 DAEMONOBJS = $(OBJDIR)/PosixDaemon.c.o $(OBJDIR)/mDNSPosix.c.o $(OBJDIR)/mDNSUNP.c.o $(OBJDIR)/mDNS.c.o \
              $(OBJDIR)/DNSDigest.c.o $(OBJDIR)/uDNS.c.o $(OBJDIR)/DNSCommon.c.o $(OBJDIR)/uds_daemon.c.o \
-             $(OBJDIR)/mDNSDebug.c.o $(OBJDIR)/dnssd_ipc.c.o $(OBJDIR)/GenLinkedList.c.o 
+             $(OBJDIR)/mDNSDebug.c.o $(OBJDIR)/dnssd_ipc.c.o $(OBJDIR)/GenLinkedList.c.o $(OBJDIR)/PlatformCommon.c.o 
 
 Daemon: setup $(BUILDDIR)/mdnsd
 	@echo "Responder daemon done"
 
 $(BUILDDIR)/mdnsd: $(DAEMONOBJS)
-	$(CC) -o $@ $+
-	$(STRIP) $@
+	$(CC) -o $@ $+ $(CFLAGS) $(LIBFLAGS)
+	@$(STRIP) $@
 
-# libmdns target builds the client library
-libmdns: setup $(BUILDDIR)/libmdns.$(LDSUFFIX)
+# libdns_sd target builds the client library
+libdns_sd: setup $(BUILDDIR)/libdns_sd.$(LDSUFFIX)
 	@echo "Client library done"
 
-$(BUILDDIR)/libmdns.$(LDSUFFIX): $(OBJDIR)/dnssd_clientlib.c.so.o $(OBJDIR)/dnssd_clientstub.c.so.o $(OBJDIR)/dnssd_ipc.c.so.o
-	$(LD) $(LDFLAGS) -o $@ $+
-	$(STRIP) $@
+CLIENTLIBOBJS = $(OBJDIR)/dnssd_clientlib.c.so.o $(OBJDIR)/dnssd_clientstub.c.so.o $(OBJDIR)/dnssd_ipc.c.so.o
+
+$(BUILDDIR)/libdns_sd.$(LDSUFFIX): $(CLIENTLIBOBJS)
+	@$(LD) $(LIBFLAGS) -o $@ $+
+	@$(STRIP) $@
+
+# nss_mdns target builds the Name Service Switch module
+nss_mdns: setup $(BUILDDIR)/$(NSSLIBFILE)
+	@echo "Name Service Switch module done"
+
+$(BUILDDIR)/$(NSSLIBFILE): $(CLIENTLIBOBJS) $(OBJDIR)/nss_mdns.c.so.o
+	@$(LD) $(LIBFLAGS) -o $@ $+
+	@$(STRIP) $@
 
 #############################################################################
 
 # The Install targets place built stuff in their proper places
 InstalledDaemon: $(INSTBASE)/sbin/mdnsd
-	@echo $< " installed"
+	@echo $+ " installed"
 
-InstalledLib: $(INSTBASE)/lib/libmdns.$(LDSUFFIX).$(LIBVERS) $(INSTBASE)/include/dns_sd.h
-	@echo $< " installed"
+InstalledLib: $(INSTBASE)/lib/libdns_sd.$(LDSUFFIX).$(LIBVERS) $(INSTBASE)/include/dns_sd.h
+	@echo $+ " installed"
 
 InstalledStartup: $(STARTUPSCRIPTDIR)/$(STARTUPSCRIPTNAME)
-	@echo $< " installed"
+	@echo $+ " installed"
+
+InstalledNSS: $(NSSINSTPATH)/$(NSSLINKNAME) /etc/nss_mdns.conf $(MANPATH)/man5/nss_mdns.conf.5 $(MANPATH)/man8/libnss_mdns.8
+	@echo $+ " installed"
+
+InstalledManPages: $(MANPATH)/man8/mdnsd.8
+	@echo $+ " installed"
 
 $(INSTBASE)/sbin/mdnsd: $(BUILDDIR)/mdnsd
 	$(CP) $< $@
 
-$(INSTBASE)/lib/libmdns.$(LDSUFFIX).$(LIBVERS): $(BUILDDIR)/libmdns.$(LDSUFFIX)
+$(INSTBASE)/lib/libdns_sd.$(LDSUFFIX).$(LIBVERS): $(BUILDDIR)/libdns_sd.$(LDSUFFIX)
 	$(CP) $< $@
-	$(LN) $@ $(INSTBASE)/lib/libmdns.$(LDSUFFIX)
+	$(LN) $@ $(INSTBASE)/lib/libdns_sd.$(LDSUFFIX)
 ifdef LDCONFIG
     # -m means 'merge into existing database', -R means 'rescan directories'
 	$(LDCONFIG) -mR
@@ -311,6 +434,9 @@ $(STARTUPSCRIPTDIR)/$(STARTUPSCRIPTNAME): mdnsd.sh $(STARTUPSCRIPTDIR)
 	$(CP) $< $@
 	chmod ugo+x $@
 ifdef RUNLEVELSCRIPTSDIR
+ifeq ($(wildcard $(RUNLEVELSCRIPTSDIR)/runlevels/default), $(RUNLEVELSCRIPTSDIR)/runlevels/default)
+	$(LN) $@ $(RUNLEVELSCRIPTSDIR)/runlevels/default/mdns
+else
 	$(LN) $@ $(RUNLEVELSCRIPTSDIR)/rc2.d/S52mdns
 	$(LN) $@ $(RUNLEVELSCRIPTSDIR)/rc3.d/S52mdns
 	$(LN) $@ $(RUNLEVELSCRIPTSDIR)/rc4.d/S52mdns
@@ -318,6 +444,35 @@ ifdef RUNLEVELSCRIPTSDIR
 	$(LN) $@ $(RUNLEVELSCRIPTSDIR)/rc0.d/K16mdns
 	$(LN) $@ $(RUNLEVELSCRIPTSDIR)/rc6.d/K16mdns
 endif
+endif
+
+$(NSSINSTPATH)/$(NSSLINKNAME): $(NSSINSTPATH)/$(NSSLIBFILE)
+	$(LN) $< $@
+	ldconfig
+
+$(NSSINSTPATH)/$(NSSLIBFILE): $(BUILDDIR)/$(NSSLIBFILE)
+	$(CP) $< $@
+	chmod 444 $@
+
+/etc/nss_mdns.conf: nss_mdns.conf
+	$(CP) $< $@
+	chmod 444 $@
+	# Check the nsswitch.conf file.
+	# If 'mdns' does not already appear on the "hosts:" line, then add it right before 'dns'
+	cp -f /etc/nsswitch.conf /etc/nsswitch.conf.pre-mdns
+	sed -e '/mdns/!s/^\(hosts:.*\)dns\(.*\)/\1mdns dns\2/' /etc/nsswitch.conf.pre-mdns > /etc/nsswitch.conf
+
+$(MANPATH)/man5/%.5: %.5
+	cp $< $@
+	chmod 444 $@
+
+$(MANPATH)/man8/%.8: %.8
+	cp $< $@
+	chmod 444 $@
+
+$(MANPATH)/man8/mdnsd.8: $(SHAREDDIR)/mDNSResponder.8
+	cp $< $@
+	chmod 444 $@
 
 #############################################################################
 
@@ -394,20 +549,26 @@ Identify: setup $(BUILDDIR)/mDNSIdentify
 NetMonitor: setup $(BUILDDIR)/mDNSNetMonitor
 	@echo "NetMonitor done"
 
+dnsextd: setup $(BUILDDIR)/dnsextd
+	@echo "dnsextd done"
+
 $(BUILDDIR)/mDNSClientPosix:         $(APPOBJ)     $(OBJDIR)/Client.c.o
-	$(CC) $+ -o $@
+	$(CC) $+ -o $@ $(LIBFLAGS)
 
 $(BUILDDIR)/mDNSResponderPosix:      $(COMMONOBJ)  $(OBJDIR)/Responder.c.o
-	$(CC) $+ -o $@
+	$(CC) $+ -o $@ $(LIBFLAGS)
 
 $(BUILDDIR)/mDNSProxyResponderPosix: $(COMMONOBJ)  $(OBJDIR)/ProxyResponder.c.o
-	$(CC) $+ -o $@
+	$(CC) $+ -o $@ $(LIBFLAGS)
 
 $(BUILDDIR)/mDNSIdentify:            $(SPECIALOBJ) $(OBJDIR)/Identify.c.o
-	$(CC) $+ -o $@
+	$(CC) $+ -o $@ $(LIBFLAGS)
 
 $(BUILDDIR)/mDNSNetMonitor:          $(SPECIALOBJ) $(OBJDIR)/NetMonitor.c.o
-	$(CC) $+ -o $@
+	$(CC) $+ -o $@ $(LIBFLAGS)
+
+$(BUILDDIR)/dnsextd:                 $(SPECIALOBJ) $(OBJDIR)/dnsextd.c.o
+	$(CC) $+ -o $@ $(LIBFLAGS) $(DNSEXT_FLAGS)
 
 #############################################################################
 

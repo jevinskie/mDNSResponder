@@ -23,9 +23,14 @@
 # @APPLE_LICENSE_HEADER_END@
 #
 # $Log: mdnsd.sh,v $
+# Revision 1.6  2004/12/07 20:30:45  cheshire
+# Fix start-stop-daemon for Suse Linux (don't use -s TERM)
+#
+# Revision 1.5  2004/06/29 22:13:45  cheshire
+# Fix from Andrew White at NICTA
+#
 # Revision 1.4  2004/02/05 20:23:10  cheshire
 # Fix mdnsd.sh to work on *BSD distributions
-#
 #
 # Revision 1.3  2004/01/19 22:47:17  cheshire
 # Define killprocterm() to do "killproc $1 -TERM" for Linux
@@ -51,8 +56,11 @@ test -r $DAEMON || exit 0
 
 # Some systems have start-stop-daemon, some don't. 
 if [ -r /sbin/start-stop-daemon ]; then
-	START=start-stop-daemon --start --quiet --exec
-	STOP=start-stop-daemon --stop -s TERM --quiet --oknodo --exec
+	START="start-stop-daemon --start --quiet --exec"
+	# Suse Linux doesn't work with symbolic signal names, but we really don't need
+	# to specify "-s TERM" since SIGTERM (15) is the default stop signal anway
+	# STOP="start-stop-daemon --stop -s TERM --quiet --oknodo --exec"
+	STOP="start-stop-daemon --stop --quiet --oknodo --exec"
 else
 	killmdnsd() {
 		kill -TERM `cat /var/run/mdnsd.pid`

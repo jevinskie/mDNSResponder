@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,49 @@
     Change History (most recent first):
 
 $Log: mDNSMacOS9.c,v $
+Revision 1.41  2004/10/16 00:17:00  cheshire
+<rdar://problem/3770558> Replace IP TTL 255 check with local subnet source address check
+
+Revision 1.40  2004/09/27 23:56:27  cheshire
+Fix infinite loop where mDNSPlatformUnlock() called mDNS_TimeNow(),
+and then mDNS_TimeNow() called mDNSPlatformUnlock()
+
+Revision 1.39  2004/09/21 21:02:54  cheshire
+Set up ifname before calling mDNS_RegisterInterface()
+
+Revision 1.38  2004/09/17 01:08:50  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.37  2004/09/17 00:19:10  cheshire
+For consistency with AllDNSLinkGroupv6, rename AllDNSLinkGroup to AllDNSLinkGroupv4
+
+Revision 1.36  2004/09/16 21:59:16  cheshire
+For consistency with zerov6Addr, rename zeroIPAddr to zerov4Addr
+
+Revision 1.35  2004/09/16 00:24:49  cheshire
+<rdar://problem/3803162> Fix unsafe use of mDNSPlatformTimeNow()
+
+Revision 1.34  2004/09/14 23:42:36  cheshire
+<rdar://problem/3801296> Need to seed random number generator from platform-layer data
+
+Revision 1.33  2004/09/14 23:16:31  cheshire
+Fix compile error: mDNS_SetFQDNs has been renamed to mDNS_SetFQDN
+
+Revision 1.32  2004/09/14 21:03:16  cheshire
+Fix spacing
+
+Revision 1.31  2004/08/14 03:22:42  cheshire
+<rdar://problem/3762579> Dynamic DNS UI <-> mDNSResponder glue
+Add GetUserSpecifiedDDNSName() routine
+Convert ServiceRegDomain to domainname instead of C string
+Replace mDNS_GenerateFQDN/mDNS_GenerateGlobalFQDN with mDNS_SetFQDNs
+
+Revision 1.30  2004/07/29 19:26:03  ksekar
+Plaform-level changes for NATPMP support
+
 Revision 1.29  2004/05/26 20:53:16  cheshire
 Remove unncecessary "return( -1 );" at the end of mDNSPlatformUTC()
 
@@ -55,10 +96,10 @@ Fixes so that Posix/Linux, OS9, Windows, and VxWorks targets build again
 
 Revision 1.20  2003/11/14 20:59:09  cheshire
 Clients can't use AssignDomainName macro because mDNSPlatformMemCopy is defined in mDNSPlatformFunctions.h.
-Best solution is just to combine mDNSClientAPI.h and mDNSPlatformFunctions.h into a single file.
+Best solution is just to combine mDNSEmbeddedAPI.h and mDNSPlatformFunctions.h into a single file.
 
 Revision 1.19  2003/08/18 23:09:20  cheshire
-<rdar://problem/3382647> mDNSResponder divide by zero in mDNSPlatformTimeNow()
+<rdar://problem/3382647> mDNSResponder divide by zero in mDNSPlatformRawTime()
 
 Revision 1.18  2003/08/12 19:56:24  cheshire
 Update to APSL 2.0
@@ -72,7 +113,7 @@ Update to APSL 2.0
 #include <TextUtils.h>					// For smSystemScript
 #include <UnicodeConverter.h>			// For ConvertFromPStringToUnicode()
 
-#include "mDNSClientAPI.h"				// Defines the interface provided to the client layer above
+#include "mDNSEmbeddedAPI.h"				// Defines the interface provided to the client layer above
 
 #include "mDNSMacOS9.h"					// Defines the specific types needed to run mDNS on this platform
 
@@ -165,7 +206,7 @@ mDNSexport void LogMsg(const char *format, ...)
 	}
 #endif
 
-mDNSexport mStatus mDNSPlatformSendUDP(const mDNS *const m, const DNSMessage *const msg, const mDNSu8 *const end,
+mDNSexport mStatus mDNSPlatformSendUDP(const mDNS *const m, const void *const msg, const mDNSu8 *const end,
 	mDNSInterfaceID InterfaceID, const mDNSAddr *dst, mDNSIPPort dstPort)
 	{
 	// Note: If we did multi-homing, we'd have to use the InterfaceID parameter to specify from which interface to send this response
@@ -223,11 +264,11 @@ mDNSlocal OSStatus readpacket(mDNS *m)
 	senderport.NotAnInteger = sender.fPort;
 	
 	destaddr.type = mDNSAddrType_IPv4;
-	destaddr.ip.v4  = zeroIPAddr;
+	destaddr.ip.v4  = zerov4Addr;
 
 	#if OTCARBONAPPLICATION
 	// IP_RCVDSTADDR is known to fail on OS X Carbon, so we'll just assume the packet was probably multicast
-	destaddr.ip.v4  = AllDNSLinkGroup;
+	destaddr.ip.v4  = AllDNSLinkGroupv4;
 	#endif
 
 	if (recvdata.opt.len)
@@ -246,8 +287,7 @@ mDNSlocal OSStatus readpacket(mDNS *m)
 
 	if      (flags & T_MORE)                                debugf("ERROR: OTRcvUData() buffer too small (T_MORE set)");
 	else if (recvdata.addr.len < sizeof(InetAddress))       debugf("ERROR: recvdata.addr.len (%d) too short", recvdata.addr.len);
-	else if (recvdata.udata.len < sizeof(DNSMessageHeader)) debugf("ERROR: recvdata.udata.len (%d) too short", recvdata.udata.len);
-	else mDNSCoreReceive(m, &packet, recvdata.udata.buf + recvdata.udata.len, &senderaddr, senderport, &destaddr, MulticastDNSPort, interface, 255);
+	else mDNSCoreReceive(m, &packet, recvdata.udata.buf + recvdata.udata.len, &senderaddr, senderport, &destaddr, MulticastDNSPort, interface);
 	
 	return(err);
 	}
@@ -324,11 +364,14 @@ mDNSlocal pascal void mDNSNotifier(void *contextPtr, OTEventCode code, OTResult 
 			if (err) { LogMsg("OTInetGetInterfaceInfo failed %d", err); mDNSinitComplete(m, err); return; }
 
 			// Make our basic standard host resource records (address, PTR, etc.)
-			m->p->interface.InterfaceID           = (mDNSInterfaceID)&m->p->interface;
-			m->p->interface.ip.type               = mDNSAddrType_IPv4;
-			m->p->interface.ip.ip.v4.NotAnInteger = interfaceinfo.fAddress;
-			m->p->interface.Advertise             = m->AdvertiseLocalAddresses;
-			m->p->interface.McastTxRx             = mDNStrue;
+			m->p->interface.InterfaceID             = (mDNSInterfaceID)&m->p->interface;
+			m->p->interface.ip  .type               = mDNSAddrType_IPv4;
+			m->p->interface.ip  .ip.v4.NotAnInteger = interfaceinfo.fAddress;
+			m->p->interface.mask.type               = mDNSAddrType_IPv4;
+			m->p->interface.mask.ip.v4.NotAnInteger = interfaceinfo.fMask;
+			m->p->interface.ifname[0]               = 0;
+			m->p->interface.Advertise               = m->AdvertiseLocalAddresses;
+			m->p->interface.McastTxRx               = mDNStrue;
 			}
 			
 		case T_OPTMGMTCOMPLETE:
@@ -572,7 +615,7 @@ mDNSexport mStatus mDNSPlatformInit(mDNS *const m)
 	ConvertUTF8PstringToRFC1034HostLabel(m->nicelabel.c, &m->hostlabel);
 	if (m->hostlabel.c[0] == 0) MakeDomainLabelFromLiteralString(&m->hostlabel, "Macintosh");
 
-	mDNS_GenerateFQDN(m);
+	mDNS_SetFQDN(m);
 
 	// When it's finished mDNSOpenEndpoint asynchronously calls mDNSinitComplete() and then mDNS_RegisterInterface()
 	CallmDNSNotifierUPP = NewOTNotifyUPP(CallmDNSNotifier);
@@ -655,7 +698,7 @@ mDNSlocal void ScheduleNextTimerCallback(const mDNS *const m)
 	{
 	if (m->mDNSPlatformStatus == mStatus_NoError)
 		{
-		SInt32 interval = m->NextScheduledEvent - mDNSPlatformTimeNow();
+		SInt32 interval = m->NextScheduledEvent - (mDNSPlatformRawTime() + m->timenow_adjust);
 		if      (interval < 1)                 interval = 1;
 		else if (interval > 0x70000000 / 1000) interval = 0x70000000 / mDNSPlatformOneSecond;
 		else                                   interval = (interval * 1000 + mDNSPlatformOneSecond-1)/ mDNSPlatformOneSecond;
@@ -680,9 +723,10 @@ mDNSexport void     mDNSPlatformMemCopy(const void *src,       void *dst, UInt32
 mDNSexport mDNSBool mDNSPlatformMemSame(const void *src, const void *dst, UInt32 len) { return(OTMemcmp(dst, src, len)); }
 mDNSexport void     mDNSPlatformMemZero(                       void *dst, UInt32 len) { OTMemzero(dst, len); }
 mDNSexport void *   mDNSPlatformMemAllocate(mDNSu32 len)                              { return(OTAllocMem(len)); }
-mDNSexport void     mDNSPlatformMemFree    (void *mem)                                { OTFreeMem(mem); }
-mDNSexport mStatus  mDNSPlatformTimeInit(mDNSs32 *timenow) { *timenow = mDNSPlatformTimeNow(); return(mStatus_NoError); }
-mDNSexport SInt32   mDNSPlatformTimeNow()                                             { return((SInt32)TickCount()); }
+mDNSexport void     mDNSPlatformMemFree(void *mem)                                    { OTFreeMem(mem); }
+mDNSexport mDNSu32  mDNSPlatformRandomSeed(void)                                      { return(TickCount()); }
+mDNSexport mStatus  mDNSPlatformTimeInit(void)                                        { return(mStatus_NoError); }
+mDNSexport SInt32   mDNSPlatformRawTime()                                             { return((SInt32)TickCount()); }
 mDNSexport SInt32   mDNSPlatformOneSecond = 60;
 
 mDNSexport mDNSs32	mDNSPlatformUTC(void)

@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,12 @@
     Change History (most recent first):
 
 $Log: DNSServiceDiscovery.c,v $
+Revision 1.8  2004/09/17 01:08:58  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
 Revision 1.7  2004/05/08 12:24:48  bradley
 Removed trailing character from zero value to fix compile error.
 
@@ -38,7 +42,7 @@ Updated to support full Unicode display. Added support for all services on www.d
 
 Revision 1.4  2003/11/14 20:59:10  cheshire
 Clients can't use AssignDomainName macro because mDNSPlatformMemCopy is defined in mDNSPlatformFunctions.h.
-Best solution is just to combine mDNSClientAPI.h and mDNSPlatformFunctions.h into a single file.
+Best solution is just to combine mDNSEmbeddedAPI.h and mDNSPlatformFunctions.h into a single file.
 
 Revision 1.3  2003/10/04 04:47:08  bradley
 Changed DNSServiceRegistrationCreate to treat the port in network byte order for end-to-end consistency.
@@ -74,7 +78,7 @@ Platform-neutral DNSServices-based emulation layer for the Mac OS X DNSServiceDi
 	
 #endif
 
-#include	"mDNSClientAPI.h"
+#include	"mDNSEmbeddedAPI.h"
 #include	"DNSServices.h"
 
 #include	"DNSServiceDiscovery.h"

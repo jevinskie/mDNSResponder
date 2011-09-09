@@ -3,8 +3,6 @@
  *
  * @APPLE_LICENSE_HEADER_START@
  * 
- * Copyright (c) 1999-2003 Apple Computer, Inc.  All Rights Reserved.
- * 
  * This file contains Original Code and/or Modifications of Original Code
  * as defined in and that are subject to the Apple Public Source License
  * Version 2.0 (the 'License'). You may not use this file except in
@@ -25,6 +23,91 @@
     Change History (most recent first):
     
 $Log: mDNSWin32.c,v $
+Revision 1.63  2004/11/23 03:39:47  cheshire
+Let interface name/index mapping capability live directly in JNISupport.c,
+instead of having to call through to the daemon via IPC to get this information.
+
+Revision 1.62  2004/11/12 03:16:41  rpantos
+rdar://problem/3809541 Add mDNSPlatformGetInterfaceByName, mDNSPlatformGetInterfaceName
+
+Revision 1.61  2004/11/05 22:54:38  shersche
+Change registry key flags from KEY_ALL_ACCESS to KEY_READ to support mDNSResponder running with limited access rights
+Submitted by: Pavel Repin <prepin@gmail.com>
+
+Revision 1.60  2004/11/05 22:41:56  shersche
+Determine subnet mask when populating network interface data structures
+Submitted by: Pavel Repin <prepin@gmail.com>
+Reviewed by:
+
+Revision 1.59  2004/10/28 03:24:42  cheshire
+Rename m->CanReceiveUnicastOn as m->CanReceiveUnicastOn5353
+
+Revision 1.58  2004/10/16 00:17:01  cheshire
+<rdar://problem/3770558> Replace IP TTL 255 check with local subnet source address check
+
+Revision 1.57  2004/10/11 21:53:15  shersche
+<rdar://problem/3832450> Change GetWindowsVersionString link scoping from static to non-static so that it can be accessed from other compilation units. The information returned in this function will be used to determine what service dependencies to use when calling CreateService().
+Bug #: 3832450
+
+Revision 1.56  2004/09/26 23:20:36  ksekar
+<rdar://problem/3813108> Allow default registrations in multiple wide-area domains
+
+Revision 1.55  2004/09/21 21:02:57  cheshire
+Set up ifname before calling mDNS_RegisterInterface()
+
+Revision 1.54  2004/09/17 01:08:57  cheshire
+Renamed mDNSClientAPI.h to mDNSEmbeddedAPI.h
+  The name "mDNSClientAPI.h" is misleading to new developers looking at this code. The interfaces
+  declared in that file are ONLY appropriate to single-address-space embedded applications.
+  For clients on general-purpose computers, the interfaces defined in dns_sd.h should be used.
+
+Revision 1.53  2004/09/17 00:19:11  cheshire
+For consistency with AllDNSLinkGroupv6, rename AllDNSLinkGroup to AllDNSLinkGroupv4
+
+Revision 1.52  2004/09/16 00:24:50  cheshire
+<rdar://problem/3803162> Fix unsafe use of mDNSPlatformTimeNow()
+
+Revision 1.51  2004/09/14 23:42:37  cheshire
+<rdar://problem/3801296> Need to seed random number generator from platform-layer data
+
+Revision 1.50  2004/08/25 23:36:56  shersche
+<rdar://problem/3658379> Remove code that retrieves TTL from received packets
+Bug #: 3658379
+
+Revision 1.49  2004/08/25 16:43:29  ksekar
+Fix Windows build - change mDNS_SetFQDNs to mDNS_SetFQDN, remove unicast
+hostname parameter.
+
+Revision 1.48  2004/08/14 03:22:43  cheshire
+<rdar://problem/3762579> Dynamic DNS UI <-> mDNSResponder glue
+Add GetUserSpecifiedDDNSName() routine
+Convert ServiceRegDomain to domainname instead of C string
+Replace mDNS_GenerateFQDN/mDNS_GenerateGlobalFQDN with mDNS_SetFQDNs
+
+Revision 1.47  2004/08/06 17:33:02  shersche
+<rdar://problem/3753797> Put correct length of string in first byte of nicelabel
+Bug #: 3753797
+
+Revision 1.46  2004/08/05 05:43:01  shersche
+<rdar://problem/3751566> Add HostDescriptionChangedCallback so callers can choose to handle it when mDNSWin32 core detects that the computer description string has changed
+Bug #: 3751566
+
+Revision 1.45  2004/07/26 22:49:31  ksekar
+<rdar://problem/3651409>: Feature #9516: Need support for NATPMP in client
+
+Revision 1.44  2004/07/26 05:42:50  shersche
+use "Computer Description" for nicename if available, track dynamic changes to "Computer Description"
+
+Revision 1.43  2004/07/13 21:24:25  rpantos
+Fix for <rdar://problem/3701120>.
+
+Revision 1.42  2004/06/24 15:23:24  shersche
+Add InterfaceListChanged callback.  This callback is used in Service.c to add link local routes to the routing table
+Submitted by: herscher
+
+Revision 1.41  2004/06/18 05:22:16  rpantos
+Integrate Scott's changes
+
 Revision 1.40  2004/05/26 09:06:07  bradley
 Retry while building the interface list if it returns an error since the two-step process required to
 get the interface list could allow a subsequent interface change to come in that window and change the
@@ -42,7 +125,7 @@ Unified list copy/free code.  Added symetric list for
 
 Revision 1.36  2004/05/12 22:03:09  ksekar
 Made GetSearchDomainList a true platform-layer call (declaration moved
-from mDNSMacOSX.h to mDNSClientAPI.h), impelemted to return "local"
+from mDNSMacOSX.h to mDNSEmbeddedAPI.h), impelemted to return "local"
 only on non-OSX platforms.  Changed call to return a copy of the list
 to avoid shared memory issues.  Added a routine to free the list.
 
@@ -87,7 +170,7 @@ Fixes so that Posix/Linux, OS9, Windows, and VxWorks targets build again
 
 Revision 1.25  2003/11/14 20:59:09  cheshire
 Clients can't use AssignDomainName macro because mDNSPlatformMemCopy is defined in mDNSPlatformFunctions.h.
-Best solution is just to combine mDNSClientAPI.h and mDNSPlatformFunctions.h into a single file.
+Best solution is just to combine mDNSEmbeddedAPI.h and mDNSPlatformFunctions.h into a single file.
 
 Revision 1.24  2003/10/24 23:23:02  bradley
 Removed legacy port 53 support as it is no longer needed.
@@ -96,7 +179,7 @@ Revision 1.23  2003/10/14 03:26:12  bradley
 Clear interface list buffer to workaround Windows CE bug where interfaces are not reported correctly.
 
 Revision 1.22  2003/08/20 06:21:25  bradley
-Updated to latest internal version of the Rendezvous for Windows platform plugin: Added support
+Updated to latest internal version of the mDNSWindows platform layer: Added support
 for Windows CE/PocketPC 2003; re-did interface-related code to emulate getifaddrs/freeifaddrs for
 restricting usage to only active, multicast-capable, and non-point-to-point interfaces and to ease
 the addition of IPv6 support in the future; Changed init code to serialize thread initialization to
@@ -107,7 +190,7 @@ platforms (re-mapped to CreateThread on Window CE) to avoid a leak in the Micros
 Added IPv4/IPv6 string<->address conversion routines; Cleaned up some code and added HeaderDoc.
 
 Revision 1.21  2003/08/18 23:09:57  cheshire
-<rdar://problem/3382647> mDNSResponder divide by zero in mDNSPlatformTimeNow()
+<rdar://problem/3382647> mDNSResponder divide by zero in mDNSPlatformRawTime()
 
 Revision 1.20  2003/08/12 19:56:27  cheshire
 Update to APSL 2.0
@@ -195,7 +278,7 @@ Multicast DNS platform plugin for Win32
 	#include	<process.h>
 #endif
 
-#include	"mDNSClientAPI.h"
+#include	"mDNSEmbeddedAPI.h"
 
 #include	"mDNSWin32.h"
 
@@ -223,7 +306,8 @@ Multicast DNS platform plugin for Win32
 #define	kWaitListCancelEvent						( WAIT_OBJECT_0 + 0 )
 #define	kWaitListInterfaceListChangedEvent			( WAIT_OBJECT_0 + 1 )
 #define	kWaitListWakeupEvent						( WAIT_OBJECT_0 + 2 )
-#define	kWaitListFixedItemCount						3
+#define kWaitListRegEvent							( WAIT_OBJECT_0 + 3 )
+#define	kWaitListFixedItemCount						4
 
 #if( !TARGET_OS_WINDOWS_CE )
 	static GUID										kWSARecvMsgGUID = WSAID_WSARECVMSG;
@@ -239,6 +323,8 @@ Multicast DNS platform plugin for Win32
 
 mDNSlocal mStatus			SetupSynchronizationObjects( mDNS * const inMDNS );
 mDNSlocal mStatus			TearDownSynchronizationObjects( mDNS * const inMDNS );
+mDNSlocal mStatus			SetupNiceName( mDNS * const inMDNS );
+mDNSlocal mStatus			SetupHostName( mDNS * const inMDNS );
 mDNSlocal mStatus			SetupName( mDNS * const inMDNS );
 mDNSlocal mStatus			SetupInterfaceList( mDNS * const inMDNS );
 mDNSlocal mStatus			TearDownInterfaceList( mDNS * const inMDNS );
@@ -256,6 +342,7 @@ mDNSlocal mStatus 			ProcessingThreadInitialize( mDNS * const inMDNS );
 mDNSlocal mStatus			ProcessingThreadSetupWaitList( mDNS * const inMDNS, HANDLE **outWaitList, int *outWaitListCount );
 mDNSlocal void				ProcessingThreadProcessPacket( mDNS *inMDNS, mDNSInterfaceData *inIFD, SocketRef inSock );
 mDNSlocal void				ProcessingThreadInterfaceListChanged( mDNS *inMDNS );
+mDNSlocal void				ProcessingThreadRegistryChanged( mDNS * inMDNS );
 
 // Platform Accessors
 
@@ -277,6 +364,7 @@ mDNSexport mStatus	mDNSPlatformInterfaceIDToInfo( mDNS * const inMDNS, mDNSInter
 
 #if( MDNS_WINDOWS_USE_IPV6_IF_ADDRS )
 	mDNSlocal int	getifaddrs_ipv6( struct ifaddrs **outAddrs );
+	mDNSlocal int	getifnetmask_ipv6( struct ifaddrs * ifa );
 #endif
 
 #if( !TARGET_OS_WINDOWS_CE )
@@ -288,7 +376,6 @@ mDNSexport mStatus	mDNSPlatformInterfaceIDToInfo( mDNS * const inMDNS, mDNSInter
 #endif
 
 mDNSlocal mDNSBool	CanReceiveUnicast( void );
-mDNSlocal OSStatus	GetWindowsVersionString(  char *inBuffer, size_t inBufferSize );
 
 #ifdef	__cplusplus
 	}
@@ -353,7 +440,7 @@ mStatus	mDNSPlatformInit( mDNS * const inMDNS )
 	supported = ( ( LOBYTE( wsaData.wVersion ) == kWinSockMajorMin ) && ( HIBYTE( wsaData.wVersion ) == kWinSockMinorMin ) );
 	require_action( supported, exit, err = mStatus_UnsupportedErr );
 	
-	inMDNS->CanReceiveUnicast = CanReceiveUnicast();
+	inMDNS->CanReceiveUnicastOn5353 = CanReceiveUnicast();
 	
 	// Setup the HINFO HW/SW strings.
 	
@@ -406,6 +493,7 @@ void	mDNSPlatformClose( mDNS * const inMDNS )
 	
 	err = TearDownInterfaceList( inMDNS );
 	check_noerr( err );
+	check( !inMDNS->p->inactiveInterfaceList );
 		
 	err = TearDownSynchronizationObjects( inMDNS );
 	check_noerr( err );
@@ -434,7 +522,7 @@ void	mDNSPlatformClose( mDNS * const inMDNS )
 mStatus
 	mDNSPlatformSendUDP( 
 		const mDNS * const			inMDNS, 
-		const DNSMessage * const	inMsg, 
+		const void * const	        inMsg, 
 		const mDNSu8 * const		inMsgEnd, 
 		mDNSInterfaceID 			inInterfaceID, 
 		const mDNSAddr *			inDstIP, 
@@ -618,24 +706,29 @@ mDNSexport void	mDNSPlatformMemFree( void *inMem )
 }
 
 //===========================================================================================================================
+//	mDNSPlatformRandomSeed
+//===========================================================================================================================
+
+mDNSexport mDNSu32 mDNSPlatformRandomSeed(void)
+{
+	return( GetTickCount() );
+}
+
+//===========================================================================================================================
 //	mDNSPlatformTimeInit
 //===========================================================================================================================
 
-mDNSexport mStatus	mDNSPlatformTimeInit( mDNSs32 *outTimeNow )
+mDNSexport mStatus	mDNSPlatformTimeInit( void )
 {
-	check( outTimeNow );
-	
 	// No special setup is required on Windows -- we just use GetTickCount().
-	
-	*outTimeNow = mDNSPlatformTimeNow();
 	return( mStatus_NoError );
 }
 
 //===========================================================================================================================
-//	mDNSPlatformTimeNow
+//	mDNSPlatformRawTime
 //===========================================================================================================================
 
-mDNSs32	mDNSPlatformTimeNow( void )
+mDNSs32	mDNSPlatformRawTime( void )
 {
 	return( (mDNSs32) GetTickCount() );
 }
@@ -766,12 +859,27 @@ mDNSu32	mDNSPlatformInterfaceIndexfromInterfaceID( const mDNS * const inMDNS, mD
 	{
 		mDNSInterfaceData *		ifd;
 		
+		// Search active interfaces.
 		for( ifd = inMDNS->p->interfaceList; ifd; ifd = ifd->next )
 		{
 			if( (mDNSInterfaceID) ifd == inID )
 			{
 				index = ifd->scopeID;
 				break;
+			}
+		}
+		
+		// Search inactive interfaces too so remove events for inactive interfaces report the old interface index.
+		
+		if( !ifd )
+		{
+			for( ifd = inMDNS->p->inactiveInterfaceList; ifd; ifd = ifd->next )
+			{
+				if( (mDNSInterfaceID) ifd == inID )
+				{
+					index = ifd->scopeID;
+					break;
+				}
 			}
 		}
 		check( ifd );
@@ -857,6 +965,14 @@ mDNSexport DNameListElem *mDNSPlatformGetSearchDomainList(void)
 	return mDNS_CopyDNameList(&tmp);
 	}
 
+//===========================================================================================================================
+//	mDNSPlatformGetRegDomainList
+//===========================================================================================================================
+
+mDNSexport DNameListElem *mDNSPlatformGetRegDomainList(void)
+	{
+	return NULL;
+	}
 
 
 #if 0
@@ -905,6 +1021,7 @@ void	verbosedebugf_( const char *inFormat, ... )
 //	LogMsg
 //===========================================================================================================================
 
+/*
 void	LogMsg( const char *inFormat, ... )
 {
 	char		buffer[ 512 ];
@@ -917,6 +1034,7 @@ void	LogMsg( const char *inFormat, ... )
 	
 	dlog( kDebugLevelWarning, "%s\n", buffer );
 }
+*/
 
 #if 0
 #pragma mark -
@@ -992,51 +1110,140 @@ mDNSlocal mStatus	TearDownSynchronizationObjects( mDNS * const inMDNS )
 	return( mStatus_NoError );
 }
 
+
 //===========================================================================================================================
-//	SetupName
+//	SetupNiceName
 //===========================================================================================================================
 
-mDNSlocal mStatus	SetupName( mDNS * const inMDNS )
+mDNSlocal mStatus	SetupNiceName( mDNS * const inMDNS )
 {
-	mStatus		err;
+	mStatus		err = 0;
 	char		tempString[ 256 ];
 	
 	check( inMDNS );
 	
 	// Set up the nice name.
-	
 	tempString[ 0 ] = '\0';
-	err = gethostname( tempString, sizeof( tempString ) - 1 );
-	check_translated_errno( err == 0, errno_compat(), kNameErr );
+
+	// First try and open the registry key that contains the computer description value
+	if (inMDNS->p->regKey == NULL)
+	{
+		const char * s = "SYSTEM\\CurrentControlSet\\Services\\lanmanserver\\parameters";
+		err = RegOpenKeyEx( HKEY_LOCAL_MACHINE, s, 0, KEY_READ, &inMDNS->p->regKey);
+		check_translated_errno( err == 0, errno_compat(), kNameErr );
+
+		if (err)
+		{
+			inMDNS->p->regKey = NULL;
+		}
+	}
+
+	// if we opened it...
+	if (inMDNS->p->regKey != NULL)
+	{
+		DWORD type;
+		DWORD valueLen = sizeof(tempString);
+
+		// look for the computer description
+		err = RegQueryValueEx(inMDNS->p->regKey, "srvcomment", 0, &type, (LPBYTE) &tempString, &valueLen);
+		check_translated_errno( err == 0, errno_compat(), kNameErr );
+	}
+
+	// if we can't find it in the registry, then use the hostname of the machine
+	if (err || ( tempString[ 0] == '\0' ) )
+	{
+		err = gethostname( tempString, sizeof( tempString ) - 1 );
+		check_translated_errno( err == 0, errno_compat(), kNameErr );
+	}
+
+	// if we can't get the hostname
 	if( err || ( tempString[ 0 ] == '\0' ) )
 	{
 		// Invalidate name so fall back to a default name.
 		
 		strcpy( tempString, kMDNSDefaultName );
 	}
+
 	tempString[ sizeof( tempString ) - 1 ] = '\0';
 	
-	inMDNS->nicelabel.c[ 0 ] = (mDNSu8) strlen( tempString );
+	inMDNS->nicelabel.c[ 0 ] = (mDNSu8) (strlen( tempString ) < MAX_DOMAIN_LABEL ? strlen( tempString ) : MAX_DOMAIN_LABEL);
 	memcpy( &inMDNS->nicelabel.c[ 1 ], tempString, inMDNS->nicelabel.c[ 0 ] );
+	
+	dlog( kDebugLevelInfo, DEBUG_NAME "nice name \"%.*s\"\n", inMDNS->nicelabel.c[ 0 ], &inMDNS->nicelabel.c[ 1 ] );
+	
+	return( err );
+}
+
+
+//===========================================================================================================================
+//	SetupHostName
+//===========================================================================================================================
+
+mDNSlocal mStatus	SetupHostName( mDNS * const inMDNS )
+{
+	mStatus		err = 0;
+	char		tempString[ 256 ];
+	domainlabel tempLabel;
+	
+	check( inMDNS );
+
+	// Set up the nice name.
+	tempString[ 0 ] = '\0';
+
+	// use the hostname of the machine
+	err = gethostname( tempString, sizeof( tempString ) - 1 );
+	check_translated_errno( err == 0, errno_compat(), kNameErr );
+
+	// if we can't get the hostname
+	if( err || ( tempString[ 0 ] == '\0' ) )
+	{
+		// Invalidate name so fall back to a default name.
+		
+		strcpy( tempString, kMDNSDefaultName );
+	}
+
+	tempString[ sizeof( tempString ) - 1 ] = '\0';
+	tempLabel.c[ 0 ] = (mDNSu8) (strlen( tempString ) < MAX_DOMAIN_LABEL ? strlen( tempString ) : MAX_DOMAIN_LABEL );
+	memcpy( &tempLabel.c[ 1 ], tempString, tempLabel.c[ 0 ] );
 	
 	// Set up the host name.
 	
-	ConvertUTF8PstringToRFC1034HostLabel( inMDNS->nicelabel.c, &inMDNS->hostlabel );
+	ConvertUTF8PstringToRFC1034HostLabel( tempLabel.c, &inMDNS->hostlabel );
 	if( inMDNS->hostlabel.c[ 0 ] == 0 )
 	{
 		// Nice name has no characters that are representable as an RFC1034 name (e.g. Japanese) so use the default.
 		
 		MakeDomainLabelFromLiteralString( &inMDNS->hostlabel, kMDNSDefaultName );
 	}
-	check( inMDNS->nicelabel.c[ 0 ] != 0 );
+
 	check( inMDNS->hostlabel.c[ 0 ] != 0 );
 	
-	mDNS_GenerateFQDN( inMDNS );
+	mDNS_SetFQDN( inMDNS );
 	
-	dlog( kDebugLevelInfo, DEBUG_NAME "nice name \"%.*s\"\n", inMDNS->nicelabel.c[ 0 ], &inMDNS->nicelabel.c[ 1 ] );
 	dlog( kDebugLevelInfo, DEBUG_NAME "host name \"%.*s\"\n", inMDNS->hostlabel.c[ 0 ], &inMDNS->hostlabel.c[ 1 ] );
+	
 	return( err );
 }
+
+//===========================================================================================================================
+//	SetupName
+//===========================================================================================================================
+
+mDNSlocal mStatus	SetupName( mDNS * const inMDNS )
+{
+	mStatus		err = 0;
+	
+	check( inMDNS );
+	
+	err = SetupNiceName( inMDNS );
+	check_noerr( err );
+
+	err = SetupHostName( inMDNS );
+	check_noerr( err );
+
+	return err;
+}
+
 
 //===========================================================================================================================
 //	SetupInterfaceList
@@ -1062,7 +1269,7 @@ mDNSlocal mStatus	SetupInterfaceList( mDNS * const inMDNS )
 	// Tear down any existing interfaces that may be set up.
 	
 	TearDownInterfaceList( inMDNS );
-	
+
 	// Set up the name of this machine.
 	
 	err = SetupName( inMDNS );
@@ -1197,11 +1404,31 @@ exit:
 mDNSlocal mStatus	TearDownInterfaceList( mDNS * const inMDNS )
 {
 	mStatus					err;
+	mDNSInterfaceData **		p;
 	mDNSInterfaceData *		ifd;
 	
 	dlog( kDebugLevelTrace, DEBUG_NAME "tearing down interface list\n" );
 	check( inMDNS );
 	check( inMDNS->p );
+	
+	// Free any interfaces that were previously marked inactive and are no longer referenced by the mDNS cache.
+	// Interfaces are marked inactive, but not deleted immediately if they were still referenced by the mDNS cache
+	// so that remove events that occur after an interface goes away can still report the correct interface.
+
+	p = &inMDNS->p->inactiveInterfaceList;
+	while( *p )
+	{
+		ifd = *p;
+		if( NumCacheRecordsForInterfaceID( inMDNS, (mDNSInterfaceID) ifd ) > 0 )
+		{
+			p = &ifd->next;
+			continue;
+		}
+		
+		dlog( kDebugLevelInfo, DEBUG_NAME "freeing unreferenced, inactive interface %#p %#a\n", ifd, &ifd->interfaceInfo.ip );
+		*p = ifd->next;
+		free( ifd );
+	}
 	
 	// Tear down interface list change notifications.
 	
@@ -1252,7 +1479,10 @@ mDNSlocal mStatus	SetupInterface( mDNS * const inMDNS, const struct ifaddrs *inI
 	check( strlen( inIFA->ifa_name ) < sizeof( ifd->name ) );
 	strncpy( ifd->name, inIFA->ifa_name, sizeof( ifd->name ) - 1 );
 	ifd->name[ sizeof( ifd->name ) - 1 ] = '\0';
-
+	
+	strncpy(ifd->interfaceInfo.ifname, inIFA->ifa_name, sizeof(ifd->interfaceInfo.ifname));
+	ifd->interfaceInfo.ifname[sizeof(ifd->interfaceInfo.ifname)-1] = 0;
+	
 	// We always send and receive using IPv4, but to reduce traffic, we send and receive using IPv6 only on interfaces 
 	// that have no routable IPv4 address. Having a routable IPv4 address assigned is a reasonable indicator of being 
 	// on a large configured network, which means there's a good chance that most or all the other devices on that 
@@ -1351,6 +1581,9 @@ mDNSlocal mStatus	SetupInterface( mDNS * const inMDNS, const struct ifaddrs *inI
 	err = SockAddrToMDNSAddr( inIFA->ifa_addr, &ifd->interfaceInfo.ip, NULL );
 	require_noerr( err, exit );
 	
+	err = SockAddrToMDNSAddr( inIFA->ifa_netmask, &ifd->interfaceInfo.mask, NULL );
+	require_noerr( err, exit );
+	
 	ifd->interfaceInfo.Advertise = inMDNS->AdvertiseLocalAddresses;
 	
 	err = mDNS_RegisterInterface( inMDNS, &ifd->interfaceInfo );
@@ -1408,10 +1641,21 @@ mDNSlocal mStatus	TearDownInterface( mDNS * const inMDNS, mDNSInterfaceData *inI
 	{
 		close_compat( sock );
 	}
-		
-	// Free the memory used by the interface info.
 	
-	free( inIFD );	
+	// If the interface is still referenced by items in the mDNS cache then put it on the inactive list. This keeps 
+	// the InterfaceID valid so remove events report the correct interface. If it is no longer referenced, free it.
+
+	if( NumCacheRecordsForInterfaceID( inMDNS, (mDNSInterfaceID) inIFD ) > 0 )
+	{
+		inIFD->next = inMDNS->p->inactiveInterfaceList;
+		inMDNS->p->inactiveInterfaceList = inIFD;
+		dlog( kDebugLevelInfo, DEBUG_NAME "deferring free of interface %#p %#a\n", inIFD, &inIFD->interfaceInfo.ip );
+	}
+	else
+	{
+		dlog( kDebugLevelInfo, DEBUG_NAME "freeing interface %#p %#a immediately\n", inIFD, &inIFD->interfaceInfo.ip );
+		free( inIFD );
+	}
 	return( mStatus_NoError );
 }
 
@@ -1468,7 +1712,7 @@ mDNSlocal mStatus	SetupSocket( mDNS * const inMDNS, const struct sockaddr *inAdd
 		
 		// Join the all-DNS multicast group so we receive Multicast DNS packets.
 		
-		mreqv4.imr_multiaddr.s_addr = AllDNSLinkGroup.NotAnInteger;
+		mreqv4.imr_multiaddr.s_addr = AllDNSLinkGroupv4.NotAnInteger;
 		mreqv4.imr_interface.s_addr = ipv4.NotAnInteger;
 		err = setsockopt( sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *) &mreqv4, sizeof( mreqv4 ) );
 		check_translated_errno( err == 0, errno_compat(), kOptionErr );
@@ -1521,12 +1765,6 @@ mDNSlocal mStatus	SetupSocket( mDNS * const inMDNS, const struct sockaddr *inAdd
 		
 		option = 1;
 		err = setsockopt( sock, IPPROTO_IPV6, IPV6_PKTINFO, (char *) &option, sizeof( option ) );
-		check_translated_errno( err == 0, errno_compat(), kOptionErr );
-		
-		// Turn on option to receive TTL so we can check for spoofing.
-		
-		option = 1;
-		err = setsockopt( sock, IPPROTO_IPV6, IPV6_HOPLIMIT, (char *) &option, sizeof( option ) );
 		check_translated_errno( err == 0, errno_compat(), kOptionErr );
 		
 		// We only want to receive IPv6 packets (not IPv4-mapped IPv6 addresses) because we have a separate socket 
@@ -1680,6 +1918,16 @@ mDNSlocal mStatus	SetupNotifications( mDNS * const inMDNS )
 	err = translate_errno( err == 0, errno_compat(), kUnknownErr );
 	require_noerr( err, exit );
 
+	inMDNS->p->regEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	err = translate_errno( inMDNS->p->regEvent, (mStatus) GetLastError(), kUnknownErr );
+	require_noerr( err, exit );
+
+	if (inMDNS->p->regKey != NULL)
+	{
+		err = RegNotifyChangeKeyValue(inMDNS->p->regKey, TRUE, REG_NOTIFY_CHANGE_LAST_SET, inMDNS->p->regEvent, TRUE);
+		require_noerr( err, exit );
+	}
+
 exit:
 	if( err )
 	{
@@ -1699,6 +1947,19 @@ mDNSlocal mStatus	TearDownNotifications( mDNS * const inMDNS )
 		close_compat( inMDNS->p->interfaceListChangedSocket );
 		inMDNS->p->interfaceListChangedSocket = kInvalidSocketRef;
 	}
+
+	if ( inMDNS->p->regEvent != NULL )
+	{
+		CloseHandle( inMDNS->p->regEvent );
+		inMDNS->p->regEvent = NULL;
+	}
+
+	if ( inMDNS->p->regKey != NULL )
+	{
+		RegCloseKey( inMDNS->p->regKey );
+		inMDNS->p->regKey = NULL;
+	}
+
 	return( mStatus_NoError );
 }
 
@@ -1813,7 +2074,11 @@ mDNSlocal unsigned WINAPI	ProcessingThread( LPVOID inParam )
 		{
 			// Give the mDNS core a chance to do its work and determine next event time.
 			
-			mDNSs32 interval = mDNS_Execute(m) - mDNSPlatformTimeNow();
+			mDNSs32 interval = mDNS_Execute(m) - mDNS_TimeNow(m);
+			if (m->p->idleThreadCallback)
+			{
+				interval = m->p->idleThreadCallback(m, interval);
+			}
 			if      (interval < 0)						interval = 0;
 			else if (interval > (0x7FFFFFFF / 1000))	interval = 0x7FFFFFFF / mDNSPlatformOneSecond;
 			else										interval = (interval * 1000) / mDNSPlatformOneSecond;
@@ -1849,6 +2114,14 @@ mDNSlocal unsigned WINAPI	ProcessingThread( LPVOID inParam )
 				
 				dlog( kDebugLevelChatty - 1, DEBUG_NAME "wakeup for mDNS_Execute\n" );
 				continue;
+			}
+			else if ( result == kWaitListRegEvent )
+			{
+				//
+				// The computer description might have changed
+				//
+				ProcessingThreadRegistryChanged( m );
+				break;
 			}
 			else
 			{
@@ -1966,6 +2239,7 @@ mDNSlocal mStatus	ProcessingThreadSetupWaitList( mDNS * const inMDNS, HANDLE **o
 	*waitItemPtr++ = inMDNS->p->cancelEvent;
 	*waitItemPtr++ = inMDNS->p->interfaceListChangedEvent;
 	*waitItemPtr++ = inMDNS->p->wakeupEvent;
+	*waitItemPtr++ = inMDNS->p->regEvent;
 	
 	// Append all the dynamic wait items to the list.
 	
@@ -2066,10 +2340,6 @@ mDNSlocal void	ProcessingThreadProcessPacket( mDNS *inMDNS, mDNSInterfaceData *i
 				dstAddr.type	= mDNSAddrType_IPv6;
 				dstAddr.ip.v6	= *( (mDNSv6Addr *) &ipv6PacketInfo->ipi6_addr );
 			}
-			else if( ( header->cmsg_level == IPPROTO_IPV6 ) && ( header->cmsg_type == IPV6_HOPLIMIT ) )
-			{
-				ttl = (mDNSu8) *( (int *) WSA_CMSG_DATA( header ) );
-			}
 		}
 	}
 	else
@@ -2094,7 +2364,7 @@ mDNSlocal void	ProcessingThreadProcessPacket( mDNS *inMDNS, mDNSInterfaceData *i
 	dlog( kDebugLevelChatty, DEBUG_NAME "\n" );
 	
 	end = ( (mDNSu8 *) &packet ) + n;
-	mDNSCoreReceive( inMDNS, &packet, end, &srcAddr, srcPort, &dstAddr, dstPort, inIFD->interfaceInfo.InterfaceID, ttl );
+	mDNSCoreReceive( inMDNS, &packet, end, &srcAddr, srcPort, &dstAddr, dstPort, inIFD->interfaceInfo.InterfaceID );
 	
 exit:
 	return;
@@ -2110,6 +2380,11 @@ mDNSlocal void	ProcessingThreadInterfaceListChanged( mDNS *inMDNS )
 	
 	dlog( kDebugLevelInfo, DEBUG_NAME "interface list changed\n" );
 	check( inMDNS );
+
+	if (inMDNS->p->interfaceListChangedCallback)
+	{
+		inMDNS->p->interfaceListChangedCallback(inMDNS);
+	}
 	
 	mDNSPlatformLock( inMDNS );
 	
@@ -2134,6 +2409,38 @@ mDNSlocal void	ProcessingThreadInterfaceListChanged( mDNS *inMDNS )
 	
 	mDNSCoreMachineSleep( inMDNS, mDNSfalse );
 }
+
+
+//===========================================================================================================================
+//	ProcessingThreadRegistryChanged
+//===========================================================================================================================
+mDNSlocal void	ProcessingThreadRegistryChanged( mDNS *inMDNS )
+{
+	mStatus		err;
+	
+	dlog( kDebugLevelInfo, DEBUG_NAME "registry has changed\n" );
+	check( inMDNS );
+
+	mDNSPlatformLock( inMDNS );
+
+	// redo the names
+	SetupNiceName( inMDNS );
+
+	if (inMDNS->p->hostDescriptionChangedCallback)
+	{
+		inMDNS->p->hostDescriptionChangedCallback(inMDNS);
+	}
+	
+	// and reset the event handler
+	if ((inMDNS->p->regKey != NULL) && (inMDNS->p->regEvent))
+	{
+		err = RegNotifyChangeKeyValue(inMDNS->p->regKey, TRUE, REG_NOTIFY_CHANGE_LAST_SET, inMDNS->p->regEvent, TRUE);
+		check_noerr( err );
+	}
+
+	mDNSPlatformUnlock( inMDNS );
+}
+
 
 #if 0
 #pragma mark -
@@ -2330,6 +2637,12 @@ mDNSlocal int	getifaddrs_ipv6( struct ifaddrs **outAddrs )
 					ifa->ifa_addr = (struct sockaddr *) calloc( 1, (size_t) addr->Address.iSockaddrLength );
 					require_action( ifa->ifa_addr, exit, err = WSAENOBUFS );
 					memcpy( ifa->ifa_addr, addr->Address.lpSockaddr, (size_t) addr->Address.iSockaddrLength );
+
+					ifa->ifa_netmask = (struct sockaddr *) calloc( 1, sizeof(struct sockaddr) );
+					require_action( ifa->ifa_netmask, exit, err = WSAENOBUFS );
+					err = getifnetmask_ipv6(ifa);
+					require_noerr(err, exit);
+
 					break;
 				
 				default:
@@ -2357,6 +2670,60 @@ exit:
 		free( iaaList );
 	}
 	return( (int) err );
+}
+
+mDNSlocal int
+getifnetmask_ipv6( struct ifaddrs * ifa )
+{
+	PMIB_IPADDRTABLE	pIPAddrTable	=	NULL;
+	DWORD				dwSize			=	0;
+	DWORD				dwRetVal;
+	DWORD				i;
+	int					err				=	0;
+
+	// Make an initial call to GetIpAddrTable to get the
+	// necessary size into the dwSize variable
+
+	dwRetVal = GetIpAddrTable(NULL, &dwSize, 0);
+	require_action( dwRetVal == ERROR_INSUFFICIENT_BUFFER, exit, err = WSAENOBUFS );
+
+	pIPAddrTable = (MIB_IPADDRTABLE *) malloc ( dwSize );
+	require_action( pIPAddrTable != NULL, exit, err = WSAENOBUFS );
+
+	// Make a second call to GetIpAddrTable to get the
+	// actual data we want
+
+	dwRetVal = GetIpAddrTable( pIPAddrTable, &dwSize, 0 );
+	require_action(dwRetVal == NO_ERROR, exit, err = WSAENOBUFS);
+
+	// Now try and find the correct IP Address
+
+	for (i = 0; i < pIPAddrTable->dwNumEntries; i++)
+	{
+		struct sockaddr_in sa;
+
+		memset(&sa, 0, sizeof(sa));
+		sa.sin_family = AF_INET;
+		sa.sin_addr.s_addr = pIPAddrTable->table[i].dwAddr;
+
+		if (memcmp(ifa->ifa_addr, &sa, sizeof(sa)) == 0)
+		{
+			// Found the right one, so copy the subnet mask information
+
+			sa.sin_addr.s_addr = pIPAddrTable->table[i].dwMask;
+			memcpy( ifa->ifa_netmask, &sa, sizeof(sa) );
+			break;
+		}
+	}
+
+exit:
+
+	if ( pIPAddrTable != NULL )
+	{
+		free(pIPAddrTable);
+	}
+
+	return err;
 }
 #endif	// MDNS_WINDOWS_USE_IPV6_IF_ADDRS
 
@@ -2454,6 +2821,12 @@ mDNSlocal int	getifaddrs_ipv4( struct ifaddrs **outAddrs )
 				ifa->ifa_addr = (struct sockaddr *) calloc( 1, sizeof( *sa4 ) );
 				require_action( ifa->ifa_addr, exit, err = WSAENOBUFS );
 				memcpy( ifa->ifa_addr, sa4, sizeof( *sa4 ) );
+
+				sa4 = &ifInfo->iiNetmask.AddressIn;
+				ifa->ifa_netmask = (struct sockaddr*) calloc(1, sizeof( *sa4 ) );
+				require_action( ifa->ifa_netmask, exit, err = WSAENOBUFS );
+				memcpy( ifa->ifa_netmask, sa4, sizeof( *sa4 ) );
+
 				break;
 			}
 			
@@ -2696,7 +3069,7 @@ mDNSlocal mDNSBool	CanReceiveUnicast( void )
 //	GetWindowsVersionString
 //===========================================================================================================================
 
-mDNSlocal OSStatus	GetWindowsVersionString( char *inBuffer, size_t inBufferSize )
+OSStatus	GetWindowsVersionString( char *inBuffer, size_t inBufferSize )
 {
 #if( !defined( VER_PLATFORM_WIN32_CE ) )
 	#define VER_PLATFORM_WIN32_CE		3
