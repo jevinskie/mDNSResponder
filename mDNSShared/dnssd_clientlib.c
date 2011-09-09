@@ -1,5 +1,4 @@
-/* -*- Mode: C; tab-width: 4 -*-
- *
+/*
  * Copyright (c) 2004, Apple Computer, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without 
@@ -28,9 +27,6 @@
    Change History (most recent first):
 
 $Log: dnssd_clientlib.c,v $
-Revision 1.11  2006/08/14 23:05:53  cheshire
-Added "tab-width" emacs header line
-
 Revision 1.10  2005/04/06 02:06:56  shersche
 Add DNSSD_API macro to TXTRecord API calls
 

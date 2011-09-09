@@ -1,31 +1,28 @@
-/* -*- Mode: Java; tab-width: 4 -*-
- *
+/*
  * Copyright (c) 2004 Apple Computer, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @APPLE_LICENSE_HEADER_START@
  * 
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
  * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
  * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: DNSSD.java,v $
-Revision 1.11  2006/08/14 23:25:08  cheshire
-Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
-
-Revision 1.10  2006/06/20 23:05:55  rpantos
-<rdar://problem/3839132> Java needs to implement DNSServiceRegisterRecord equivalent
-
-Revision 1.9  2005/10/26 01:52:24  cheshire
-<rdar://problem/4316286> Race condition in Java code (doesn't work at all on Linux)
-
 Revision 1.8  2005/07/11 01:55:21  cheshire
 <rdar://problem/4175511> Race condition in Java API
 
@@ -54,6 +51,10 @@ First checked in.
 	This file declares and implements DNSSD, the central Java factory class
 	for doing DNS Service Discovery. It includes the mostly-abstract public
 	interface, as well as the Apple* implementation subclasses.
+
+	To do:
+	- implement network interface mappings
+	- RegisterRecord
  */
 
 
@@ -306,18 +307,6 @@ abstract public class	DNSSD
 	throws DNSSDException
 	{ return register( 0, 0, serviceName, regType, null, null, port, null, listener); }
 
-	/** Create a {@link DNSSDRecordRegistrar} allowing efficient registration of 
-		multiple individual records.<P> 
-		<P>
-		@return		A {@link DNSSDRecordRegistrar} that can be used to register records.
-
-		@throws SecurityException If a security manager is present and denies <tt>RuntimePermission("getDNSSDInstance")</tt>.
-		@see    RuntimePermission
-	*/
-	public static DNSSDRecordRegistrar	createRecordRegistrar( RegisterRecordListener listener)
-	throws DNSSDException
-	{ return getInstance()._createRecordRegistrar( listener); }
-
 	/** Query for an arbitrary DNS record.<P> 
 		@param	flags
 					Possible values are: MORE_COMING.
@@ -482,9 +471,6 @@ abstract public class	DNSSD
 									String domain, String host, int port, TXTRecord txtRecord, RegisterListener listener)
 	throws DNSSDException;
 
-	abstract protected DNSSDRecordRegistrar	_createRecordRegistrar( RegisterRecordListener listener)
-	throws DNSSDException;
-
 	abstract protected DNSSDService	_queryRecord( int flags, int ifIndex, String serviceName, int rrtype, 
 										int rrclass, QueryListener listener)
 	throws DNSSDException;
@@ -606,12 +592,6 @@ class	AppleDNSSD extends DNSSD
 										( txtRecord != null) ? txtRecord.getRawBytes() : null, client);
 	}
 
-	protected DNSSDRecordRegistrar	_createRecordRegistrar( RegisterRecordListener listener)
-	throws DNSSDException
-	{
-		return new AppleRecordRegistrar( listener);
-	}
-
 	protected DNSSDService		_queryRecord( int flags, int ifIndex, String serviceName, int rrtype, 
 										int rrclass, QueryListener client)
 	throws DNSSDException
@@ -672,8 +652,8 @@ class	AppleService implements DNSSDService, Runnable
 
 	public void				stop() { this.HaltOperation(); }
 
-	/* Block until data arrives, or one second passes. Returns 1 if data present, 0 otherwise. */
-	protected native int	BlockForData();
+	/* Block for timeout ms (or forever if -1). Returns 1 if data present, 0 if timed out, -1 if not browsing. */
+	protected native int	BlockForData( int msTimeout);
 
 	/* Call ProcessResults when data appears on socket descriptor. */
 	protected native int	ProcessResults();
@@ -692,9 +672,7 @@ class	AppleService implements DNSSDService, Runnable
 	{
 		while ( true )
 		{
-			// Note: We want to allow our DNS-SD operation to be stopped from other threads, so we have to
-			// block waiting for data *outside* the synchronized section. Because we're doing this unsynchronized
-			// we have to write some careful code. Suppose our DNS-SD operation is stopped from some other thread,
+			// We have to be very careful here. Suppose our DNS-SD operation is stopped from some other thread,
 			// and then immediately afterwards that thread (or some third, unrelated thread) starts a new DNS-SD
 			// operation. The Unix kernel always allocates the lowest available file descriptor to a new socket,
 			// so the same file descriptor is highly likely to be reused for the new operation, and if our old
@@ -713,11 +691,11 @@ class	AppleService implements DNSSDService, Runnable
 			// locking DOESN'T prevent the callback routine from stopping its own operation, but DOES prevent
 			// any other thread from stopping it until after the callback has completed and returned to us here.
 
-			int result = BlockForData();
+			int result = BlockForData(-1);
+			if (result != 1) break;	// If socket has been closed, time to terminate this thread
 			synchronized (this)
 			{
 				if (fNativeContext == 0) break;	// Some other thread stopped our DNSSD operation; time to terminate this thread
-				if (result == 0) continue;		// If BlockForData() said there was no data, go back and block again
 				result = ProcessResults();
 				if (fNativeContext == 0) break;	// Event listener stopped its own DNSSD operation; terminate this thread
 				if (result != 0) { fListener.operationFailed(this, result); break; }	// If error, notify listener
@@ -814,6 +792,7 @@ class	AppleRegistration extends AppleService implements DNSSDRegistration
 		AppleDNSRecord	newRecord = new AppleDNSRecord( this);
 
 		this.ThrowOnErr( this.AddRecord( flags, rrType, rData, ttl, newRecord));
+
 		return newRecord;
 	}
 
@@ -829,35 +808,6 @@ class	AppleRegistration extends AppleService implements DNSSDRegistration
 
 	// Sets fNativeContext. Returns non-zero on error.
 	protected native int	AddRecord( int flags, int rrType, byte[] rData, int ttl, AppleDNSRecord destObj);
-}
-
-class	AppleRecordRegistrar extends AppleService implements DNSSDRecordRegistrar
-{
-	public			AppleRecordRegistrar( RegisterRecordListener listener) 
-	throws DNSSDException
-	{ 
-		super(listener); 
-		this.ThrowOnErr( this.CreateConnection());
-		if ( !AppleDNSSD.hasAutoCallbacks)
-			new Thread(this).start();
-	}
-
-	public DNSRecord	registerRecord( int flags, int ifIndex, String fullname, int rrtype, 
-									int rrclass, byte[] rdata, int ttl)
-	throws DNSSDException
-	{
-		AppleDNSRecord	newRecord = new AppleDNSRecord( this);
-
-		this.ThrowOnErr( this.RegisterRecord( flags, ifIndex, fullname, rrtype, rrclass, rdata, ttl, newRecord));
-		return newRecord;
-	}
-
-	// Sets fNativeContext. Returns non-zero on error.
-	protected native int	CreateConnection();
-
-	// Sets fNativeContext. Returns non-zero on error.
-	protected native int	RegisterRecord( int flags, int ifIndex, String fullname, int rrtype, 
-										int rrclass, byte[] rdata, int ttl, AppleDNSRecord destObj);
 }
 
 class	AppleQuery extends AppleService

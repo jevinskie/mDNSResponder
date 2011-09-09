@@ -1,60 +1,28 @@
-/* -*- Mode: C; tab-width: 4 -*-
- *
+/*
  * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @APPLE_LICENSE_HEADER_START@
  * 
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
  * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
  * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: DNSCommon.c,v $
-Revision 1.100.2.1  2006/08/29 06:24:22  cheshire
-Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
-
-Revision 1.100  2006/06/08 22:58:46  cheshire
-<rdar://problem/4335605> IPv6 link-local address prefix is FE80::/10, not FE80::/16
-
-Revision 1.99  2006/05/18 01:32:33  cheshire
-<rdar://problem/4472706> iChat: Lost connection with Bonjour
-(mDNSResponder insufficiently defensive against malformed browsing PTR responses)
-
-Revision 1.98  2006/03/19 17:00:58  cheshire
-Define symbol MaxMsg instead of using hard-coded constant value '80'
-
-Revision 1.97  2006/03/18 21:47:56  cheshire
-<rdar://problem/4073825> Improve logic for delaying packets after repeated interface transitions
-
-Revision 1.96  2006/03/10 21:51:42  cheshire
-<rdar://problem/4111464> After record update, old record sometimes remains in cache
-Split out SameRDataBody() into a separate routine so it can be called from other code
-
-Revision 1.95  2006/03/08 22:43:11  cheshire
-Use "localdomain" symbol instead of literal string
-
-Revision 1.94  2006/03/02 21:59:55  cheshire
-<rdar://problem/4395331> Spurious warning "GetLargeResourceRecord: m->rec appears to be already in use"
-Improve sanity checks & debugging support in GetLargeResourceRecord()
-
-Revision 1.93  2006/03/02 20:30:47  cheshire
-Improved GetRRDisplayString to also show priority, weight, and port for SRV records
-
-Revision 1.92  2005/09/16 21:06:49  cheshire
-Use mDNS_TimeNow_NoLock macro, instead of writing "mDNSPlatformRawTime() + m->timenow_adjust" all over the place
-
-Revision 1.91  2005/07/10 22:10:37  cheshire
-The getOptRdata routine implicitly assumes the destination ResourceRecord is large enough to
-hold MaximumRDSize bytes, but its parameter was a generic ResourceRecord, which need not be that
-large. Changing the parameter to a LargeCacheRecord makes it clearer what the routine requires.
-
 Revision 1.90  2005/03/21 00:33:51  shersche
 <rdar://problem/4021486> Fix build warnings on Win32 platform
 
@@ -468,24 +436,22 @@ mDNSexport char *DNSTypeName(mDNSu16 rrtype)
 // long as this routine is only used for debugging messages, it probably isn't a big problem.
 mDNSexport char *GetRRDisplayString_rdb(const ResourceRecord *rr, RDataBody *rd, char *buffer)
 	{
-	#define Max (MaxMsg-1)
 	char *ptr = buffer;
-	mDNSu32 length = mDNS_snprintf(buffer, Max, "%4d %##s %s ", rr->rdlength, rr->name->c, DNSTypeName(rr->rrtype));
+	mDNSu32 length = mDNS_snprintf(buffer, 79, "%4d %##s %s ", rr->rdlength, rr->name->c, DNSTypeName(rr->rrtype));
 	switch (rr->rrtype)
 		{
-		case kDNSType_A:	mDNS_snprintf(buffer+length, Max-length, "%.4a", &rd->ipv4);          break;
+		case kDNSType_A:	mDNS_snprintf(buffer+length, 79-length, "%.4a", &rd->ipv4);          break;
 
 		case kDNSType_NS:	// Same as PTR
 		case kDNSType_CNAME:// Same as PTR
-		case kDNSType_PTR:	mDNS_snprintf(buffer+length, Max-length, "%##s", rd->name.c);       break;
+		case kDNSType_PTR:	mDNS_snprintf(buffer+length, 79-length, "%##s", rd->name.c);       break;
 
 		case kDNSType_HINFO:// Display this the same as TXT (just show first string)
-		case kDNSType_TXT:  mDNS_snprintf(buffer+length, Max-length, "%#s", rd->txt.c);         break;
+		case kDNSType_TXT:  mDNS_snprintf(buffer+length, 79-length, "%#s", rd->txt.c);         break;
 
-		case kDNSType_AAAA:	mDNS_snprintf(buffer+length, Max-length, "%.16a", &rd->ipv6);       break;
-		case kDNSType_SRV:	mDNS_snprintf(buffer+length, Max-length, "%u %u %u %##s",
-								rd->srv.priority, rd->srv.weight, mDNSVal16(rd->srv.port), rd->srv.target.c); break;
-		default:			mDNS_snprintf(buffer+length, Max-length, "RDLen %d: %s", rr->rdlength, rd->data);  break;
+		case kDNSType_AAAA:	mDNS_snprintf(buffer+length, 79-length, "%.16a", &rd->ipv6);       break;
+		case kDNSType_SRV:	mDNS_snprintf(buffer+length, 79-length, "%##s", rd->srv.target.c); break;
+		default:			mDNS_snprintf(buffer+length, 79-length, "RDLen %d: %s", rr->rdlength, rd->data);  break;
 		}
 	for (ptr = buffer; *ptr; ptr++) if (*ptr < ' ') *ptr='.';
 	return(buffer);
@@ -502,14 +468,6 @@ mDNSexport mDNSu32 mDNSRandom(mDNSu32 max)
 		seed = mDNSPlatformRandomSeed();				// Pick an initial seed
 		for (i=0; i<100; i++) seed = seed * 21 + 1;		// And mix it up a bit
 		}
-	while (mask < max) mask = (mask << 1) | 1;
-	do seed = seed * 21 + 1; while ((seed & mask) > max);
-	return (seed & mask);
-	}
-
-mDNSexport mDNSu32 mDNSRandomFromFixedSeed(mDNSu32 seed, mDNSu32 max)
-	{
-	mDNSu32 mask = 1;
 	while (mask < max) mask = (mask << 1) | 1;
 	do seed = seed * 21 + 1; while ((seed & mask) > max);
 	return (seed & mask);
@@ -589,13 +547,10 @@ mDNSexport mDNSBool SameDomainName(const domainname *const d1, const domainname 
 mDNSexport mDNSBool IsLocalDomain(const domainname *d)
 	{
 	// Domains that are defined to be resolved via link-local multicast are:
-	// local., 254.169.in-addr.arpa., and {8,9,A,B}.E.F.ip6.arpa.
-	static const domainname *nL = (domainname*)"\x5" "local";
-	static const domainname *nR = (domainname*)"\x3" "254" "\x3" "169"         "\x7" "in-addr" "\x4" "arpa";
-	static const domainname *n8 = (domainname*)"\x1" "8"   "\x1" "e" "\x1" "f" "\x3" "ip6"     "\x4" "arpa";
-	static const domainname *n9 = (domainname*)"\x1" "9"   "\x1" "e" "\x1" "f" "\x3" "ip6"     "\x4" "arpa";
-	static const domainname *nA = (domainname*)"\x1" "a"   "\x1" "e" "\x1" "f" "\x3" "ip6"     "\x4" "arpa";
-	static const domainname *nB = (domainname*)"\x1" "b"   "\x1" "e" "\x1" "f" "\x3" "ip6"     "\x4" "arpa";
+	// local., 254.169.in-addr.arpa., and 0.8.E.F.ip6.arpa.
+	static const domainname *n0 = (domainname*)"\x5" "local";
+	static const domainname *n1 = (domainname*)"\x3" "254" "\x3" "169"                     "\x7" "in-addr" "\x4" "arpa";
+	static const domainname *n2 = (domainname*)"\x1" "0"   "\x1" "8"   "\x1" "e" "\x1" "f" "\x3" "ip6"     "\x4" "arpa";
 
 	const domainname *d1, *d2, *d3, *d4, *d5, *d6;	// Top-level domain, second-level domain, etc.
 	d1 = d2 = d3 = d4 = d5 = d6 = mDNSNULL;
@@ -605,12 +560,9 @@ mDNSexport mDNSBool IsLocalDomain(const domainname *d)
 		d = (domainname*)(d->c + 1 + d->c[0]);
 		}
 
-	if (d1 && SameDomainName(d1, nL)) return(mDNStrue);
-	if (d4 && SameDomainName(d4, nR)) return(mDNStrue);
-	if (d6 && SameDomainName(d6, n8)) return(mDNStrue);
-	if (d6 && SameDomainName(d6, n9)) return(mDNStrue);
-	if (d6 && SameDomainName(d6, nA)) return(mDNStrue);
-	if (d6 && SameDomainName(d6, nB)) return(mDNStrue);
+	if (d1 && SameDomainName(d1, n0)) return(mDNStrue);
+	if (d4 && SameDomainName(d4, n1)) return(mDNStrue);
+	if (d6 && SameDomainName(d6, n2)) return(mDNStrue);
 	return(mDNSfalse);
 	}
 
@@ -911,7 +863,7 @@ mDNSexport mDNSu8 *ConstructServiceName(domainname *const fqdn,
 
 	src = type->c;										// Put the service type into the domain name
 	len = *src;
-	if (len < 2 || len >= 0x40 || (len > 15 && !SameDomainName(domain, &localdomain)))
+	if (len < 2 || len >= 0x40 || (len > 15 && !SameDomainName(domain, (domainname*)"\x05" "local")))
 		{
 		errormsg="Application protocol name must be underscore plus 1-14 characters. See <http://www.dns-sd.org/ServiceTypes.html>";
 		goto fail;
@@ -944,11 +896,6 @@ fail:
 	return(mDNSNULL);
 	}
 
-// A service name has the form: instance.application-protocol.transport-protocol.domain
-// DeconstructServiceName is currently fairly forgiving: It doesn't try to enforce character
-// set or length limits for the protocol names, and the final domain is allowed to be empty.
-// However, if the given FQDN doesn't contain at least three labels,
-// DeconstructServiceName will reject it and return mDNSfalse.
 mDNSexport mDNSBool DeconstructServiceName(const domainname *const fqdn,
 	domainlabel *const name, domainname *const type, domainname *const domain)
 	{
@@ -957,32 +904,29 @@ mDNSexport mDNSBool DeconstructServiceName(const domainname *const fqdn,
 	const mDNSu8 *max = fqdn->c + MAX_DOMAIN_NAME;
 	mDNSu8 *dst;
 
-	dst = name->c;										// Extract the service name
+	dst = name->c;										// Extract the service name from the domain name
 	len = *src;
-	if (!len)        { debugf("DeconstructServiceName: FQDN empty!");            return(mDNSfalse); }
-	if (len >= 0x40) { debugf("DeconstructServiceName: Instance name too long"); return(mDNSfalse); }
+	if (len >= 0x40) { debugf("DeconstructServiceName: service name too long"); return(mDNSfalse); }
 	for (i=0; i<=len; i++) *dst++ = *src++;
 
-	dst = type->c;										// Extract the service type
+	dst = type->c;										// Extract the service type from the domain name
 	len = *src;
-	if (!len)        { debugf("DeconstructServiceName: FQDN contains only one label!");      return(mDNSfalse); }
-	if (len >= 0x40) { debugf("DeconstructServiceName: Application protocol name too long"); return(mDNSfalse); }
+	if (len >= 0x40) { debugf("DeconstructServiceName: service type too long"); return(mDNSfalse); }
 	for (i=0; i<=len; i++) *dst++ = *src++;
 
 	len = *src;
-	if (!len)        { debugf("DeconstructServiceName: FQDN contains only two labels!");   return(mDNSfalse); }
-	if (len >= 0x40) { debugf("DeconstructServiceName: Transport protocol name too long"); return(mDNSfalse); }
+	if (len >= 0x40) { debugf("DeconstructServiceName: service type too long"); return(mDNSfalse); }
 	for (i=0; i<=len; i++) *dst++ = *src++;
-	*dst++ = 0;											// Put terminator on the end of service type
+	*dst++ = 0;		// Put the null root label on the end of the service type
 
-	dst = domain->c;									// Extract the service domain
+	dst = domain->c;									// Extract the service domain from the domain name
 	while (*src)
 		{
 		len = *src;
 		if (len >= 0x40)
-			{ debugf("DeconstructServiceName: Label in service domain too long"); return(mDNSfalse); }
+			{ debugf("DeconstructServiceName: service domain label too long"); return(mDNSfalse); }
 		if (src + 1 + len + 1 >= max)
-			{ debugf("DeconstructServiceName: Total service domain too long"); return(mDNSfalse); }
+			{ debugf("DeconstructServiceName: service domain too long"); return(mDNSfalse); }
 		for (i=0; i<=len; i++) *dst++ = *src++;
 		}
 	*dst++ = 0;		// Put the null root label on the end
@@ -1148,30 +1092,23 @@ mDNSexport mDNSu32 RDataHashValue(mDNSu16 const rdlength, const RDataBody *const
 	return(sum);
 	}
 
-// r1 has to be a full ResourceRecord including rrtype and rdlength
-// r2 is just a bare RDataBody, which MUST be the same rrtype and rdlength as r1
-mDNSexport mDNSBool SameRDataBody(const ResourceRecord *const r1, const RDataBody *const r2)
-	{
-	switch(r1->rrtype)
-		{
-		case kDNSType_CNAME:// Same as PTR
-		case kDNSType_PTR:	return(SameDomainName(&r1->rdata->u.name, &r2->name));
-
-		case kDNSType_SRV:	return(mDNSBool)(  	r1->rdata->u.srv.priority          == r2->srv.priority          &&
-												r1->rdata->u.srv.weight            == r2->srv.weight            &&
-												r1->rdata->u.srv.port.NotAnInteger == r2->srv.port.NotAnInteger &&
-												SameDomainName(&r1->rdata->u.srv.target, &r2->srv.target)       );
-
-		default:			return(mDNSPlatformMemSame(r1->rdata->u.data, r2->data, r1->rdlength));
-		}
-	}
-
 mDNSexport mDNSBool SameRData(const ResourceRecord *const r1, const ResourceRecord *const r2)
 	{
 	if (r1->rrtype     != r2->rrtype)     return(mDNSfalse);
 	if (r1->rdlength   != r2->rdlength)   return(mDNSfalse);
 	if (r1->rdatahash  != r2->rdatahash)  return(mDNSfalse);
-	return(SameRDataBody(r1, &r2->rdata->u));
+	switch(r1->rrtype)
+		{
+		case kDNSType_CNAME:// Same as PTR
+		case kDNSType_PTR:	return(SameDomainName(&r1->rdata->u.name, &r2->rdata->u.name));
+
+		case kDNSType_SRV:	return(mDNSBool)(  	r1->rdata->u.srv.priority          == r2->rdata->u.srv.priority          &&
+												r1->rdata->u.srv.weight            == r2->rdata->u.srv.weight            &&
+												r1->rdata->u.srv.port.NotAnInteger == r2->rdata->u.srv.port.NotAnInteger &&
+												SameDomainName(&r1->rdata->u.srv.target, &r2->rdata->u.srv.target)       );
+
+		default:			return(mDNSPlatformMemSame(r1->rdata->u.data, r2->rdata->u.data, r1->rdlength));
+		}
 	}
 
 mDNSexport mDNSBool SameResourceRecord(ResourceRecord *r1, ResourceRecord *r2)
@@ -1446,10 +1383,9 @@ mDNSlocal mDNSu16 getVal16(const mDNSu8 **ptr)
 	return val;
 	}
 
-mDNSlocal const mDNSu8 *getOptRdata(const mDNSu8 *ptr, const mDNSu8 *const limit, LargeCacheRecord *const cr, mDNSu16 pktRDLen)
+mDNSlocal const mDNSu8 *getOptRdata(const mDNSu8 *ptr, const mDNSu8 *limit, ResourceRecord *rr, mDNSu16 pktRDLen)
 	{
 	int nread = 0;
-	ResourceRecord *const rr = &cr->r.resrec;
 	rdataOpt *opt = (rdataOpt *)rr->rdata->u.data;
 
 	while (nread < pktRDLen && (mDNSu8 *)opt < rr->rdata->u.data + MaximumRDSize - sizeof(rdataOpt))
@@ -1851,10 +1787,11 @@ mDNSexport const mDNSu8 *GetLargeResourceRecord(mDNS *const m, const DNSMessage 
 	CacheRecord *rr = &largecr->r;
 	mDNSu16 pktrdlength;
 	
-	if (largecr == &m->rec && largecr->r.resrec.RecordType)
-		LogMsg("GetLargeResourceRecord: m->rec appears to be already in use for %s", CRDisplayString(m, &largecr->r));
+	if (largecr == &m->rec && rr->resrec.RecordType)
+		LogMsg("GetLargeResourceRecord: m->rec appears to be already in use");
 
 	rr->next              = mDNSNULL;
+	rr->resrec.RecordType = RecordType;
 	rr->resrec.name       = &largecr->namestorage;
 
 	rr->NextInKAList      = mDNSNULL;
@@ -1886,7 +1823,7 @@ mDNSexport const mDNSu8 *GetLargeResourceRecord(mDNS *const m, const DNSMessage 
 	// us to look at. If we decide to copy it into the cache, then we'll update m->NextCacheCheck accordingly.
 	pktrdlength           = (mDNSu16)((mDNSu16)ptr[8] <<  8 | ptr[9]);
 	if (ptr[2] & (kDNSClass_UniqueRRSet >> 8))
-		RecordType |= kDNSRecordTypePacketUniqueMask;
+		rr->resrec.RecordType |= kDNSRecordTypePacketUniqueMask;
 	ptr += 10;
 	if (ptr + pktrdlength > end) { debugf("GetResourceRecord: RDATA exceeds end of packet"); return(mDNSNULL); }
 	end = ptr + pktrdlength;		// Adjust end to indicate the end of the rdata for this resource record
@@ -1947,7 +1884,7 @@ mDNSexport const mDNSu8 *GetLargeResourceRecord(mDNS *const m, const DNSMessage 
 			                rr->resrec.rdata->u.soa.min     = (mDNSu32) ((mDNSu32)ptr[0x10] << 24 | (mDNSu32)ptr[0x11] << 16 | (mDNSu32)ptr[0x12] << 8 | ptr[0x13]);
 			                break;
 
-		case kDNSType_OPT:  getOptRdata(ptr, end, largecr, pktrdlength); break;
+		case kDNSType_OPT:  getOptRdata(ptr, end, &rr->resrec, pktrdlength); break;
 
 		default:			if (pktrdlength > rr->resrec.rdata->MaxRDLength)
 								{
@@ -1970,8 +1907,6 @@ mDNSexport const mDNSu8 *GetLargeResourceRecord(mDNS *const m, const DNSMessage 
 	rr->resrec.namehash = DomainNameHashValue(rr->resrec.name);
 	SetNewRData(&rr->resrec, mDNSNULL, 0);
 
-	// Success! Now fill in RecordType to show this record contains valid data
-	rr->resrec.RecordType = RecordType;
 	return(ptr + pktrdlength);
 	}
 
@@ -2112,14 +2047,14 @@ mDNSexport void mDNS_Lock(mDNS *const m)
 	if (m->mDNS_busy == 0)
 		{
 		if (m->timenow)
-			LogMsg("mDNS_Lock: m->timenow already set (%ld/%ld)", m->timenow, mDNS_TimeNow_NoLock(m));
-		m->timenow = mDNS_TimeNow_NoLock(m);
+			LogMsg("mDNS_Lock: m->timenow already set (%ld/%ld)", m->timenow, mDNSPlatformRawTime() + m->timenow_adjust);
+		m->timenow = mDNSPlatformRawTime() + m->timenow_adjust;
 		if (m->timenow == 0) m->timenow = 1;
 		}
 	else if (m->timenow == 0)
 		{
 		LogMsg("mDNS_Lock: m->mDNS_busy is %ld but m->timenow not set", m->mDNS_busy);
-		m->timenow = mDNS_TimeNow_NoLock(m);
+		m->timenow = mDNSPlatformRawTime() + m->timenow_adjust;
 		if (m->timenow == 0) m->timenow = 1;
 		}
 

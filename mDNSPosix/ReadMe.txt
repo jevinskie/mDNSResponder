@@ -1,30 +1,23 @@
 ReadMe About mDNSPosix
 ----------------------
 
-mDNSPosix is a port of Apple's Multicast DNS and DNS Service Discovery
-code to Posix platforms.
+mDNSPosix is a port of Apple's core mDNS code to Posix platforms.
 
-Multicast DNS and DNS Service Discovery are technologies that allow you
-to register IP-based services and browse the network for those services.
-For more information about mDNS, see the mDNS web site.
+mDNS is short for "multicast DNS", which is a technology that allows you
+to register IP services and browse the network for those services.  For
+more information about mDNS, see the mDNS web site.
 
   <http://www.multicastdns.org/>
 
-Multicast DNS is part of a family of technologies resulting from the
-efforts of the IETF Zeroconf working group.  For information about
-other Zeroconf technologies, see the Zeroconf web site.
+mDNS is part of a family of technologies resulting from the efforts of
+the IETF zeroconf working group.  For information about other zeroconf
+technologies, see the zeroconf web site.
 
   <http://www.zeroconf.org/>
 
 Apple uses the trade mark "Bonjour" to describe our implementation of
-Zeroconf technologies.  This sample is designed to show how easy it is
+zeroconf technologies.  This sample is designed to show how easy it is
 to make a device "Bonjour compatible".
-
-The "Bonjour" trade mark can also be licensed at no charge for
-inclusion on your own products, packaging, manuals, promotional
-materials, or web site. For details and licensing terms, see
-
-  <http://developer.apple.com/bonjour/>
 
 The code in this sample was compiled and tested on Mac OS X (10.1.x,
 10.2, 10.3), Solaris (SunOS 5.8), Linux (Redhat 2.4.9-21, Fedora Core 1), 
@@ -86,30 +79,26 @@ o Standalone products for dedicated devices (printer, network camera, etc.)
   - mDNSResponderPosix
   - mDNSProxyResponderPosix
 
-o Testing and Debugging tools
-  - dns-sd command-line tool (from the "Clients" folder)
+o Debugging tools
   - mDNSNetMonitor
   - mDNSIdentify
 
-As root type "make install" to install eight things:
+As root type "make install" to install six things:
 o mdnsd                   (usually in /usr/sbin)
 o libmdns                 (usually in /usr/lib)
 o dns_sd.h                (usually in /usr/include)
 o startup scripts         (e.g. in /etc/rc.d)
 o manual pages            (usually in /usr/share/man)
-o dns-sd tool             (usually in /usr/bin)
 o nss_mdns                (usually in /lib)
 o nss configuration files (usually in /etc)
 
-The "make install" concludes by executing the startup script
-(usually "/etc/init.d/mdns start") to start the daemon running.
-You shouldn't need to reboot unless you really want to.
-
-Once the daemon is running, you can use the dns-sd test tool
-to exercise all the major functionality of the daemon. Running
-"dns-sd" with no arguments gives a summary of the available options.
-This test tool is also described in detail, with several examples,
-in Chapter 6 of the O'Reilly "Zero Configuration Networking" book.
+Once you've installed the files in their respective places,
+you need to start the daemon running, either by rebooting,
+or by running the startup script "/etc/init.d/mdns start"
+(the exact path may be different on your system).
+Then you can cd to the "Clients" folder and type "make".
+This builds a test client showing how to exercise all the major
+functionality of the daemon.
 
 
 How It Works
@@ -254,19 +243,17 @@ Caveats
 -------
 Currently the program uses a simple make file.
 
-The Multicast DNS protocol can also operate locally over the loopback
-interface, but this exposed some problems with the underlying network
-stack in early versions of Mac OS X and may expose problems with other
-network stacks too.
+There are various problems with loopback-only self discovery.  The code
+will attempt service discovery on the loopback interface only if no
+other interfaces are available.  However, this exposes a number of
+problems with the underlying network stack (at least on Mac OS X).
 
-o On Mac OS X 10.1.x the code failed to start on the loopback interface
+o On Mac OS X 10.1.x the code fails to start on the loopback interface
   because the IP_ADD_MEMBERSHIP option returns ENOBUFS.
 
-o On Mac OS X 10.2 the loopback-only case failed because
-  "sendto" calls fails with error EHOSTUNREACH. (3016042)
-
-Consequently, the code will attempt service discovery on the loopback
-interface only if no other interfaces are available.
+o On Mac OS X 10.2 the loopback-only case fails because
+  mDNSPlatformSendUDP's call to "sendto" fails with error EHOSTUNREACH
+  [Radar ID 3016042].
 
 I haven't been able to test the loopback-only case on other platforms
 because I don't have access to the physical machine.
@@ -274,7 +261,9 @@ because I don't have access to the physical machine.
 
 Licencing
 ---------
-This source code is Open Source; for details see the "LICENSE" file.
+This code is distributed under the Apple Public Source License.
+Information about the licence is included at the top of each source file.
+
 
 Credits and Version History
 ---------------------------

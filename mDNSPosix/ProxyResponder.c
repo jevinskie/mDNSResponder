@@ -2,30 +2,28 @@
  *
  * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @APPLE_LICENSE_HEADER_START@
  * 
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
  * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
  * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: ProxyResponder.c,v $
-Revision 1.39  2006/08/14 23:24:46  cheshire
-Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
-
-Revision 1.38  2006/06/12 18:22:42  cheshire
-<rdar://problem/4580067> mDNSResponder building warnings under Red Hat 64-bit (LP64) Linux
-
-Revision 1.37  2006/02/23 23:38:43  cheshire
-<rdar://problem/4427969> On FreeBSD 4 "arpa/inet.h" requires "netinet/in.h" be included first
-
 Revision 1.36  2005/08/04 03:12:47  mkrochma
 <rdar://problem/4199236> Register reverse PTR record using multicast
 
@@ -120,8 +118,8 @@ Add "$Log" header
 #include <unistd.h>				// For select()
 #include <signal.h>				// For SIGINT, SIGTERM
 #include <errno.h>				// For errno, EINTR
-#include <netinet/in.h>			// For INADDR_NONE
 #include <arpa/inet.h>			// For inet_addr()
+#include <netinet/in.h>			// For INADDR_NONE
 #include <netdb.h>				// For gethostbyname()
 
 #include "mDNSEmbeddedAPI.h"	// Defines the interface to the client layer above
@@ -328,7 +326,7 @@ mDNSexport int main(int argc, char **argv)
 		mDNS_Init_NoCache, mDNS_Init_ZeroCacheSize,
 		mDNS_Init_DontAdvertiseLocalAddresses,
 		mDNS_Init_NoInitCallback, mDNS_Init_NoInitCallbackContext);
-	if (status) { fprintf(stderr, "Daemon start: mDNS_Init failed %d\n", (int)status); return(status); }
+	if (status) { fprintf(stderr, "Daemon start: mDNS_Init failed %ld\n", status); return(status); }
 
 	mDNSPosixListenForSignalInEventLoop(SIGINT);
 	mDNSPosixListenForSignalInEventLoop(SIGTERM);

@@ -2,17 +2,24 @@
  *
  * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @APPLE_LICENSE_HEADER_START@
  * 
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
  * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
  * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
  *
  * Formatting notes:
  * This code follows the "Whitesmiths style" C indentation rules. Plenty of discussion
@@ -30,24 +37,6 @@
 	Change History (most recent first):
 
 $Log: mDNSPosix.c,v $
-Revision 1.78.2.1  2006/08/29 06:24:34  cheshire
-Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
-
-Revision 1.78  2006/06/28 09:12:22  cheshire
-Added debugging message
-
-Revision 1.77  2006/03/19 02:00:11  cheshire
-<rdar://problem/4073825> Improve logic for delaying packets after repeated interface transitions
-
-Revision 1.76  2006/01/09 19:29:16  cheshire
-<rdar://problem/4403128> Cap number of "sendto failed" messages we allow mDNSResponder to log
-
-Revision 1.75  2006/01/05 22:04:57  cheshire
-<rdar://problem/4399479> Log error message when send fails with "operation not permitted"
-
-Revision 1.74  2006/01/05 21:45:27  cheshire
-<rdar://problem/4400118> Fix uninitialized structure member in IPv6 code
-
 Revision 1.73  2005/10/11 21:31:46  cheshire
 <rdar://problem/4296177> Don't depend on IP_RECVTTL succeeding (not available on all platforms)
 
@@ -452,20 +441,11 @@ mDNSexport mStatus mDNSPlatformSendUDP(const mDNS *const m, const void *const ms
 	if      (err > 0) err = 0;
 	else if (err < 0)
 		{
-		static int MessageCount = 0;
-        // Don't report EHOSTDOWN (i.e. ARP failure), ENETDOWN, or no route to host for unicast destinations
-		if (!mDNSAddressIsAllDNSLinkGroup(dst))
-			if (errno == EHOSTDOWN || errno == ENETDOWN || errno == EHOSTUNREACH || errno == ENETUNREACH) return(mStatus_TransientErr);
-
-		if (MessageCount < 1000)
-			{
-			MessageCount++;
-			if (thisIntf)
-				LogMsg("mDNSPlatformSendUDP got error %d (%s) sending packet to %#a on interface %#a/%s/%d",
-							  errno, strerror(errno), dst, &thisIntf->coreIntf.ip, thisIntf->intfName, thisIntf->index);
-			else
-				LogMsg("mDNSPlatformSendUDP got error %d (%s) sending packet to %#a", errno, strerror(errno), dst);
-			}
+		if (thisIntf)
+			verbosedebugf("mDNSPlatformSendUDP got error %d (%s) sending packet to %#a on interface %#a/%s/%d",
+						  errno, strerror(errno), dst, &thisIntf->coreIntf.ip, thisIntf->intfName, thisIntf->index);
+		else
+			verbosedebugf("mDNSPlatformSendUDP got error %d (%s) sending packet to %#a", errno, strerror(errno), dst);
 		}
 
 	return PosixErrorToStatus(err);
@@ -691,7 +671,7 @@ mDNSlocal PosixNetworkInterface *SearchForInterfaceByName(mDNS *const m, const c
 	return intf;
 	}
 
-mDNSexport mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(mDNS *const m, mDNSu32 index)
+mDNSexport mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(const mDNS *const m, mDNSu32 index)
 	{
 	PosixNetworkInterface *intf;
 
@@ -706,7 +686,7 @@ mDNSexport mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(mDNS *const
 	return (mDNSInterfaceID) intf;
 	}
 	
-mDNSexport mDNSu32 mDNSPlatformInterfaceIndexfromInterfaceID(mDNS *const m, mDNSInterfaceID id)
+mDNSexport mDNSu32 mDNSPlatformInterfaceIndexfromInterfaceID(const mDNS *const m, mDNSInterfaceID id)
 	{
 	PosixNetworkInterface *intf;
 
@@ -742,7 +722,7 @@ mDNSlocal void ClearInterfaceList(mDNS *const m)
 	while (m->HostInterfaces)
 		{
 		PosixNetworkInterface *intf = (PosixNetworkInterface*)(m->HostInterfaces);
-		mDNS_DeregisterInterface(m, &intf->coreIntf, mDNSfalse);
+		mDNS_DeregisterInterface(m, &intf->coreIntf);
 		if (gMDNSPlatformPosixVerboseLevel > 0) fprintf(stderr, "Deregistered interface %s\n", intf->intfName);
 		FreePosixNetworkInterface(intf);
 		}
@@ -894,7 +874,6 @@ mDNSlocal int SetupSocket(struct sockaddr *intfAddr, mDNSIPPort port, int interf
 			{
 			imr6.ipv6mr_multiaddr       = *(const struct in6_addr*)&AllDNSLinkGroupv6;
 			imr6.ipv6mr_interface       = interfaceIndex;
-			//LogMsg("Joining %.16a on %d", &imr6.ipv6mr_multiaddr, imr6.ipv6mr_interface);
 			err = setsockopt(*sktPtr, IPPROTO_IPV6, IPV6_JOIN_GROUP, &imr6, sizeof(imr6));
 			if (err < 0)
 				{
@@ -947,7 +926,7 @@ mDNSlocal int SetupSocket(struct sockaddr *intfAddr, mDNSIPPort port, int interf
 			bindAddr6.sin6_family      = AF_INET6;
 			bindAddr6.sin6_port        = port.NotAnInteger;
 			bindAddr6.sin6_flowinfo    = 0;
-			bindAddr6.sin6_addr        = in6addr_any; // Want to receive multicasts AND unicasts on this socket
+//			bindAddr6.sin6_addr.s_addr = IN6ADDR_ANY_INIT; // Want to receive multicasts AND unicasts on this socket
 			bindAddr6.sin6_scope_id    = 0;
 			err = bind(*sktPtr, (struct sockaddr *) &bindAddr6, sizeof(bindAddr6));
 			if (err < 0) { err = errno; perror("bind"); fflush(stderr); }
@@ -1036,7 +1015,7 @@ mDNSlocal int SetupOneInterface(mDNS *const m, struct sockaddr *intfAddr, struct
 
 	// The interface is all ready to go, let's register it with the mDNS core.
 	if (err == 0)
-		err = mDNS_RegisterInterface(m, &intf->coreIntf, mDNSfalse);
+		err = mDNS_RegisterInterface(m, &intf->coreIntf, 0);
 
 	// Clean up.
 	if (err == 0)

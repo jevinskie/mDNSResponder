@@ -1,18 +1,24 @@
-/* -*- Mode: C; tab-width: 4 -*-
- *
+/*
  * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @APPLE_LICENSE_HEADER_START@
  * 
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
  * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
  * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
 
 
    NOTE:
@@ -54,39 +60,6 @@
     Change History (most recent first):
 
 $Log: mDNSEmbeddedAPI.h,v $
-Revision 1.296.2.1  2006/08/29 06:24:22  cheshire
-Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
-
-Revision 1.296  2006/06/29 05:28:01  cheshire
-Added comment about mDNSlocal and mDNSexport
-
-Revision 1.295  2006/06/29 03:02:43  cheshire
-<rdar://problem/4607042> mDNSResponder NXDOMAIN and CNAME support
-
-Revision 1.294  2006/06/28 06:50:08  cheshire
-In future we may want to change definition of mDNSs32 from "signed long" to "signed int"
-I doubt anyone is building mDNSResponder on systems where int is 16-bits,
-but lets add a compile-time assertion to make sure.
-
-Revision 1.293  2006/06/12 18:00:43  cheshire
-To make code a little more defensive, check _ILP64 before _LP64,
-in case both are set by mistake on some platforms
-
-Revision 1.292  2006/03/19 17:00:57  cheshire
-Define symbol MaxMsg instead of using hard-coded constant value '80'
-
-Revision 1.291  2006/03/19 02:00:07  cheshire
-<rdar://problem/4073825> Improve logic for delaying packets after repeated interface transitions
-
-Revision 1.290  2006/03/08 22:42:23  cheshire
-Fix spelling mistake: LocalReverseMapomain -> LocalReverseMapDomain
-
-Revision 1.289  2006/02/26 00:54:41  cheshire
-Fixes to avoid code generation warning/error on FreeBSD 7
-
-Revision 1.288  2005/12/21 03:24:58  cheshire
-<rdar://problem/4388858> Code changes required to compile on EFI
-
 Revision 1.287  2005/10/20 00:10:33  cheshire
 <rdar://problem/4290265> Add check to avoid crashing NAT gateways that have buggy DNS relay code
 
@@ -1025,17 +998,7 @@ Merge in license terms from Quinn's copy, in preparation for Darwin release
 #ifndef __mDNSClientAPI_h
 #define __mDNSClientAPI_h
 
-#if defined(EFI32) || defined(EFI64)
-// EFI doesn't have stdarg.h
-#include "Tiano.h"
-#define va_list			VA_LIST
-#define va_start(a, b)	VA_START(a, b)
-#define va_end(a)		VA_END(a)
-#define va_arg(a, b)	VA_ARG(a, b)
-#else
 #include <stdarg.h>		// stdarg.h is required for for va_list support for the mDNS_vsnprintf declaration
-#endif
-
 #include "mDNSDebug.h"
 
 #ifdef __cplusplus
@@ -1056,19 +1019,6 @@ Merge in license terms from Quinn's copy, in preparation for Darwin release
 #ifndef mDNSexport
 #define mDNSexport
 #endif
-
-// Explanation: These local/export markers are a little habit of mine for signaling the programmers' intentions.
-// When "mDNSlocal" is just a synonym for "static", and "mDNSexport" is a complete no-op, you could be
-// forgiven for asking what purpose they serve. The idea is that if you see "mDNSexport" in front of a
-// function definition it means the programmer intended it to be exported and callable from other files
-// in the project. If you see "mDNSlocal" in front of a function definition it means the programmer
-// intended it to be private to that file. If you see neither in front of a function definition it
-// means the programmer forgot (so you should work out which it is supposed to be, and fix it).
-// Using "mDNSlocal" instead of "static" makes it easier to do a textual searches for one or the other.
-// For example you can do a search for "static" to find if any functions declare any local variables as "static"
-// (generally a bad idea unless it's also "const", because static storage usually risks being non-thread-safe)
-// without the results being cluttered with hundreds of matches for functions declared static.
-// - Stuart Cheshire
 
 // ***************************************************************************
 // Structure packing macro
@@ -1155,17 +1105,15 @@ typedef unsigned short mDNSu16;
 //   Macro Name __LP64__ Value 1
 // A quick Google search for "defined(__LP64__)" OR "#ifdef __LP64__" gives 2590 hits and
 // a search for "#if __LP64__" gives only 12, so I think we'll go with the majority and use defined()
-#if defined(_ILP64) || defined(__ILP64__)
-typedef   signed int32 mDNSs32;
-typedef unsigned int32 mDNSu32;
-#elif defined(_LP64) || defined(__LP64__)
+#if defined(_LP64) || defined(__LP64__)
 typedef   signed int   mDNSs32;
 typedef unsigned int   mDNSu32;
+#elif defined(_ILP64) || defined(__ILP64__)
+typedef   signed int32 mDNSs32;
+typedef unsigned int32 mDNSu32;
 #else
 typedef   signed long  mDNSs32;
 typedef unsigned long  mDNSu32;
-//typedef   signed int mDNSs32;
-//typedef unsigned int mDNSu32;
 #endif
 
 // To enforce useful type checking, we make mDNSInterfaceID be a pointer to a dummy struct
@@ -1905,7 +1853,6 @@ struct DNSQuestion_struct
 	mDNSu32               CurrentAnswers;	// Number of records currently in the cache that answer this question
 	mDNSu32               LargeAnswers;		// Number of answers with rdata > 1024 bytes
 	mDNSu32               UniqueAnswers;	// Number of answers received with kDNSClass_UniqueRRSet bit set
-	mDNSInterfaceID       FlappingInterface;// Set when an interface goes away, to flag if removes are delivered for this Q
 	DNSQuestion          *DuplicateOf;
 	DNSQuestion          *NextInDQList;
 	DupSuppressInfo       DupSuppress[DupSuppressInfoSize];
@@ -1926,7 +1873,6 @@ struct DNSQuestion_struct
 	mDNSBool              LongLived;        // Set by client for calls to mDNS_StartQuery to indicate LLQs to unicast layer.
 	mDNSBool              ExpectUnique;		// Set by client if it's expecting unique RR(s) for this question, not shared RRs
 	mDNSBool              ForceMCast;		// Set by client to force mDNS query, even for apparently uDNS names
-	mDNSBool              ReturnCNAME;		// Set by client to request callbacks for intermediate CNAME records
 	mDNSQuestionCallback *QuestionCallback;
 	void                 *QuestionContext;
 	};
@@ -1977,6 +1923,7 @@ struct ServiceInfoQuery_struct
 #define NATMAP_MAX_TRIES 3                                     // for max 3 tries
 #define NATMAP_DEFAULT_LEASE (60 * 60)  // lease life in seconds
 #define NATMAP_VERS 0
+#define NATMAP_PORT 5351
 #define NATMAP_RESPONSE_MASK 0x80
 
 typedef enum
@@ -2130,8 +2077,7 @@ struct mDNS_struct
 	mDNSu8  lock_rrcache;				// For debugging: Set at times when these lists may not be modified
 	mDNSu8  lock_Questions;
 	mDNSu8  lock_Records;
-	#define MaxMsg 120
-	char MsgBuffer[MaxMsg];				// Temp storage used while building error log messages
+	char MsgBuffer[80];					// Temp storage used while building error log messages
 
 	// Task Scheduling variables
 	mDNSs32  timenow_adjust;			// Correction applied if we ever discover time went backwards
@@ -2145,7 +2091,6 @@ struct mDNS_struct
 	mDNSs32  NextScheduledResponse;		// Next time to send authoritative record(s) in responses
 	mDNSs32  ExpectUnicastResponse;		// Set when we send a query with the kDNSQClass_UnicastResponse bit set
 	mDNSs32  RandomQueryDelay;			// For de-synchronization of query packets on the wire
-	mDNSu32  RandomReconfirmDelay;		// For de-synchronization of reconfirmation queries on the wire
 	mDNSs32  PktNum;					// Unique sequence number assigned to each received packet
 	mDNSBool SendDeregistrations;		// Set if we need to send deregistrations (immediately)
 	mDNSBool SendImmediateAnswers;		// Set if we need to send answers (immediately -- or as soon as SuppressSending clears)
@@ -2211,14 +2156,10 @@ extern const mDNSInterfaceID mDNSInterface_Any;				// Zero
 extern const mDNSInterfaceID mDNSInterface_LocalOnly;		// Special value
 
 extern const mDNSIPPort      UnicastDNSPort;
-extern const mDNSIPPort      NATPMPPort;
-extern const mDNSIPPort      DNSEXTPort;
 extern const mDNSIPPort      MulticastDNSPort;
-extern const mDNSIPPort      LoopbackIPCPort;
-
 extern const mDNSv4Addr      AllDNSAdminGroup;
-#define AllDNSLinkGroupv4 (AllDNSLinkGroup_v4.ip.v4)
-#define AllDNSLinkGroupv6 (AllDNSLinkGroup_v6.ip.v6)
+extern const mDNSv4Addr      AllDNSLinkGroupv4;
+extern const mDNSv6Addr      AllDNSLinkGroupv6;
 extern const mDNSAddr        AllDNSLinkGroup_v4;
 extern const mDNSAddr        AllDNSLinkGroup_v6;
 
@@ -2229,8 +2170,8 @@ extern const mDNSOpaque16 ResponseFlags;
 extern const mDNSOpaque16 UpdateReqFlags;
 extern const mDNSOpaque16 UpdateRespFlags;
 
-#define localdomain (*(const domainname *)"\x5" "local")
-#define LocalReverseMapDomain (*(const domainname *)"\x3" "254" "\x3" "169" "\x7" "in-addr" "\x4" "arpa")
+#define localdomain (*(const domainname *)"\x5local")
+#define LocalReverseMapomain (*(const domainname *)"\x3" "254" "\x3" "169" "\x7" "in-addr" "\x4" "arpa")
 	
 // ***************************************************************************
 #if 0
@@ -2705,8 +2646,8 @@ extern mDNSs32  mDNSPlatformUTC         (void);
 // Platform support modules should provide the following functions to map between opaque interface IDs
 // and interface indexes in order to support the DNS-SD API. If your target platform does not support
 // multiple interfaces and/or does not support the DNS-SD API, these functions can be empty.
-extern mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(mDNS *const m, mDNSu32 index);
-extern mDNSu32 mDNSPlatformInterfaceIndexfromInterfaceID(mDNS *const m, mDNSInterfaceID id);
+extern mDNSInterfaceID mDNSPlatformInterfaceIDfromInterfaceIndex(const mDNS *const m, mDNSu32 index);
+extern mDNSu32 mDNSPlatformInterfaceIndexfromInterfaceID(const mDNS *const m, mDNSInterfaceID id);
 
 // Every platform support module must provide the following functions if it is to support unicast DNS
 // and Dynamic Update.
@@ -2798,8 +2739,8 @@ extern mStatus LNT_UnmapPort(mDNSIPPort PubPort, mDNSBool tcp);
 // not lightweight second-by-second CPU power management modes.)
 
 extern void     mDNS_SetFQDN(mDNS *const m);
-extern mStatus  mDNS_RegisterInterface  (mDNS *const m, NetworkInterfaceInfo *set, mDNSBool flapping);
-extern void     mDNS_DeregisterInterface(mDNS *const m, NetworkInterfaceInfo *set, mDNSBool flapping);
+extern mStatus  mDNS_RegisterInterface  (mDNS *const m, NetworkInterfaceInfo *set, mDNSs32 delay);
+extern void     mDNS_DeregisterInterface(mDNS *const m, NetworkInterfaceInfo *set);
 extern void     mDNSCoreInitComplete(mDNS *const m, mStatus result);
 extern void     mDNSCoreReceive(mDNS *const m, void *const msg, const mDNSu8 *const end,
 								const mDNSAddr *const srcaddr, const mDNSIPPort srcport,
@@ -2836,7 +2777,6 @@ struct mDNS_CompileTimeAssertionChecks
 	char assertA[(sizeof(mDNSOpaque32)     ==   4                          ) ? 1 : -1];
 	char assertB[(sizeof(mDNSOpaque128)    ==  16                          ) ? 1 : -1];
 	char assertC[(sizeof(CacheRecord  )    >=  sizeof(CacheGroup)          ) ? 1 : -1];
-	char assertD[(sizeof(int)              >=  4                           ) ? 1 : -1];
 	};
 
 // ***************************************************************************

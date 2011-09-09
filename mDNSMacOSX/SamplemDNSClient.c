@@ -1,18 +1,24 @@
-/* -*- Mode: C; tab-width: 4 -*-
- *
+/*
  * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @APPLE_LICENSE_HEADER_START@
  * 
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
  * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
  * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
  *
  * Formatting notes:
  * This code follows the "Whitesmiths style" C indentation rules. Plenty of discussion
@@ -30,12 +36,6 @@
     Change History (most recent first):
 
 $Log: SamplemDNSClient.c,v $
-Revision 1.48  2006/08/14 23:24:39  cheshire
-Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
-
-Revision 1.47  2006/01/10 02:29:22  cheshire
-<rdar://problem/4403861> Cosmetic IPv6 address display problem in mDNS test tool
-
 Revision 1.46  2004/11/02 01:32:34  cheshire
 <rdar://problem/3861705> Update code so it still compiles when DNSServiceDiscovery.h is deprecated
 
@@ -217,14 +217,12 @@ static void resolve_reply(struct sockaddr *interface, struct sockaddr *address, 
         else if (address->sa_family == AF_INET6)
             {
             struct sockaddr_in6 *ip6 = (struct sockaddr_in6 *)address;
-            u_int8_t *b = ip6->sin6_addr.__u6_addr.__u6_addr8;
+            u_int16_t *w = ip6->sin6_addr.__u6_addr.__u6_addr16;
             union { uint16_t s; u_char b[2]; } port = { ip6->sin6_port };
             uint16_t PortAsNumber = ((uint16_t)port.b[0]) << 8 | port.b[1];
             char ipstring[40];
             char ifname[IF_NAMESIZE + 1] = "";
-            sprintf(ipstring, "%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X",
-				b[0x0], b[0x1], b[0x2], b[0x3], b[0x4], b[0x5], b[0x6], b[0x7],
-				b[0x8], b[0x9], b[0xA], b[0xB], b[0xC], b[0xD], b[0xE], b[0xF]);
+            sprintf(ipstring, "%04X:%04X:%04X:%04X:%04X:%04X:%04X:%04X", w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7]);
             if (ip6->sin6_scope_id) { ifname[0] = '%';  if_indextoname(ip6->sin6_scope_id, &ifname[1]); }
             printf("%s%s:%u", ipstring, ifname, PortAsNumber);
             }

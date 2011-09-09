@@ -1,18 +1,24 @@
-/* -*- Mode: C; tab-width: 4 -*-
+/*
+ * Copyright (c) 2002-2003 Apple Computer, Inc. All rights reserved.
  *
- * Copyright (c) 2002-2006 Apple Computer, Inc. All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @APPLE_LICENSE_HEADER_START@
  * 
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
  * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
  * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
  *
  * Formatting notes:
  * This code follows the "Whitesmiths style" C indentation rules. Plenty of discussion
@@ -30,38 +36,8 @@
     Change History (most recent first):
 
 $Log: daemon.c,v $
-Revision 1.265.2.1  2006/08/29 06:24:30  cheshire
-Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
-
-Revision 1.265  2006/06/29 07:32:08  cheshire
-Added missing LogOperation logging for DNSServiceBrowse results
-
-Revision 1.264  2006/06/29 05:33:30  cheshire
-<rdar://problem/4607043> mDNSResponder conditional compilation options
-
-Revision 1.263  2006/06/08 23:23:48  cheshire
-Fix errant indentation of curly brace at the end of provide_DNSServiceBrowserCreate_rpc()
-
-Revision 1.262  2006/03/18 21:49:11  cheshire
-Added comment in ShowTaskSchedulingError(mDNS *const m)
-
-Revision 1.261  2006/01/06 01:22:28  cheshire
-<rdar://problem/4108164> Reword "mach_absolute_time went backwards" dialog
-
-Revision 1.260  2005/11/07 01:51:58  cheshire
-<rdar://problem/4331591> Include list of configured DNS servers in SIGINFO output
-
-Revision 1.259  2005/07/22 21:50:55  ksekar
+Revision 1.255.2.1  2005/07/22 21:45:04  ksekar
 Fix GCC 4.0/Intel compiler warnings
-
-Revision 1.258  2005/07/04 22:40:26  cheshire
-Additional debugging code to help catch memory corruption
-
-Revision 1.257  2005/03/28 19:28:55  cheshire
-Fix minor typos in LogOperation() messages
-
-Revision 1.256  2005/03/17 22:01:22  cheshire
-Tidy up alignment of lines to make code more readable
 
 Revision 1.255  2005/03/09 00:48:43  cheshire
 <rdar://problem/4015157> QU packets getting sent too early on wake from sleep
@@ -773,105 +749,59 @@ static DNSServiceRegistration      *DNSServiceRegistrationList      = NULL;
 
 char _malloc_options[] = "AXZ";
 
-mDNSexport void LogMemCorruption(const char *format, ...)
-	{
-	char buffer[512];
-	va_list ptr;
-	va_start(ptr,format);
-	buffer[mDNS_vsnprintf((char *)buffer, sizeof(buffer), format, ptr)] = 0;
-	va_end(ptr);
-	LogMsg("!!!! %s !!!!", buffer);
-	NotifyOfElusiveBug("Memory Corruption", buffer);
-	//*(long*)0 = -1;	// Trick to crash and get a stack trace right here, if that's what we want
-	}
-
 mDNSlocal void validatelists(mDNS *const m)
 	{
-	// Check Mach client lists
-	
 	DNSServiceDomainEnumeration *e;
+	DNSServiceBrowser           *b;
+	DNSServiceResolver          *l;
+	DNSServiceRegistration      *r;
+	AuthRecord                  *rr;
+	CacheGroup                  *cg;
+	CacheRecord                 *cr;
+	DNSQuestion                 *q;
+	mDNSu32 slot;
+	NetworkInterfaceInfoOSX     *i;
+
 	for (e = DNSServiceDomainEnumerationList; e; e=e->next)
 		if (e->ClientMachPort == 0 || e->ClientMachPort == (mach_port_t)~0)
-			LogMemCorruption("DNSServiceDomainEnumerationList: %p is garbage (%X)", e, e->ClientMachPort);
+			LogMsg("!!!! DNSServiceDomainEnumerationList: %p is garbage (%X) !!!!", e, e->ClientMachPort);
 
-	DNSServiceBrowser           *b;
 	for (b = DNSServiceBrowserList; b; b=b->next)
 		if (b->ClientMachPort == 0 || b->ClientMachPort == (mach_port_t)~0)
-			LogMemCorruption("DNSServiceBrowserList: %p is garbage (%X)", b, b->ClientMachPort);
+			LogMsg("!!!! DNSServiceBrowserList: %p is garbage (%X) !!!!", b, b->ClientMachPort);
 
-	DNSServiceResolver          *l;
 	for (l = DNSServiceResolverList; l; l=l->next)
 		if (l->ClientMachPort == 0 || l->ClientMachPort == (mach_port_t)~0)
-			LogMemCorruption("DNSServiceResolverList: %p is garbage (%X)", l, l->ClientMachPort);
+			LogMsg("!!!! DNSServiceResolverList: %p is garbage (%X) !!!!", l, l->ClientMachPort);
 
-	DNSServiceRegistration      *r;
 	for (r = DNSServiceRegistrationList; r; r=r->next)
 		if (r->ClientMachPort == 0 || r->ClientMachPort == (mach_port_t)~0)
-			LogMemCorruption("DNSServiceRegistrationList: %p is garbage (%X)", r, r->ClientMachPort);
+			LogMsg("!!!! DNSServiceRegistrationList: %p is garbage (%X) !!!!", r, r->ClientMachPort);
 
-	// Check UDS client lists
-	uds_validatelists();
-
-	// Check core mDNS lists
-	AuthRecord                  *rr;
 	for (rr = m->ResourceRecords; rr; rr=rr->next)
 		{
 		if (rr->resrec.RecordType == 0 || rr->resrec.RecordType == 0xFF)
-			LogMemCorruption("ResourceRecords list: %p is garbage (%X)", rr, rr->resrec.RecordType);
+			LogMsg("!!!! ResourceRecords list: %p is garbage (%X) !!!!", rr, rr->resrec.RecordType);
 		if (rr->resrec.name != &rr->namestorage)
-			LogMemCorruption("ResourceRecords list: %p name %p does not point to namestorage %p %##s",
+			LogMsg("!!!! ResourceRecords list: %p name %p does not point to namestorage %p %##s",
 				rr, rr->resrec.name->c, rr->namestorage.c, rr->namestorage.c);
 		}
 
 	for (rr = m->DuplicateRecords; rr; rr=rr->next)
 		if (rr->resrec.RecordType == 0 || rr->resrec.RecordType == 0xFF)
-			LogMemCorruption("DuplicateRecords list: %p is garbage (%X)", rr, rr->resrec.RecordType);
+			LogMsg("!!!! DuplicateRecords list: %p is garbage (%X) !!!!", rr, rr->resrec.RecordType);
 
-	DNSQuestion                 *q;
 	for (q = m->Questions; q; q=q->next)
 		if (q->ThisQInterval == (mDNSs32)~0)
-			LogMemCorruption("Questions list: %p is garbage (%lX)", q, q->ThisQInterval);
+			LogMsg("!!!! Questions list: %p is garbage (%lX) !!!!", q, q->ThisQInterval);
 
-	CacheGroup                  *cg;
-	CacheRecord                 *cr;
-	mDNSu32 slot;
 	FORALL_CACHERECORDS(slot, cg, cr)
 		if (cr->resrec.RecordType == 0 || cr->resrec.RecordType == 0xFF)
-			LogMemCorruption("Cache slot %lu: %p is garbage (%X)", slot, rr, rr->resrec.RecordType);
+			LogMsg("!!!! Cache slot %lu: %p is garbage (%X) !!!!", slot, rr, rr->resrec.RecordType);
 
-	// Check platform-layer lists
-
-	NetworkInterfaceInfoOSX     *i;
 	for (i = m->p->InterfaceList; i; i = i->next)
 		if (!i->ifa_name)
-			LogMemCorruption("InterfaceList: %p is garbage", i);
-
-	// Check uDNS lists
-
-	for (q = m->uDNS_info.ActiveQueries; q; q=q->next)
-		if (*(long*)q == (mDNSs32)~0)
-			LogMemCorruption("uDNS_info.ActiveQueries: %p is garbage (%lX)", q, *(long*)q);
-
-	ServiceRecordSet            *s;
-	for (s = m->uDNS_info.ServiceRegistrations; s; s=s->next)
-		if (s->next == (ServiceRecordSet*)~0)
-			LogMemCorruption("uDNS_info.ServiceRegistrations: %p is garbage (%lX)", s, s->next);
-
-	for (rr = m->uDNS_info.RecordRegistrations; rr; rr=rr->next)
-		{
-		if (rr->resrec.RecordType == 0 || rr->resrec.RecordType == 0xFF)
-			LogMemCorruption("uDNS_info.RecordRegistrations: %p is garbage (%X)", rr, rr->resrec.RecordType);
-		if (rr->resrec.name != &rr->namestorage)
-			LogMemCorruption("uDNS_info.RecordRegistrations: %p name %p does not point to namestorage %p %##s",
-				rr, rr->resrec.name->c, rr->namestorage.c, rr->namestorage.c);
-		}
-
-	NATTraversalInfo            *n;
-	for (n = m->uDNS_info.NATTraversals; n; n=n->next)
-		if (n->op > 2) LogMemCorruption("uDNS_info.NATTraversals: %p is garbage", n);
-
-	for (n = m->uDNS_info.LLQNatInfo; n; n=n->next)
-		if (n->op > 2) LogMemCorruption("uDNS_info.LLQNatInfo: %p is garbage", n);
+			LogMsg("!!!! InterfaceList: %p is garbage !!!!", i);
 	}
 
 void *mallocL(char *msg, unsigned int size)
@@ -972,8 +902,8 @@ mDNSlocal void AbortClient(mach_port_t ClientMachPort, void *m)
 		while (qptr)
 			{
 			if (m && m != x)
-				LogMsg("%5d: DNSServiceBrowse(%##s) STOP; WARNING m %p != x %p", ClientMachPort, qptr->q.qname.c, m, x);
-			else LogOperation("%5d: DNSServiceBrowse(%##s) STOP", ClientMachPort, qptr->q.qname.c);
+				LogMsg("%5d: DNSServiceBrowser(%##s) STOP; WARNING m %p != x %p", ClientMachPort, qptr->q.qname.c, m, x);
+			else LogOperation("%5d: DNSServiceBrowser(%##s) STOP", ClientMachPort, qptr->q.qname.c);
 			mDNS_StopBrowse(&mDNSStorage, &qptr->q);
 			freePtr = qptr;
 			qptr = qptr->next;
@@ -995,8 +925,8 @@ mDNSlocal void AbortClient(mach_port_t ClientMachPort, void *m)
 		DNSServiceResolver *x = *l;
 		*l = (*l)->next;
 		if (m && m != x)
-			LogMsg("%5d: DNSServiceResolve(%##s) STOP; WARNING m %p != x %p", ClientMachPort, x->i.name.c, m, x);
-		else LogOperation("%5d: DNSServiceResolve(%##s) STOP", ClientMachPort, x->i.name.c);
+			LogMsg("%5d: DNSServiceResolver(%##s) STOP; WARNING m %p != x %p", ClientMachPort, x->i.name.c, m, x);
+		else LogOperation("%5d: DNSServiceResolver(%##s) STOP", ClientMachPort, x->i.name.c);
 		mDNS_StopResolveService(&mDNSStorage, &x->q);
 		freeL("DNSServiceResolver", x);
 		return;
@@ -1046,21 +976,19 @@ mDNSlocal void AbortClientWithLogMessage(mach_port_t c, char *reason, char *msg,
 	while (b && b->ClientMachPort != c) b = b->next;
 	while (l && l->ClientMachPort != c) l = l->next;
 	while (r && r->ClientMachPort != c) r = r->next;
-
-	if      (e) LogMsg("%5d: DomainEnumeration(%##s) %s%s",                   c, e->dom.qname.c,                reason, msg);
+	if      (e)     LogMsg("%5d: DomainEnumeration(%##s) %s%s",                   c, e->dom.qname.c,            reason, msg);
 	else if (b)
-			{
-			for (qptr = b->qlist; qptr; qptr = qptr->next)
-				LogMsg("%5d: Browser(%##s) %s%s",                             c, qptr->q.qname.c,               reason, msg);
-			}
-	else if (l) LogMsg("%5d: Resolver(%##s) %s%s",                            c, l->i.name.c,                   reason, msg);
+		{
+		for (qptr = b->qlist; qptr; qptr = qptr->next)
+			        LogMsg("%5d: Browser(%##s) %s%s",                             c, qptr->q.qname.c,              reason, msg);
+		}
+	else if (l)     LogMsg("%5d: Resolver(%##s) %s%s",                            c, l->i.name.c,               reason, msg);
 	else if (r)
-			{
-			ServiceInstance *si;
-			for (si = r->regs; si; si = si->next)
-				LogMsg("%5d: Registration(%##s) %s%s",                        c, si->srs.RR_SRV.resrec.name->c, reason, msg);
-			}
-	else        LogMsg("%5d: (%s) %s, but no record of client can be found!", c,                                reason, msg);
+		{
+		ServiceInstance *si;
+		for (si = r->regs; si; si = si->next) LogMsg("%5d: Registration(%##s) %s%s", c, si->srs.RR_SRV.resrec.name->c, reason, msg);
+		}
+	else            LogMsg("%5d: (%s) %s, but no record of client can be found!", c,                            reason, msg);
 
 	AbortClient(c, m);
 	}
@@ -1223,9 +1151,6 @@ mDNSlocal void FoundInstance(mDNS *const m, DNSQuestion *question, const Resourc
 	DNSServiceBrowserResult **p = &browser->results;
 	while (*p) p = &(*p)->next;
 	*p = x;
-
-	LogOperation("%5d: DNSServiceBrowse(%##s, %s) RESULT %s %s",
-		browser->ClientMachPort, question->qname.c, DNSTypeName(question->qtype), AddRecord ? "Add" : "Rmv", RRDisplayString(m, answer));
 	}
 
 mDNSlocal mStatus AddDomainToBrowser(DNSServiceBrowser *browser, const domainname *d)
@@ -1275,10 +1200,8 @@ mDNSexport void DefaultBrowseDomainChanged(const domainname *d, mDNSBool add)
 						*q = (*q)->next;
 						if (remove->q.LongLived)
 							{
-							// Give goodbyes for known answers.
-							// Note that this a special case where we know that the QuestionCallback function is our own
-							// code (it's FoundInstance), and that callback routine doesn't ever cancel its operation, so we
-							// don't need to guard against the question being cancelled mid-loop the way the mDNSCore routines do.
+							// give goodbyes for known answers.  note that since events are sent to client via udns_execute(),
+							// we don't need to worry about the question being cancelled mid-loop
 							CacheRecord *ka = remove->q.uDNS_info.knownAnswers;
 							while (ka) { remove->q.QuestionCallback(&mDNSStorage, &remove->q, &ka->resrec, mDNSfalse); ka = ka->next; }
 							}						
@@ -1369,7 +1292,7 @@ fail:
 	LogMsg("%5d: DNSServiceBrowse(\"%s\", \"%s\") failed: %s (%ld)", client, regtype, domain, errormsg, err);
 	if (SearchDomains) mDNS_FreeDNameList(SearchDomains);
 	return(err);
-	}
+		}
 
 //*************************************************************************************************************
 // Resolve Service Info
@@ -1487,7 +1410,7 @@ mDNSexport kern_return_t provide_DNSServiceResolverResolve_rpc(mach_port_t unuse
 	DNSServiceResolverList = x;
 
 	// Do the operation
-	LogOperation("%5d: DNSServiceResolve(%##s) START", client, x->i.name.c);
+	LogOperation("%5d: DNSServiceResolver(%##s) START", client, x->i.name.c);
 	err = mDNS_StartResolveService(&mDNSStorage, &x->q, &x->i, FoundInstanceInfo, x);
 	if (err) { AbortClient(client, x); errormsg = "mDNS_StartResolveService"; goto fail; }
 
@@ -1788,14 +1711,12 @@ fail:
 	return(err);
 	}
 
+mDNSlocal CFUserNotificationRef gNotification    = NULL;
+mDNSlocal CFRunLoopSourceRef    gNotificationRLS = NULL;
 mDNSlocal domainlabel           gNotificationPrefHostLabel;	// The prefs as they were the last time we saw them
 mDNSlocal domainlabel           gNotificationPrefNiceLabel;
 mDNSlocal domainlabel           gNotificationUserHostLabel;	// The prefs as they were the last time the user changed them
 mDNSlocal domainlabel           gNotificationUserNiceLabel;
-
-#ifndef NO_CFUSERNOTIFICATION
-mDNSlocal CFUserNotificationRef gNotification    = NULL;
-mDNSlocal CFRunLoopSourceRef    gNotificationRLS = NULL;
 
 mDNSlocal void NotificationCallBackDismissed(CFUserNotificationRef userNotification, CFOptionFlags responseFlags)
 	{
@@ -1841,7 +1762,6 @@ mDNSlocal void ShowNameConflictNotification(CFStringRef header, CFStringRef subt
 
 	CFRelease(dictionary);
 	}
-#endif /* NO_CFUSERNOTIFICATION */
 
 // This updates either the text of the field currently labelled "Local Hostname",
 // or the text of the field currently labelled "Computer Name"
@@ -1878,7 +1798,6 @@ mDNSlocal void RecordUpdatedName(const mDNS *const m, const domainlabel *const o
 			LogMsg("RecordUpdatedName: ERROR: Couldn't update SCPreferences");
 		else if (m->p->NotifyUser)
 			{
-#ifndef NO_CFUSERNOTIFICATION
 			uid_t uid;
 			gid_t gid;
 			CFStringRef userName = SCDynamicStoreCopyConsoleUser(NULL, &uid, &gid);
@@ -1896,9 +1815,6 @@ mDNSlocal void RecordUpdatedName(const mDNS *const m, const domainlabel *const o
 				append(alertHeader, CFSTR("automatically."));
 				ShowNameConflictNotification(alertHeader, subtext);
 				}
-#else
-			(void)subtext;
-#endif /*  NO_CFUSERNOTIFICATION */
 			}
 		if (s0)          CFRelease(s0);
 		if (s1)          CFRelease(s1);
@@ -1931,11 +1847,9 @@ mDNSlocal void mDNS_StatusCallback(mDNS *const m, mStatus result)
 			{
 			gNotificationUserHostLabel = gNotificationPrefHostLabel = m->p->userhostlabel;
 			gNotificationUserNiceLabel = gNotificationPrefNiceLabel = m->p->usernicelabel;
-#ifndef NO_CFUSERNOTIFICATION
 			// If we're showing a name conflict notification, and the user has manually edited
 			// the name to remedy the conflict, we should now remove the notification window.
 			if (gNotificationRLS) CFUserNotificationCancel(gNotification);
-#endif /* NO_CFUSERNOTIFICATION */
 			}
 
 		DNSServiceRegistration *r;
@@ -2369,7 +2283,6 @@ mDNSlocal void INFOCallback(void)
 	DNSServiceResolver          *l;
 	DNSServiceRegistration      *r;
 	NetworkInterfaceInfoOSX     *i;
-	DNSServer *s;
 
 	LogMsgIdent(mDNSResponderVersionString, "---- BEGIN STATE LOG ----");
 	
@@ -2410,9 +2323,6 @@ mDNSlocal void INFOCallback(void)
 				i->ifinfo.McastTxRx ? "TxRx" : "    ",
 				&i->ifinfo.ip);
 		}
-
-	for (s = mDNSStorage.uDNS_info.Servers; s; s = s->next)
-		LogMsgNoIdent("DNS Server %#a %##s", &s->addr, s->domain.c);
 
 	LogMsgIdent(mDNSResponderVersionString, "----  END STATE LOG  ----");
 	}
@@ -2595,8 +2505,6 @@ mDNSlocal void ShowTaskSchedulingError(mDNS *const m)
 
 	LogMsg("Task Scheduling Error: Continuously busy for more than a second");
 	
-	// NOTE: To accurately diagnose *why* we're busy, the debugging code here to show needs to mirror the logic in GetNextScheduledEvent
-
 	if (m->NewQuestions && (!m->NewQuestions->DelayAnswering || m->timenow - m->NewQuestions->DelayAnswering >= 0))
 		LogMsg("Task Scheduling Error: NewQuestion %##s (%s)",
 			m->NewQuestions->qname.c, DNSTypeName(m->NewQuestions->qtype));

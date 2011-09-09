@@ -1,43 +1,28 @@
-/* -*- Mode: C; tab-width: 4 -*-
+/*
+ * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
- * Copyright (c) 2002-2006 Apple Computer, Inc. All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @APPLE_LICENSE_HEADER_START@
  * 
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
  * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
  * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
 
     Change History (most recent first):
 
 $Log: uDNS.c,v $
-Revision 1.230.2.1  2006/08/29 06:24:23  cheshire
-Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
-
-Revision 1.230  2006/06/29 03:02:44  cheshire
-<rdar://problem/4607042> mDNSResponder NXDOMAIN and CNAME support
-
-Revision 1.229  2006/03/02 22:03:41  cheshire
-<rdar://problem/4395331> Spurious warning "GetLargeResourceRecord: m->rec appears to be already in use"
-Refinement: m->rec.r.resrec.RecordType needs to be cleared *every* time around for loop, not just once at the end
-
-Revision 1.228  2006/02/26 00:54:42  cheshire
-Fixes to avoid code generation warning/error on FreeBSD 7
-
-Revision 1.227  2006/01/09 20:47:05  cheshire
-<rdar://problem/4395331> Spurious warning "GetLargeResourceRecord: m->rec appears to be already in use"
-
-Revision 1.226  2005/12/20 02:46:33  cheshire
-<rdar://problem/4175520> mDNSPosix wide-area registration broken
-Check too strict -- we can still do wide-area registration (without NAT-PMP)
-without having to know our gateway address
-
 Revision 1.225  2005/10/21 22:51:17  cheshire
 <rdar://problem/4290265> Add check to avoid crashing NAT gateways that have buggy DNS relay code
 Refinement: Shorten "check-for-broken-dns-relay" to just "dnsbugtest"
@@ -961,7 +946,7 @@ mDNSexport void mDNS_AddDNSServer(mDNS *const m, const mDNSAddr *addr, const dom
 	mDNS_Lock(m);
 	if (!d) d = (domainname *)"";
 
-	while (*p)                 // Check if we already have this {server,domain} pair registered
+	while (*p)		// Check if we already have this {server,domain} pair registered
 		{
 		if (mDNSSameAddress(&(*p)->addr, addr) && SameDomainName(&(*p)->domain, d))
 			LogMsg("Note: DNS Server %#a for domain %##s registered more than once", addr, d->c);
@@ -1143,6 +1128,8 @@ mDNSlocal mDNSBool FreeNATInfo(mDNS *m, NATTraversalInfo *n)
 mDNSlocal void SendNATMsg(NATTraversalInfo *info, mDNS *m)
 	{
 	mStatus err;
+	mDNSAddr dst;
+	mDNSIPPort dstport;
 	uDNS_GlobalInfo *u = &m->uDNS_info;
 
 	if (info->state != NATState_Request && info->state != NATState_Refresh)
@@ -1150,12 +1137,15 @@ mDNSlocal void SendNATMsg(NATTraversalInfo *info, mDNS *m)
 
 	if (u->Router.ip.v4.NotAnInteger)
 		{
-		// send msg if we have a router
+		// send msg	if we have a router
 		const mDNSu8 *end = (mDNSu8 *)&info->request;
 		if (info->op == NATOp_AddrRequest) end += sizeof(NATAddrRequest);
 		else end += sizeof(NATPortMapRequest);
 
-		err = mDNSPlatformSendUDP(m, &info->request, end, 0, &u->Router, NATPMPPort);
+		dst.type = u->Router.type;
+		dst.ip.v4 = u->Router.ip.v4;
+		dstport = mDNSOpaque16fromIntVal(NATMAP_PORT);
+		err = mDNSPlatformSendUDP(m, &info->request, end, 0, &dst, dstport);
 		if (!err) (info->ntries++);  // don't increment attempt counter if the send failed
 		}
 	
@@ -1972,7 +1962,7 @@ mDNSexport void mDNS_SetPrimaryInterfaceInfo(mDNS *m, const mDNSAddr *v4addr, co
 	if (router) u->Router       = *router;  else u->Router.ip.v4.NotAnInteger = 0;
 	// setting router to zero indicates that nat mappings must be reestablished when router is reset
 	
-	if ((v4Changed || RouterChanged || v6Changed) && v4addr)
+	if ((v4Changed || RouterChanged || v6Changed) && (v4addr && router))
 		{
 		// don't update these unless we've got V4
 		UpdateHostnameRegistrations(m);
@@ -2057,9 +2047,6 @@ mDNSlocal void deriveGoodbyes(mDNS * const m, DNSMessage *msg, const  mDNSu8 *en
 			m->mDNS_reentrancy++; // Increment to allow client to legally make mDNS API calls from the callback
 			question->QuestionCallback(m, question, &ka->resrec, mDNSfalse);
 			m->mDNS_reentrancy--; // Decrement to block mDNS API calls again
-			// CAUTION: Need to be careful after calling question->QuestionCallback(),
-			// because the client's callback function is allowed to do anything,
-			// including starting/stopping queries, registering/deregistering records, etc.
 			if (question != m->uDNS_info.CurrentQuery)
 				{
 				debugf("deriveGoodbyes - question removed via callback.  returning.");
@@ -2105,9 +2092,6 @@ mDNSlocal void deriveGoodbyes(mDNS * const m, DNSMessage *msg, const  mDNSu8 *en
 			m->mDNS_reentrancy++; // Increment to allow client to legally make mDNS API calls from the callback
 			question->QuestionCallback(m, question, &ka->resrec, mDNSfalse);
 			m->mDNS_reentrancy--; // Decrement to block mDNS API calls again
-			// CAUTION: Need to be careful after calling question->QuestionCallback(),
-			// because the client's callback function is allowed to do anything,
-			// including starting/stopping queries, registering/deregistering records, etc.
 			if (question != m->uDNS_info.CurrentQuery)
 				{
 				debugf("deriveGoodbyes - question removed via callback.  returning.");
@@ -2143,10 +2127,9 @@ mDNSlocal void pktResponseHndlr(mDNS * const m, DNSMessage *msg, const  mDNSu8 *
 	{
 	const mDNSu8 *ptr;
 	int i;
-	CacheRecord *cr = &m->rec.r;
-	mDNSBool goodbye, inKAList;
-	int	followedCNames = 0;
-	static const int maxCNames = 5;
+	LargeCacheRecord lcr;
+	CacheRecord *cr = &lcr.r;
+	mDNSBool goodbye, inKAList, followedCName = mDNSfalse;
 	LLQ_Info *llqInfo = question->uDNS_info.llq;
 	domainname origname;
 	origname.c[0] = 0;
@@ -2154,40 +2137,6 @@ mDNSlocal void pktResponseHndlr(mDNS * const m, DNSMessage *msg, const  mDNSu8 *
 	if (question != m->uDNS_info.CurrentQuery)
 		{ LogMsg("ERROR: pktResponseHdnlr called without CurrentQuery ptr set!");  return; }
 
-	if (question->uDNS_info.Answered == 0 && msg->h.numAnswers == 0 && !llq)
-		{
-		/* NXDOMAIN error or empty RR set - notify client */
-		question->uDNS_info.Answered = mDNStrue;
-		
-		/* Create empty resource record */
-		cr->resrec.RecordType = kDNSRecordTypeUnregistered;
-		cr->resrec.InterfaceID = mDNSNULL;
-		cr->resrec.name = &question->qname;
-		cr->resrec.rrtype = question->qtype;
-		cr->resrec.rrclass = question->qclass;
-		cr->resrec.rroriginalttl = 1; /* What should we use for the TTL? TTL from SOA for domain? */
-		cr->resrec.rdlength = 0;
-		cr->resrec.rdestimate = 0;
-		cr->resrec.namehash = 0;
-		cr->resrec.namehash = 0;
-		cr->resrec.rdata = (RData*)&cr->rdatastorage;
-		cr->resrec.rdata->MaxRDLength = cr->resrec.rdlength;
-		
-		/* Pass empty answer to callback */
-		m->mDNS_reentrancy++; // Increment to allow client to legally make mDNS API calls from the callback
-		question->QuestionCallback(m, question, &cr->resrec, 0);
-		m->mDNS_reentrancy--; // Decrement to block mDNS API calls again
-		// CAUTION: Need to be careful after calling question->QuestionCallback(),
-		// because the client's callback function is allowed to do anything,
-		// including starting/stopping queries, registering/deregistering records, etc.
-		m->rec.r.resrec.RecordType = 0; // Clear RecordType to show we're not still using it
-		if (question != m->uDNS_info.CurrentQuery)
-			{
-			debugf("pktResponseHndlr - CurrentQuery changed by QuestionCallback - returning.");
-			return;
-			}
-		}
-	
 	question->uDNS_info.Answered = mDNStrue;
 	
 	ptr = LocateAnswers(msg, end);
@@ -2195,50 +2144,30 @@ mDNSlocal void pktResponseHndlr(mDNS * const m, DNSMessage *msg, const  mDNSu8 *
 
 	for (i = 0; i < msg->h.numAnswers; i++)
 		{
-		ptr = GetLargeResourceRecord(m, msg, ptr, end, 0, kDNSRecordTypePacketAns, &m->rec);
+		ptr = GetLargeResourceRecord(m, msg, ptr, end, 0, kDNSRecordTypePacketAns, &lcr);
 		if (!ptr) goto pkt_error;
 		if (ResourceRecordAnswersQuestion(&cr->resrec, question))
 			{
-			goodbye = llq ? ((mDNSs32)cr->resrec.rroriginalttl == -1) : mDNSfalse;
 			if (cr->resrec.rrtype == kDNSType_CNAME)
 				{
-				if (followedCNames > (maxCNames - 1)) LogMsg("Error: too many CNAME referals for question %##s", &origname);
+				if (followedCName) LogMsg("Error: multiple CNAME referals for question %##s", question->qname.c);
 				else
 					{
 					debugf("Following cname %##s -> %##s", question->qname.c, cr->resrec.rdata->u.name.c);
-					if (question->ReturnCNAME)
-						{
-						m->mDNS_reentrancy++; // Increment to allow client to legally make mDNS API calls from the callback
-						question->QuestionCallback(m, question, &cr->resrec, !goodbye);
-						m->mDNS_reentrancy--; // Decrement to block mDNS API calls again
-						// CAUTION: Need to be careful after calling question->QuestionCallback(),
-						// because the client's callback function is allowed to do anything,
-						// including starting/stopping queries, registering/deregistering records, etc.
-						if (question != m->uDNS_info.CurrentQuery)
-							{
-							m->rec.r.resrec.RecordType = 0; // Clear RecordType to show we're not still using it
-							debugf("pktResponseHndlr - CurrentQuery changed by QuestionCallback - returning.");
-							return;
-							}
-						}
 					AssignDomainName(&origname, &question->qname);
 					AssignDomainName(&question->qname, &cr->resrec.rdata->u.name);
 					question->qnamehash = DomainNameHashValue(&question->qname);
-					followedCNames++;
+					followedCName = mDNStrue;
 					i = -1; // restart packet answer matching
 					ptr = LocateAnswers(msg, end);
-					m->rec.r.resrec.RecordType = 0; // Clear RecordType to show we're not still using it
 					continue;
 					}
 				}
 			
+			goodbye = llq ? ((mDNSs32)cr->resrec.rroriginalttl == -1) : mDNSfalse;
 			inKAList = kaListContainsAnswer(question, cr);
 
-			if ((goodbye && !inKAList) || (!goodbye && inKAList))
-				{
-				m->rec.r.resrec.RecordType = 0; // Clear RecordType to show we're not still using it
-				continue;  // list up to date
-				}
+			if ((goodbye && !inKAList) || (!goodbye && inKAList)) continue;  // list up to date
 			if (!inKAList) addKnownAnswer(question, cr);
 			if (goodbye) removeKnownAnswer(question, cr);
 			m->mDNS_reentrancy++; // Increment to allow client to legally make mDNS API calls from the callback
@@ -2246,15 +2175,16 @@ mDNSlocal void pktResponseHndlr(mDNS * const m, DNSMessage *msg, const  mDNSu8 *
 			m->mDNS_reentrancy--; // Decrement to block mDNS API calls again
 			if (question != m->uDNS_info.CurrentQuery)
 				{
-				m->rec.r.resrec.RecordType = 0; // Clear RecordType to show we're not still using it
 				debugf("pktResponseHndlr - CurrentQuery changed by QuestionCallback - returning");
 				return;
 				}
 			}
-
-		m->rec.r.resrec.RecordType = 0; // Clear RecordType to show we're not still using it
+		else if (!followedCName || !SameDomainName(cr->resrec.name, &origname))
+			LogMsg("Question %##s %X (%s) %##s unexpected answer %##s %X (%s)",
+				question->qname.c, question->qnamehash, DNSTypeName(question->qtype), origname.c,
+				cr->resrec.name->c, cr->resrec.namehash, DNSTypeName(cr->resrec.rrtype));
 		}
-
+	
 	if (!llq || llqInfo->state == LLQ_Poll || llqInfo->deriveRemovesOnResume)
 		{
 		deriveGoodbyes(m, msg, end,question);
@@ -2751,7 +2681,7 @@ mDNSlocal mDNSBool uDNS_ReceiveTestQuestionResponse(mDNS *const m, DNSMessage *c
 	if (found && result == DNSServer_Failed)
 		LogMsg("NOTE: Wide-Area Service Discovery disabled to avoid crashing defective DNS relay %#a.", srcaddr);
 
-	return(mDNStrue); // Return mDNStrue to tell uDNS_ReceiveMsg it doens't need to process this packet further
+	return(mDNStrue);	// Return mDNStrue to tell uDNS_ReceiveMsg it doens't need to process this packet further
 	}
 
 mDNSexport void uDNS_ReceiveMsg(mDNS *const m, DNSMessage *const msg, const mDNSu8 *const end,
@@ -4685,7 +4615,7 @@ mDNSexport mStatus uDNS_AddRecordToService(mDNS *const m, ServiceRecordSet *sr, 
 	else
 		{
 		err = SetupRecordRegistration(m, &extra->r);
-		extra->r.uDNS_info.state = regState_ExtraQueued; // %%% Is it okay to overwrite the previous uDNS_info.state?
+		extra->r.uDNS_info.state = regState_ExtraQueued;	// %%% Is it okay to overwrite the previous uDNS_info.state?
 		}
 	
 	if (!err)
@@ -4864,7 +4794,7 @@ mDNSlocal mDNSs32 CheckQueries(mDNS *m, mDNSs32 timenow)
 			{
 			sendtime = q->LastQTime + q->ThisQInterval;
 			if (m->SuppressStdPort53Queries &&
-				sendtime - m->SuppressStdPort53Queries < 0) // Don't allow sendtime to be earlier than SuppressStdPort53Queries
+				sendtime - m->SuppressStdPort53Queries < 0)		// Don't allow sendtime to be earlier than SuppressStdPort53Queries
 				sendtime = m->SuppressStdPort53Queries;
 			if (sendtime - timenow < 0)
 				{
@@ -5004,7 +4934,7 @@ mDNSexport void uDNS_Execute(mDNS *const m)
 	if (nexte - u->nextevent < 0) u->nextevent = nexte;
 
 	if (m->SuppressStdPort53Queries && m->timenow - m->SuppressStdPort53Queries >= 0)
-		m->SuppressStdPort53Queries = 0; // If suppression time has passed, clear it
+		m->SuppressStdPort53Queries = 0;	// If suppression time has passed, clear it
 
 	nexte = CheckQueries(m, timenow);
 	if (nexte - u->nextevent < 0) u->nextevent = nexte;

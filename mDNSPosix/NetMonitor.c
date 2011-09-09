@@ -2,17 +2,24 @@
  *
  * Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * @APPLE_LICENSE_HEADER_START@
  * 
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * This file contains Original Code and/or Modifications of Original Code
+ * as defined in and that are subject to the Apple Public Source License
+ * Version 2.0 (the 'License'). You may not use this file except in
+ * compliance with the License. Please obtain a copy of the License at
+ * http://www.opensource.apple.com/apsl/ and read it before using this
+ * file.
  * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
+ * The Original Code and all software distributed under the License are
+ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+ * Please see the License for the specific language governing rights and
  * limitations under the License.
+ * 
+ * @APPLE_LICENSE_HEADER_END@
  *
  * Formatting notes:
  * This code follows the "Whitesmiths style" C indentation rules. Plenty of discussion
@@ -30,32 +37,6 @@
     Change History (most recent first):
 
 $Log: NetMonitor.c,v $
-Revision 1.82  2006/08/14 23:24:46  cheshire
-Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
-
-Revision 1.81  2006/07/06 00:01:44  cheshire
-<rdar://problem/4472014> Add Private DNS client functionality to mDNSResponder
-Update mDNSSendDNSMessage() to use uDNS_TCPSocket type instead of "int"
-
-Revision 1.80  2006/06/12 18:22:42  cheshire
-<rdar://problem/4580067> mDNSResponder building warnings under Red Hat 64-bit (LP64) Linux
-
-Revision 1.79  2006/04/26 20:48:33  cheshire
-Make final count of unique source addresses show IPv4 and IPv6 counts separately
-
-Revision 1.78  2006/04/25 00:42:24  cheshire
-Add ability to specify a single interface index to capture on,
-e.g. typically "-i 4" for Ethernet and "-i 5" for AirPort
-
-Revision 1.77  2006/03/02 21:50:45  cheshire
-Removed strange backslash at the end of a line
-
-Revision 1.76  2006/02/23 23:38:43  cheshire
-<rdar://problem/4427969> On FreeBSD 4 "arpa/inet.h" requires "netinet/in.h" be included first
-
-Revision 1.75  2006/01/05 22:33:58  cheshire
-Use IFNAMSIZ (more portable) instead of IF_NAMESIZE
-
 Revision 1.74  2005/12/02 20:08:39  cheshire
 Update "No HINFO" message
 
@@ -313,9 +294,9 @@ Added NetMonitor.c
 #include <signal.h>			// For SIGINT, SIGTERM
 #include <netdb.h>			// For gethostbyname()
 #include <sys/socket.h>		// For AF_INET, AF_INET6, etc.
+#include <arpa/inet.h>		// For inet_addr()
 #include <net/if.h>			// For IF_NAMESIZE
 #include <netinet/in.h>		// For INADDR_NONE
-#include <arpa/inet.h>		// For inet_addr()
 
 #include "mDNSPosix.h"      // Defines the specific types needed to run mDNS on this platform
 #include "ExampleClientApp.h"
@@ -379,7 +360,7 @@ static mDNS mDNSStorage;						// mDNS core uses this to store its globals
 static mDNS_PlatformSupport PlatformStorage;	// Stores this platform's globals
 
 struct timeval tv_start, tv_end, tv_interval;
-static int FilterInterface = 0;
+
 static FilterList *Filters;
 #define ExactlyOneFilter (Filters && !Filters->next)
 
@@ -573,7 +554,7 @@ mDNSlocal void SendUnicastQuery(mDNS *const m, HostEntry *entry, domainname *nam
 		m->ExpectUnicastResponse = m->timenow;
 		}
 
-	mDNSSendDNSMessage(&mDNSStorage, &query, qptr, InterfaceID, target, MulticastDNSPort, mDNSNULL, mDNSNULL);
+	mDNSSendDNSMessage(&mDNSStorage, &query, qptr, InterfaceID, target, MulticastDNSPort, -1, mDNSNULL);
 	}
 
 mDNSlocal void AnalyseHost(mDNS *const m, HostEntry *entry, const mDNSInterfaceID InterfaceID)
@@ -710,7 +691,7 @@ mDNSlocal void printstats(int max)
 		}
 	}
 
-mDNSlocal const mDNSu8 *FindUpdate(mDNS *const m, const DNSMessage *const query, const mDNSu8 *ptr, const mDNSu8 *const end,
+mDNSlocal const mDNSu8 *FindUpdate(mDNS *const m, const DNSMessage *const query, const mDNSu8 *ptr, const mDNSu8 *const end,\
 	DNSQuestion *q, LargeCacheRecord *pkt)
 	{
 	int i;
@@ -732,7 +713,7 @@ mDNSlocal void DisplayPacketHeader(mDNS *const m, const DNSMessage *const msg, c
 	struct timeval tv;
 	struct tm tm;
 	const mDNSu32 index = mDNSPlatformInterfaceIndexfromInterfaceID(m, InterfaceID);
-	char if_name[IFNAMSIZ];		// Older Linux distributions don't define IF_NAMESIZE
+	char if_name[IF_NAMESIZE];
 	if_indextoname(index, if_name);
 	gettimeofday(&tv, NULL);
 	localtime_r((time_t*)&tv.tv_sec, &tm);
@@ -1003,7 +984,6 @@ mDNSexport void mDNSCoreReceive(mDNS *const m, DNSMessage *const msg, const mDNS
 	const mDNSu8 StdR = kDNSFlag0_QR_Response | kDNSFlag0_OP_StdQuery;
 	const mDNSu8 QR_OP = (mDNSu8)(msg->h.flags.b[0] & kDNSFlag0_QROP_Mask);
 	mDNSu8 *ptr = (mDNSu8 *)&msg->h.numQuestions;
-	int goodinterface = (FilterInterface == 0);
 
 	(void)dstaddr;	// Unused
 	(void)dstport;	// Unused
@@ -1016,8 +996,7 @@ mDNSexport void mDNSCoreReceive(mDNS *const m, DNSMessage *const msg, const mDNS
 
 	// For now we're only interested in monitoring IPv4 traffic.
 	// All IPv6 packets should just be duplicates of the v4 packets.
-	if (!goodinterface) goodinterface = (FilterInterface == (int)mDNSPlatformInterfaceIndexfromInterfaceID(m, InterfaceID));
-	if (goodinterface && AddressMatchesFilterList(srcaddr))
+	if (AddressMatchesFilterList(srcaddr))
 		{
 		mDNS_Lock(m);
 		if (!mDNSAddrIsDNSMulticast(dstaddr))
@@ -1093,14 +1072,7 @@ mDNSlocal mStatus mDNSNetMonitor(void)
 	localtime_r((time_t*)&tv_end.tv_sec, &tm);
 	mprintf("End          %3d:%02d:%02d.%06d\n", tm.tm_hour, tm.tm_min, tm.tm_sec, tv_end.tv_usec);
 	mprintf("Captured for %3d:%02d:%02d.%06d\n", h, m, s, tv_interval.tv_usec);
-	if (!Filters)
-		{
-		mprintf("Unique source addresses seen on network:");
-		if (IPv4HostList.num) mprintf(" %ld (IPv4)", IPv4HostList.num);
-		if (IPv6HostList.num) mprintf(" %ld (IPv6)", IPv6HostList.num);
-		if (!IPv4HostList.num && !IPv6HostList.num) mprintf(" None");
-		mprintf("\n");
-		}
+	if (!Filters) mprintf("Unique source addresses seen on network: %ld\n", IPv4HostList.num + IPv6HostList.num);
 	mprintf("\n");
 	mprintf("Modern Query        Packets:      %7d   (avg%5d/min)\n", NumPktQ,        NumPktQ        * mul / div);
 	mprintf("Legacy Query        Packets:      %7d   (avg%5d/min)\n", NumPktL,        NumPktL        * mul / div);
@@ -1136,43 +1108,34 @@ mDNSexport int main(int argc, char **argv)
 
 	for (i=1; i<argc; i++)
 		{
-		if (i+1 < argc && !strcmp(argv[i], "-i") && atoi(argv[i+1]))
+		struct in_addr s4;
+		struct in6_addr s6;
+		FilterList *f;
+		mDNSAddr a;
+		a.type = mDNSAddrType_IPv4;
+
+		if (inet_pton(AF_INET, argv[i], &s4) == 1)
+			a.ip.v4.NotAnInteger = s4.s_addr;
+		else if (inet_pton(AF_INET6, argv[i], &s6) == 1)
 			{
-			FilterInterface = atoi(argv[i+1]);
-			i += 2;
-			printf("Monitoring interface %d\n", FilterInterface);
+			a.type = mDNSAddrType_IPv6;
+			bcopy(&s6, &a.ip.v6, sizeof(a.ip.v6));
 			}
 		else
 			{
-			struct in_addr s4;
-			struct in6_addr s6;
-			FilterList *f;
-			mDNSAddr a;
-			a.type = mDNSAddrType_IPv4;
-	
-			if (inet_pton(AF_INET, argv[i], &s4) == 1)
-				a.ip.v4.NotAnInteger = s4.s_addr;
-			else if (inet_pton(AF_INET6, argv[i], &s6) == 1)
-				{
-				a.type = mDNSAddrType_IPv6;
-				bcopy(&s6, &a.ip.v6, sizeof(a.ip.v6));
-				}
-			else
-				{
-				struct hostent *h = gethostbyname(argv[i]);
-				if (h) a.ip.v4.NotAnInteger = *(long*)h->h_addr;
-				else goto usage;
-				}
-			
-			f = malloc(sizeof(*f));
-			f->FilterAddr = a;
-			f->next = Filters;
-			Filters = f;
+			struct hostent *h = gethostbyname(argv[i]);
+			if (h) a.ip.v4.NotAnInteger = *(long*)h->h_addr;
+			else goto usage;
 			}
+		
+		f = malloc(sizeof(*f));
+		f->FilterAddr = a;
+		f->next = Filters;
+		Filters = f;
 		}
 
 	status = mDNSNetMonitor();
-	if (status) { fprintf(stderr, "%s: mDNSNetMonitor failed %d\n", progname, (int)status); return(status); }
+	if (status) { fprintf(stderr, "%s: mDNSNetMonitor failed %ld\n", progname, status); return(status); }
 	return(0);
 
 usage:

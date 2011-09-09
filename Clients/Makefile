@@ -1,26 +1,25 @@
-# -*- tab-width: 4 -*-
-#
 # Copyright (c) 2002-2004 Apple Computer, Inc. All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# @APPLE_LICENSE_HEADER_START@
 # 
-#     http://www.apache.org/licenses/LICENSE-2.0
+# This file contains Original Code and/or Modifications of Original Code
+# as defined in and that are subject to the Apple Public Source License
+# Version 2.0 (the 'License'). You may not use this file except in
+# compliance with the License. Please obtain a copy of the License at
+# http://www.opensource.apple.com/apsl/ and read it before using this
+# file.
 # 
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
+# The Original Code and all software distributed under the License are
+# distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
+# EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
+# INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
+# Please see the License for the specific language governing rights and
 # limitations under the License.
+# 
+# @APPLE_LICENSE_HEADER_END@
 #
 # $Log: Makefile,v $
-# Revision 1.8  2006/08/14 23:23:55  cheshire
-# Re-licensed mDNSResponder daemon source code under Apache License, Version 2.0
-#
-# Revision 1.7  2006/01/06 01:06:17  cheshire
-# <rdar://problem/3978979> Compile library and client programs in one pass
-#
 # Revision 1.6  2004/09/24 21:15:26  cheshire
 # <rdar://problem/3724985> Library "libmdns" misnamed; should be "libdns_sd"
 #
@@ -49,12 +48,12 @@
 
 #############################################################################
 
-# On OS X the dns_sd library functions are included in libSystem, which is implicitly linked with every executable
-# If /usr/lib/libSystem.dylib exists, then we're on OS X, so we don't need also to link the "dns_sd" shared library
-ifneq "$(wildcard /usr/lib/libSystem.dylib)" ""
-LIBS =
+
+# If library /usr/lib/libdns_sd.* exists, then link it
+ifneq "$(wildcard /usr/lib/libdns_sd.*)" ""
+LIBS = -ldns_sd
 else
-LIBS = -L../mDNSPosix/build/prod/ -ldns_sd
+LIBS =
 endif
 
 targets: build/dns-sd
