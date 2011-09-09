@@ -23,6 +23,9 @@
     Change History (most recent first):
 
 $Log: mDNSClientAPI.h,v $
+Revision 1.114.2.6  2004/03/02 02:55:25  cheshire
+<rdar://problem/3549576> Properly support "_services._dns-sd._udp" meta-queries
+
 Revision 1.114.2.5  2004/02/18 23:35:17  cheshire
 <rdar://problem/3488559>: Hard code domain enumeration functions to return ".local" only
 Also make mDNS_StopGetDomains() a no-op too, so that we don't get warning messages in syslog
@@ -901,7 +904,7 @@ struct ServiceRecordSet_struct
 	AuthRecord          *SubTypes;
 	mDNSBool             Conflict;	// Set if this record set was forcibly deregistered because of a conflict
 	domainname           Host;		// Set if this service record does not use the standard target host name
-	AuthRecord           RR_ADV;	// e.g. _services._mdns._udp.local. PTR _printer._tcp.local.
+	AuthRecord           RR_ADV;	// e.g. _services._dns-sd._udp.local. PTR _printer._tcp.local.
 	AuthRecord           RR_PTR;	// e.g. _printer._tcp.local.        PTR Name._printer._tcp.local.
 	AuthRecord           RR_SRV;	// e.g. Name._printer._tcp.local.   SRV 0 0 port target
 	AuthRecord           RR_TXT;	// e.g. Name._printer._tcp.local.   TXT PrintQueueName
