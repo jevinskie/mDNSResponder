@@ -54,10 +54,14 @@ COREDIR = ../mDNSCore
 SHAREDDIR ?= ../mDNSShared
 JDK = /usr/jdk
 
-CC = @cc
+SYSROOT=$(HOME)/opt/buildroot/buildroot-2016.11.1/output
+SYSROOT_HOST_BIN=$(SYSROOT)/host/usr/bin
+SYSROOT_TARGET = $(SYSROOT)/host/usr/mips-buildroot-linux-uclibc/sysroot
+
+CC = $(SYSROOT_HOST_BIN)/mips-buildroot-linux-uclibc-gcc -I$(SYSROOT_TARGET)/usr/include
 BISON = @bison
 FLEX = @flex
-LD = ld -shared
+LD = $(SYSROOT_HOST_BIN)/mips-buildroot-linux-uclibc-ld -shared
 CP = cp
 RM = rm
 LN = ln -s -f
@@ -69,7 +73,7 @@ LDSUFFIX = so
 JAVACFLAGS_OS = -fPIC -shared -ldns_sd
 
 # Set up diverging paths for debug vs. prod builds
-DEBUG=0
+DEBUG=1
 ifeq ($(DEBUG),1)
 CFLAGS_DEBUG = -g -DMDNS_DEBUGMSGS=2 
 OBJDIR = objects/debug
