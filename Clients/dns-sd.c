@@ -170,7 +170,7 @@ cl dns-sd.c -I../mDNSShared -DNOT_HAVE_GETOPT ws2_32.lib ..\mDNSWindows\DLL\Rele
 	#include <arpa/inet.h>		// For inet_addr()
 	#include <net/if.h>			// For if_nametoindex()
 	static const char kFilePathSep = '/';
-	#define SA_LEN(addr) ((addr)->sa_len)
+	#define SA_LEN(addr) ((addr)->addrlen)
 #endif
 
 #if (TEST_NEW_CLIENTSTUB && !defined(__APPLE_API_PRIVATE))
@@ -340,7 +340,7 @@ static void DNSSD_API enum_reply(DNSServiceRef sdref, const DNSServiceFlags flag
 	int labels = 0, depth = 0, i, initial = 0;
 	char text[64];
 	const char *label[MAX_LABELS];
-	
+
 	(void)sdref;        // Unused
 	(void)ifIndex;      // Unused
 	(void)context;      // Unused
@@ -359,20 +359,20 @@ static void DNSSD_API enum_reply(DNSServiceRef sdref, const DNSServiceFlags flag
 		printf("%-8s", (flags & kDNSServiceFlagsMoreComing) ? "(More)" : "");
 		if (partialflags) printf("Flags: %4X  ", partialflags);
 		else printf("             ");
-		
+
 		// 2. Count the labels
 		while (replyDomain && *replyDomain && labels < MAX_LABELS)
 			{
 			label[labels++] = replyDomain;
 			replyDomain = GetNextLabel(replyDomain, text);
 			}
-		
+
 		// 3. Decide if we're going to clump the last two or three labels (e.g. "apple.com", or "nicta.com.au")
 		if      (labels >= 3 && replyDomain - label[labels-1] <= 3 && label[labels-1] - label[labels-2] <= 4) initial = 3;
 		else if (labels >= 2 && replyDomain - label[labels-1] <= 4) initial = 2;
 		else initial = 1;
 		labels -= initial;
-	
+
 		// 4. Print the initial one-, two- or three-label clump
 		for (i=0; i<initial; i++)
 			{
@@ -381,7 +381,7 @@ static void DNSSD_API enum_reply(DNSServiceRef sdref, const DNSServiceFlags flag
 			printf("%s", text);
 			}
 		printf("\n");
-	
+
 		// 5. Print the remainder of the hierarchy
 		for (depth=0; depth<labels; depth++)
 			{
@@ -639,8 +639,8 @@ static void DNSSD_API reg_reply(DNSServiceRef sdref, const DNSServiceFlags flags
 
 	if (errorCode == kDNSServiceErr_NoError)
 		{
-		if (flags & kDNSServiceFlagsAdd) printf("Name now registered and active\n"); 
-		else printf("Name registration removed\n"); 
+		if (flags & kDNSServiceFlagsAdd) printf("Name now registered and active\n");
+		else printf("Name registration removed\n");
 		if (operation == 'A' || operation == 'U' || operation == 'N')
 			{
 			timeOut = 5;
@@ -698,14 +698,14 @@ static void DNSSD_API qr_reply(DNSServiceRef sdref, const DNSServiceFlags flags,
 			case kDNSServiceType_A:
 				snprintf(rdb, sizeof(rdb), "%d.%d.%d.%d", rd[0], rd[1], rd[2], rd[3]);
 				break;
-	
+
 			case kDNSServiceType_NS:
 			case kDNSServiceType_CNAME:
 			case kDNSServiceType_PTR:
 			case kDNSServiceType_DNAME:
 				p += snprintd(p, sizeof(rdb), &rd);
 				break;
-	
+
 			case kDNSServiceType_SOA:
 				p += snprintd(p, rdb + sizeof(rdb) - p, &rd);		// mname
 				p += snprintf(p, rdb + sizeof(rdb) - p, " ");
@@ -713,20 +713,20 @@ static void DNSSD_API qr_reply(DNSServiceRef sdref, const DNSServiceFlags flags,
 				p += snprintf(p, rdb + sizeof(rdb) - p, " Ser %d Ref %d Ret %d Exp %d Min %d",
 					ntohl(((uint32_t*)rd)[0]), ntohl(((uint32_t*)rd)[1]), ntohl(((uint32_t*)rd)[2]), ntohl(((uint32_t*)rd)[3]), ntohl(((uint32_t*)rd)[4]));
 				break;
-	
+
 			case kDNSServiceType_AAAA:
 				snprintf(rdb, sizeof(rdb), "%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X",
 					rd[0x0], rd[0x1], rd[0x2], rd[0x3], rd[0x4], rd[0x5], rd[0x6], rd[0x7],
 					rd[0x8], rd[0x9], rd[0xA], rd[0xB], rd[0xC], rd[0xD], rd[0xE], rd[0xF]);
 				break;
-	
+
 			case kDNSServiceType_SRV:
 				p += snprintf(p, rdb + sizeof(rdb) - p, "%d %d %d ",	// priority, weight, port
 					ntohs(*(unsigned short*)rd), ntohs(*(unsigned short*)(rd+2)), ntohs(*(unsigned short*)(rd+4)));
 				rd += 6;
 				p += snprintd(p, rdb + sizeof(rdb) - p, &rd);			// target host
 				break;
-	
+
 			default : snprintf(rdb, sizeof(rdb), "%d bytes%s", rdlen, rdlen ? ":" : ""); unknowntype = 1; break;
 			}
 		}
@@ -848,7 +848,7 @@ static void HandleEvents(void)
 	fd_set readfds;
 	struct timeval tv;
 	int result;
-	
+
 	if (dns_sd_fd2 > dns_sd_fd) nfds = dns_sd_fd2 + 1;
 
 	while (!stopNow)
@@ -892,7 +892,7 @@ static int getfirstoption(int argc, char **argv, const char *optstr, int *pOptIn
 	int i;
 	for (i=1; i < argc; i++)
 		{
-		if (argv[i][0] == '-' && &argv[i][1] && 
+		if (argv[i][0] == '-' && &argv[i][1] &&
 			 NULL != strchr(optstr, argv[i][1]))
 			{
 			*pOptInd = i + 1;
@@ -913,7 +913,7 @@ static void DNSSD_API MyRegisterRecordCallback(DNSServiceRef service, DNSRecordR
     DNSServiceErrorType errorCode, void *context)
 	{
 	char *name = (char *)context;
-	
+
 	(void)service;	// Unused
 	(void)rec;		// Unused
 	(void)flags;	// Unused
@@ -948,7 +948,7 @@ static void getip(const char *const name, struct sockaddr_storage *result)
 	struct addrinfo *addrs = NULL;
 	int err = getaddrinfo(name, NULL, NULL, &addrs);
 	if (err) fprintf(stderr, "getaddrinfo error %d for %s", err, name);
-	else memcpy(result, addrs->ai_addr, SA_LEN(addrs->ai_addr));
+	else memcpy(result, addrs->ai_addr, addrs->ai_addrlen);
 	if (addrs) freeaddrinfo(addrs);
 	}
 
@@ -984,10 +984,10 @@ static DNSServiceErrorType RegisterService(DNSServiceRef *sdref,
 	unsigned char txt[2048] = "";
 	unsigned char *ptr = txt;
 	int i;
-	
+
 	if (nam[0] == '.' && nam[1] == 0) nam = "";   // We allow '.' on the command line as a synonym for empty string
 	if (dom[0] == '.' && dom[1] == 0) dom = "";   // We allow '.' on the command line as a synonym for empty string
-	
+
 	printf("Registering Service %s.%s%s%s", nam[0] ? nam : "<<Default>>", typ, dom[0] ? "." : "", dom);
 	if (host && *host) printf(" host %s", host);
 	printf(" port %s", port);
@@ -1010,7 +1010,7 @@ static DNSServiceErrorType RegisterService(DNSServiceRef *sdref,
 		ShowTXTRecord(ptr-txt, txt);
 		}
 	printf("\n");
-	
+
 	//flags |= kDNSServiceFlagsAllowRemoteQuery;
 	//flags |= kDNSServiceFlagsNoAutoRename;
 

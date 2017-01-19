@@ -5,9 +5,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,7 +23,7 @@
 #include "DebugServices.h"
 #include "dnsextd.h"
 
-void yyerror( const char* error );
+void yyerror( void *context, const char* error );
 int  yylex(void);
 
 
@@ -98,17 +98,19 @@ SetupOptions
 	char	*	string;
 }
 
-%token	OPTIONS 
-%token	LISTEN_ON 
+%parse-param {void *context}
+
+%token	OPTIONS
+%token	LISTEN_ON
 %token	NAMESERVER
-%token	PORT 
-%token	ADDRESS 
-%token	LLQ 
+%token	PORT
+%token	ADDRESS
+%token	LLQ
 %token	PUBLIC
 %token  PRIVATE
 %token  ALLOWUPDATE
 %token  ALLOWQUERY
-%token	KEY 
+%token	KEY
 %token  ALGORITHM
 %token  SECRET
 %token  ISSUER
@@ -116,16 +118,16 @@ SetupOptions
 %token	ZONE
 %token  TYPE
 %token	ALLOW
-%token	OBRACE 
-%token	EBRACE 
+%token	OBRACE
+%token	EBRACE
 %token	SEMICOLON
 %token 	IN
-%token	<string>	DOTTED_DECIMAL_ADDRESS 
-%token	<string>	WILDCARD 
-%token	<string>	DOMAINNAME 
-%token	<string>	HOSTNAME 
+%token	<string>	DOTTED_DECIMAL_ADDRESS
+%token	<string>	WILDCARD
+%token	<string>	DOMAINNAME
+%token	<string>	HOSTNAME
 %token	<string>	QUOTEDSTRING
-%token	<number> 	NUMBER 
+%token	<number> 	NUMBER
 
 %type	<string>	addressstatement
 %type	<string>	networkaddress
@@ -133,7 +135,7 @@ SetupOptions
 %%
 
 commands:
-        |        
+        |
         commands command SEMICOLON
         ;
 
@@ -141,7 +143,7 @@ commands:
 command:
 		options_set
 		|
-        zone_set 
+        zone_set
 		|
 		key_set
         ;
@@ -262,7 +264,7 @@ zone_set:
         ;
 
 zonecontent:
-		OBRACE zonestatements EBRACE 
+		OBRACE zonestatements EBRACE
 
 zonestatements:
         |
@@ -353,7 +355,7 @@ networkaddress:
 		WILDCARD
 		;
 
-block: 
+block:
 		OBRACE zonestatements EBRACE SEMICOLON
         ;
 
@@ -378,15 +380,15 @@ int yywrap(void);
 
 extern int yylineno;
 
-void yyerror( const char *str )
+void yyerror( void *context, const char *str )
 {
-        fprintf( stderr,"%s:%d: error: %s\n", g_filename, yylineno, str );
+        fprintf( stderr,"%s:%d: ctx=%p: error: %s\n", g_filename, yylineno, context, str );
 }
- 
+
 int yywrap()
 {
         return 1;
-} 
+}
 
 
 int
@@ -441,7 +443,7 @@ ParseConfig
 		}
 
 	d->zones = NULL;
-	
+
 	yyin = fopen( file, "r" );
 	require_action( yyin, exit, err = 0 );
 
@@ -562,7 +564,7 @@ SetupOptions
 		{
 		d->addr.sin_port = htons( ( mDNSu16 ) info->source_port );
 		}
-				
+
 	if ( strlen( info->server_address ) )
 		{
 		inet_pton( AF_INET, info->server_address, &d->ns_addr.sin_addr );
